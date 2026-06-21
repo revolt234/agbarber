@@ -63,33 +63,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await _user?.delete();
       Navigator.pop(context); // Torna indietro (l'AuthGate farà il resto)
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account eliminato con successo.')),
+        const SnackBar(content: Text('Account deleted successfully.')),
       );
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Per sicurezza, effettua nuovamente il login prima di eliminare l\'account.'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-            } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Errore: ${e.message}'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('Per sicurezza, effettua nuovamente il login prima di eliminare l\'account.'),
+            backgroundColor: Colors.orange,
+          ),
         );
-        }
-            } finally {
-        setState(() => _isLoading = false);
-        }
-        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore: ${e.message}'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    const Color agVerde = Color(0xFF164638);
+
     return Scaffold(
+      backgroundColor: const Color(0xFF121212), // Assicura lo sfondo scuro coerente
+      // MODIFICATO: Inserito lo stesso ed identico stile dell'AppBar con logo a sinistra del brand
       appBar: AppBar(
-        title: const Text('Gestione Account', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF164638),
-        iconTheme: const IconThemeData(color: Colors.white),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12.0),
+          child: Image.asset(
+            'assets/A di barber.png',
+            fit: BoxFit.contain,
+          ),
+        ),
+        title: const Text(
+          'GESTIONE ACCOUNT',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            letterSpacing: 1.5,
+          ),
+        ),
+        backgroundColor: agVerde,
+        centerTitle: true,
+        automaticallyImplyLeading: false, // Rimuove la freccia di back nativa visto che è una scheda fissa della BottomBar
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -98,7 +117,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           // Card con info Utente
           Card(
+            color: const Color(0xFF1C2824), // Sfondo scuro per la card in palette
             elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: agVerde, width: 1),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
@@ -119,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         Text(
                           _user?.email ?? 'Nessuna email',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -132,26 +156,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 24),
 
           const Text('Opzioni Sicurezza', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
-          const Divider(),
+          const Divider(color: agVerde),
 
           // Modifica Password
           ListTile(
-            leading: const Icon(Icons.lock_reset, color: Color(0xFF164638)),
-            title: const Text('Modifica Password'),
-            subtitle: const Text('Ricevi un link via email per reimpostare la password'),
-            trailing: const Icon(Icons.chevron_right),
+            leading: const Icon(Icons.lock_reset, color: Color(0xFFE2B13C)),
+            title: const Text('Modifica Password', style: TextStyle(color: Colors.white)),
+            subtitle: const Text('Ricevi un link via email per reimpostare la password', style: TextStyle(color: Colors.grey)),
+            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
             onTap: _cambiaPassword,
           ),
 
           // Logout
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.orange),
-            title: const Text('Disconnetti'),
-            subtitle: const Text('Esci dal tuo account corrente'),
-            trailing: const Icon(Icons.chevron_right),
+            title: const Text('Disconnetti', style: TextStyle(color: Colors.white)),
+            subtitle: const Text('Esci dal tuo account corrente', style: TextStyle(color: Colors.grey)),
+            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
             onTap: () {
               FirebaseAuth.instance.signOut();
-              Navigator.pop(context); // Chiude la pagina del profilo
             },
           ),
 
@@ -163,7 +186,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ListTile(
             leading: const Icon(Icons.delete_forever, color: Colors.red),
             title: const Text('Elimina Account', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-            subtitle: const Text('Cancella permanentemente il tuo profilo da AG Barber'),
+            subtitle: const Text('Cancella permanentemente il tuo profilo da AG Barber', style: TextStyle(color: Colors.grey)),
             onTap: _eliminaAccount,
           ),
         ],

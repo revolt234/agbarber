@@ -14,6 +14,9 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // ABILITA IL DESUGARING DELLE LIBRERIE CORE (Richiesto dalle notifiche v22+)
+        isCoreLibraryDesugaringEnabled = true
+
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -31,6 +34,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // ABILITA MULTIDEX IN SICUREZZA
+        multiDexEnabled = true
     }
 
     buildTypes {
@@ -44,4 +50,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+// SEZIONE DIPENDENZE NATIIVE PER AGGIUNGERE LA LIBRERIA DI DESUGARING DI GOOGLE
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

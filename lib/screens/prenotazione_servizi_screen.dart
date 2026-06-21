@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'prenotazione_data_screen.dart';
 
 class PrenotazioneServiziScreen extends StatefulWidget {
@@ -10,10 +11,9 @@ class PrenotazioneServiziScreen extends StatefulWidget {
   State<PrenotazioneServiziScreen> createState() => _PrenotazioneServiziScreenState();
 }
 
-class _GestioneServiziScreenState {} // Ignora, serve solo per consistenza interna di Flutter
+class _GestioneServiziScreenState {}
 
 class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
-  // Mappa per salvare l'ID del servizio selezionato
   String? _servizioSelezionatoId;
   Map<String, dynamic>? _datiServizioSelezionato;
   String _nomeUtente = "Cliente";
@@ -22,9 +22,15 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   void initState() {
     super.initState();
     _recuperaNomeUtente();
+    _richiediPermessiNotifiche();
   }
 
-  // Recupera il nome reale dell'utente dal documento di Firestore
+  Future<void> _richiediPermessiNotifiche() async {
+    await FlutterLocalNotificationsPlugin()
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+  }
+
   Future<void> _recuperaNomeUtente() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -36,14 +42,13 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
             setState(() {
               _nomeUtente = data['name'];
             });
-            return; // Nome trovato su Firestore, usciamo dalla funzione
+            return;
           }
         }
       } catch (e) {
         debugPrint("Errore nel recupero del nome da Firestore: $e");
       }
 
-      // Fallback se il documento non ha ancora il campo name
       setState(() {
         _nomeUtente = user.displayName ?? user.email?.split('@')[0] ?? "Cliente";
       });
@@ -53,12 +58,12 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), // Sfondo scuro come da mockup
+      backgroundColor: const Color(0xFF121212),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 1. INTESTAZIONE (Header personalizzato del brand)
+            // 1. INTESTAZIONE (Header personalizzato del brand con Logo Ufficiale)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
               child: Column(
@@ -71,21 +76,24 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      // Logo Circolare Verde con bordo Oro
+                      // AGGIORNATO: Ora mostra l'asset reale 'A di barber.png' integrato nel cerchio con bordo oro
                       Container(
                         width: 60,
                         height: 60,
+                        padding: const EdgeInsets.all(4.0),
                         decoration: BoxDecoration(
                           color: const Color(0xFF164638),
                           shape: BoxShape.circle,
                           border: Border.all(color: const Color(0xFFE2B13C), width: 2),
                         ),
-                        child: const Center(
-                          child: Icon(Icons.content_cut, color: Color(0xFFE2B13C), size: 30),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/A di barber.png',
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 14),
-                      // Testo Salone
                       const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,7 +116,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
               ),
             ),
 
-            // 2. LISTA DEI SERVIZI (Presi in tempo reale da Firestore)
+            // 2. LISTA DEI SERVIZI
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('services').orderBy('createdAt', descending: false).snapshots(),
@@ -148,7 +156,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                           margin: const EdgeInsets.only(bottom: 14),
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                           decoration: BoxDecoration(
-                            // Se è selezionato facciamo un leggero sfondo dorato/chiaro, altrimenti bianco pieno
                             color: isSelezionato ? const Color(0xFFFFF6E0) : Colors.white,
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
@@ -158,14 +165,12 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                           ),
                           child: Row(
                             children: [
-                              // Icona Forbici/Sedia
                               Icon(
                                 nome.toLowerCase().contains('barba') ? Icons.chair : Icons.content_cut,
                                 color: const Color(0xFF164638),
                                 size: 28,
                               ),
                               const SizedBox(width: 16),
-                              // Nome e Durata del Servizio
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,7 +187,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                   ],
                                 ),
                               ),
-                              // Prezzo
                               Text(
                                 '${prezzo.toStringAsFixed(2).replaceAll('.', ',')} €',
                                 style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
@@ -197,12 +201,12 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
               ),
             ),
 
-            // 3. PULSANTE PROSEGUI (In basso, giallo fisso)
+            // 3. PULSANTE PROSEGUI
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE2B13C), // Giallo Oro del mockup
+                  backgroundColor: const Color(0xFFE2B13C),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   elevation: 2,

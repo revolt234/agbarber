@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/prenotazione_servizi_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/storico_prenotazioni_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'screens/gestione_servizi_screen.dart';
 import 'screens/gestione_operatori_screen.dart';
@@ -17,7 +18,6 @@ import 'package:intl/date_symbol_data_local.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('it_IT', null);
-  // Questo comando adesso leggerà da solo le opzioni WEB, ANDROID e IOS in modo nativo e sicuro
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
       title: 'AG Barber',
       debugShowCheckedModeBanner: false,
 
-      // TEMA CHIARO: Sfondo chiaro, ma dettagli, scritte importanti e pulsanti in Verde e Oro
+      // TEMA CHIARO
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: agVerde,
@@ -50,7 +50,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
 
-      // TEMA SCURO: Sfondo scuro total green, elementi in oro ed eleganza al massimo
+      // TEMA SCURO
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: agVerde,
@@ -69,9 +69,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// -----------------------------------------------------------------------
-/// SCHERMATA DI CONTROLLO ACCESSO (AuthGate)
-/// -----------------------------------------------------------------------
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -93,13 +90,12 @@ class AuthGate extends StatelessWidget {
               return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
 
-            String nomeEstratto = "Cliente"; // Fallback di sicurezza
+            String nomeEstratto = "Cliente";
 
             if (userSnapshot.hasData && userSnapshot.data!.exists) {
               final userData = userSnapshot.data!.data() as Map<String, dynamic>;
               final String ruolo = userData['role'] ?? 'cliente';
 
-              // Recupera il nome inserito in fase di registrazione su Firestore
               nomeEstratto = userData['name'] ?? user.displayName ?? "Cliente";
 
               if (ruolo == 'barbiere') {
@@ -107,7 +103,6 @@ class AuthGate extends StatelessWidget {
               }
             }
 
-            // Passa il nome reale alla home del cliente
             return ClienteHomePage(nomeUtente: nomeEstratto);
           },
         );
@@ -117,17 +112,35 @@ class AuthGate extends StatelessWidget {
 }
 
 /// -----------------------------------------------------------------------
-/// INTERFACCIA CLIENTE (AGGIORNATA)
+/// INTERFACCIA CLIENTE (A 3 SEZIONI: HOME, PRENOTAZIONI, UTENTE)
 /// -----------------------------------------------------------------------
-class ClienteHomePage extends StatelessWidget {
-  final String nomeUtente; // <--- Riceve il nome reale da AuthGate
+class ClienteHomePage extends StatefulWidget {
+  final String nomeUtente;
 
   const ClienteHomePage({super.key, required this.nomeUtente});
 
   @override
+  State<ClienteHomePage> createState() => _ClienteHomePageState();
+}
+
+class _ClienteHomePageState extends State<ClienteHomePage> {
+  int _indiceSelezionato = 0; // Default posizionato sulla prima scheda: 'Home' (Listino)
+
+  late final List<Widget> _pagine = [
+    const PrenotazioneServiziScreen(), // Indice 0: Listino Servizi
+    const StoricoPrenotazioniScreen(), // Indice 1: Storico Appuntamenti
+    const ProfileScreen(),             // Indice 2: Profilo Utente
+  ];
+
+  @override
   Widget build(BuildContext context) {
+    const Color agVerde = Color(0xFF164638);
+    const Color agOro = Color(0xFFE2B13C);
+
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: const Color(0xFF121212),
+      appBar: _indiceSelezionato == 0
+          ? AppBar(
         leading: Padding(
           padding: const EdgeInsets.only(left: 12.0),
           child: Image.asset(
@@ -139,29 +152,53 @@ class ClienteHomePage extends StatelessWidget {
             'AG BARBER',
             style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5, color: Colors.white)
         ),
-        backgroundColor: const Color(0xFF164638),
+        backgroundColor: agVerde,
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(
-              Icons.account_circle,
-              size: 28,
-              color: Color(0xFFE2B13C),
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              );
-            },
+        // RIMOSSO IL VECCHIO ICONBUTTON DELL'OMINO DALLE ACTIONS DI DESTRA
+        actions: const [
+          SizedBox(width: 48), // Mantiene la simmetria visiva con il logo a sinistra
+        ],
+      )
+          : null,
+
+      body: IndexedStack(
+        index: _indiceSelezionato,
+        children: _ppages ?? _pagine,
+      ),
+
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _indiceSelezionato,
+        onTap: (index) {
+          setState(() {
+            _indiceSelezionato = index;
+          });
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFF121212),
+        selectedItemColor: agOro,
+        unselectedItemColor: Colors.grey,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        unselectedLabelStyle: const TextStyle(fontSize: 12),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
           ),
-          const SizedBox(width: 8),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.format_list_bulleted),
+            label: 'Prenotazioni',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Utente',
+          ),
         ],
       ),
-      // Ora l'app passa il nome direttamente alla schermata interna senza ri-estrarre la mail
-      body: PrenotazioneServiziScreen(),
     );
   }
+
+  // Getter di sicurezza interno per la lista delle pagine
+  List<Widget>? get _ppages => null;
 }
 
 /// -----------------------------------------------------------------------

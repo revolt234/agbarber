@@ -26,11 +26,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
   bool _isLoadingSlot = false;
   bool _isLoadingConfig = true;
-  bool _isSaving = false; // Gestisce il caricamento in sicurezza sul pulsante
+  bool _isSaving = false;
 
   Map<String, dynamic> _orariNegozioBase = {};
   Map<String, dynamic> _eccezioniCalendario = {};
   List<String> _slotOrariCalcolati = [];
+  List<String> _slotOccupatiId = [];
 
   final List<String> _giorniSettimana = [
     'domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'
@@ -62,9 +63,26 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     if (_barbiereSelezionatoId == null) return;
     setState(() => _isLoadingSlot = true);
     _slotOrariCalcolati.clear();
+    _slotOccupatiId.clear();
 
     try {
       final String dataStr = _formattaData(_dataSelezionata);
+
+      // 1. SCARICA GLI APPUNTAMENTI GIÀ ESISTENTI PER EVITARE I DUPLICATI
+      final appuntamentiPresi = await FirebaseFirestore.instance
+          .collection('appointments')
+          .where('date', isEqualTo: dataStr)
+          .where('barberId', isEqualTo: _barbiereSelezionatoId)
+          .get();
+
+      for (var doc in appuntamentiPresi.docs) {
+        final datiApp = doc.data();
+        if (datiApp.containsKey('slot') && datiApp['slot'] != null) {
+          _slotOccupatiId.add(datiApp['slot']);
+        }
+      }
+
+      // 2. Controllo assenze dello staff
       final barberEx = await FirebaseFirestore.instance.collection('barber_exceptions').doc("${dataStr}_$_barbiereSelezionatoId").get();
       final dataEx = barberEx.exists ? barberEx.data() : null;
 
@@ -133,7 +151,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. SELEZIONE GIORNO Orizzontale (14 giorni)
+          // 1. SELEZIONE GIORNO
           const Padding(
             padding: EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
             child: Text('Seleziona il giorno:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
@@ -289,17 +307,26 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                 final ora = _slotOrariCalcolati[index];
                 bool sel = _orarioSelezionato == ora;
 
+                bool occupato = _slotOccupatiId.contains(ora);
+
                 return GestureDetector(
-                  onTap: _isSaving ? null : () => setState(() => _orarioSelezionato = ora),
+                  onTap: (_isSaving || occupato) ? null : () => setState(() => _orarioSelezionato = ora),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824),
+                      color: occupato
+                          ? Colors.grey.withValues(alpha: 0.15)
+                          : (sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824)),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Center(
                       child: Text(
                         ora,
-                        style: TextStyle(color: sel ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        style: TextStyle(
+                          color: occupato ? Colors.grey.shade600 : (sel ? Colors.black : Colors.white),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          decoration: occupato ? TextDecoration.lineThrough : null,
+                        ),
                       ),
                     ),
                   ),
@@ -332,15 +359,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                       ),
                       TextButton(
                         onPressed: () async {
-                          Navigator.pop(dialogContext); // Chiude l'AlertDialog informativo
+                          Navigator.pop(dialogContext);
 
-                          setState(() => _isSaving = true); // Avvia il caricamento interno
+                          setState(() => _isSaving = true);
 
                           try {
                             final user = FirebaseAuth.instance.currentUser;
                             if (user == null) throw 'Utente non autenticato';
 
-                            // Recuperiamo dinamicamente il Nome e Cognome reale dell'utente registrato su Firestore
                             String nomeRealeCliente = "Cliente";
                             final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
                             if (userDoc.exists && userDoc.data() != null) {
@@ -355,7 +381,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               'barberId': _barbiereSelezionatoId,
                               'barberName': _barbiereSelezionatoNome,
                               'userId': user.uid,
-                              'userName': nomeRealeCliente,              // <--- AGGIUNTO PER L'AGENDA ADMIN
+                              'userName': nomeRealeCliente,
                               'userEmail': user.email ?? 'Cliente anonimo',
                               'services': [widget.servizioNome],
                               'totalPrice': prezzoStimato,
@@ -375,7 +401,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
                           } catch (e) {
                             if (!context.mounted) return;
-                            setState(() => _isSaving = false); // Disattiva il caricamento in caso di errore
+                            setState(() => _isSaving = false);
 
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
