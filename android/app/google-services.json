@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "804355021014",
+    "project_id": "agbarber-bc826",
+    "storage_bucket": "agbarber-bc826.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:804355021014:android:ca8de320e050db36381177",
+        "android_client_info": {
+          "package_name": "com.LoSco.agbarber.prenotazionibarbiere"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2zOUpg1Xx9dD_XfVxERR-OI_Su8xu3TY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
