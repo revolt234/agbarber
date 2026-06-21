@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -28,15 +25,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -56,7 +47,6 @@ class DefaultFirebaseOptions {
     projectId: 'agbarber-bc826',
     storageBucket: 'agbarber-bc826.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDOanm9tGKvD4dFo9Qcl2vnCgqzOn1iYGU',
     appId: '1:804355021014:ios:ed8c5abe0e12cca8381177',
@@ -64,5 +54,33 @@ class DefaultFirebaseOptions {
     projectId: 'agbarber-bc826',
     storageBucket: 'agbarber-bc826.firebasestorage.app',
     iosBundleId: 'com.LoSco.agbarber.prenotazionibarbiere',
+  );
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyDfv3UKIm-bYtEbtBolqCcBPh7dKOf9HT4',
+    appId: '1:804355021014:web:637961c6bff5a5de381177',
+    messagingSenderId: '804355021014',
+    projectId: 'agbarber-bc826',
+    authDomain: 'agbarber-bc826.firebaseapp.com',
+    storageBucket: 'agbarber-bc826.firebasestorage.app',
+    measurementId: 'G-PMGZVVNLHM',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyDOanm9tGKvD4dFo9Qcl2vnCgqzOn1iYGU',
+    appId: '1:804355021014:ios:ed8c5abe0e12cca8381177',
+    messagingSenderId: '804355021014',
+    projectId: 'agbarber-bc826',
+    storageBucket: 'agbarber-bc826.firebasestorage.app',
+    iosBundleId: 'com.LoSco.agbarber.prenotazionibarbiere',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyD3VHTWpD04O8ovW-C2c2OPiirpr3L9UeE',
+    appId: '1:804355021014:web:dad75b1a5c419697381177',
+    messagingSenderId: '804355021014',
+    projectId: 'agbarber-bc826',
+    authDomain: 'agbarber-bc826.firebaseapp.com',
+    storageBucket: 'agbarber-bc826.firebasestorage.app',
+    measurementId: 'G-FHB3HPHM7Y',
   );
 }

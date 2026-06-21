@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'screens/visualizzazione_prenotazioni_screen.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/prenotazione_servizi_screen.dart';
@@ -11,9 +12,11 @@ import 'screens/gestione_operatori_screen.dart';
 import 'screens/gestione_orari_screen.dart';
 import 'screens/gestione_calendario_screen.dart';
 import 'screens/gestione_turni_operatori_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  await initializeDateFormatting('it_IT', null);
+  // Questo comando adesso leggerà da solo le opzioni WEB, ANDROID e IOS in modo nativo e sicuro
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -42,7 +45,7 @@ class MyApp extends StatelessWidget {
           secondary: agOro,
           brightness: Brightness.light,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF4F6F5), // Un bianco leggermente sporco che sta benissimo col verde
+        scaffoldBackgroundColor: const Color(0xFFF4F6F5),
         useMaterial3: true,
       ),
 
@@ -50,12 +53,12 @@ class MyApp extends StatelessWidget {
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: agVerde,
-          primary: agOro, // In dark mode usiamo l'oro come colore principale per farlo risaltare
+          primary: agOro,
           secondary: agVerde,
-          surface: const Color(0xFF0F2E25), // Variante ancora più scura del verde per le card/sfondi
+          surface: const Color(0xFF0F2E25),
           brightness: Brightness.dark,
         ),
-        scaffoldBackgroundColor: const Color(0xFF101715), // Sfondo quasi nero con una punta di verde
+        scaffoldBackgroundColor: const Color(0xFF101715),
         useMaterial3: true,
       ),
 
@@ -76,33 +79,28 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Se l'utente non è loggato, mostra lo schermo di Login
         if (!snapshot.hasData) {
           return const LoginScreen();
         }
 
-        // Se l'utente è loggato, leggiamo il suo ruolo da Firestore in tempo reale
         final User user = snapshot.data!;
 
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
           builder: (context, userSnapshot) {
-            // Finché i dati caricano, mostra un indicatore di caricamento
             if (userSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
 
-            // Se il documento esiste, controlliamo il ruolo
             if (userSnapshot.hasData && userSnapshot.data!.exists) {
               final userData = userSnapshot.data!.data() as Map<String, dynamic>;
               final String ruolo = userData['role'] ?? 'cliente';
 
               if (ruolo == 'barbiere') {
-                return const BarbiereHomePage(); // Se è il capo, vede l'interfaccia barbiere
+                return const BarbiereHomePage();
               }
             }
 
-            // Di base, o se non trova il documento, rimanda alla Home del Cliente
             return const ClienteHomePage();
           },
         );
@@ -121,7 +119,6 @@ class ClienteHomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        // Inserisce il logo in alto a sinistra
         leading: Padding(
           padding: const EdgeInsets.only(left: 12.0),
           child: Image.asset(
@@ -135,8 +132,6 @@ class ClienteHomePage extends StatelessWidget {
         ),
         backgroundColor: const Color(0xFF164638),
         centerTitle: true,
-
-        // Pulsante utente in alto a destra per il profilo
         actions: [
           IconButton(
             icon: const Icon(
@@ -145,7 +140,6 @@ class ClienteHomePage extends StatelessWidget {
               color: Color(0xFFE2B13C),
             ),
             onPressed: () {
-              // Naviga verso la schermata del profilo
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const ProfileScreen()),
@@ -155,7 +149,6 @@ class ClienteHomePage extends StatelessWidget {
           const SizedBox(width: 8),
         ],
       ),
-      // Sostituito il Center precedente con la schermata reale di prenotazione servizi
       body: const PrenotazioneServiziScreen(),
     );
   }
@@ -175,11 +168,9 @@ class BarbiereHomePage extends StatelessWidget {
             'DASHBOARD BARBIERE',
             style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Color(0xFF164638))
         ),
-        // L'app bar del barbiere è in Oro per distinguerla nettamente a colpo d'occhio
         backgroundColor: const Color(0xFFE2B13C),
         centerTitle: true,
         actions: [
-          // Aggiungiamo il logout rapido anche per l'admin in alto a destra
           IconButton(
             icon: const Icon(Icons.logout, color: Color(0xFF164638)),
             onPressed: () => FirebaseAuth.instance.signOut(),
@@ -207,7 +198,6 @@ class BarbiereHomePage extends StatelessWidget {
             ),
             const SizedBox(height: 40),
 
-            // PULSANTE: Gestione Servizi (Listino)
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -233,7 +223,6 @@ class BarbiereHomePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-// PULSANTE: Gestione Operatori
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -259,7 +248,6 @@ class BarbiereHomePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-// PULSANTE: Gestione Orari
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -285,7 +273,6 @@ class BarbiereHomePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-// PULSANTE: Gestione Eccezioni Calendario (Ferie/Chiusure straordinarie)
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -311,7 +298,6 @@ class BarbiereHomePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-// PULSANTE: Gestione Turni Singoli Operatori
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -337,22 +323,28 @@ class BarbiereHomePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // SEGNAPOSTO: Gestione Appuntamenti (per i futuri step)
+            // PULSANTE AGGIORNATO E ATTIVO: Gestione Appuntamenti del Salone
             Card(
-              elevation: 2,
-              color: Colors.grey.shade100,
+              elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: const ListTile(
-                contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                leading: CircleAvatar(
-                  backgroundColor: Colors.grey,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF164638),
                   child: Icon(Icons.calendar_today, color: Colors.white),
                 ),
-                title: Text(
+                title: const Text(
                   'Agendamento & Prenotazioni',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.grey),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                 ),
-                subtitle: Text('Prossimamente: Visualizza e gestisci gli appuntamenti ricevuti'),
+                subtitle: const Text('Visualizza, filtra e controlla gli appuntamenti ricevuti in tempo reale'),
+                trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const VisualizzazionePrenotazioniScreen()),
+                  );
+                },
               ),
             ),
           ],

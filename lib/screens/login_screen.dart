@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart'; // Importato per identificare se siamo su Web
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -12,7 +14,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // Creiamo i FocusNode dedicati per gestire i singoli focus
   final FocusNode _emailFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
 
@@ -32,6 +33,13 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       if (_isLogin) {
+        // Forza l'istanza su Web a non richiedere l'Enterprise verification se non configurato
+        if (kIsWeb) {
+          await FirebaseAuth.instance.setSettings(
+            appVerificationDisabledForTesting: false,
+          );
+        }
+
         // 1. Logica di Accesso (Login)
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
@@ -44,14 +52,13 @@ class _LoginScreenState extends State<LoginScreen> {
           password: _passwordController.text.trim(),
         );
 
-        // Salva il ruolo 'cliente' su Firestore usando l'ID univoco dell'utente (UID)
         if (userCredential.user != null) {
           await FirebaseFirestore.instance
               .collection('users')
               .doc(userCredential.user!.uid)
               .set({
             'email': _emailController.text.trim(),
-            'role': 'cliente', // Di base nascono tutti come clienti
+            'role': 'cliente',
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
@@ -67,16 +74,13 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    } // <--- Parentesi graffa corretta qui
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Questo trucco rileva l'altezza della tastiera di sistema.
-    // Se è 0, significa che la tastiera è chiusa (anche tramite tasto BACK).
     final bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
     if (!isKeyboardOpen) {
-      // Se la tastiera si è chiusa (in qualsiasi modo), togliamo il focus fantasma
       _emailFocus.unfocus();
       _passwordFocus.unfocus();
     }
@@ -102,10 +106,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Campo Email
                 TextField(
                   controller: _emailController,
-                  focusNode: _emailFocus, // Assegnato il focus node
+                  focusNode: _emailFocus,
                   decoration: const InputDecoration(
                     labelText: 'Email',
                     border: OutlineInputBorder(),
@@ -115,10 +118,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Campo Password
                 TextField(
                   controller: _passwordController,
-                  focusNode: _passwordFocus, // Assegnato il focus node
+                  focusNode: _passwordFocus,
                   decoration: const InputDecoration(
                     labelText: 'Password',
                     border: OutlineInputBorder(),
