@@ -11,9 +11,11 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _nomeCognomeController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  final FocusNode _nomeCognomeFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
 
@@ -22,41 +24,53 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _nomeCognomeController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _nomeCognomeFocus.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
     super.dispose();
   }
 
   Future<void> _inviaForm() async {
+    if (!_isLogin && _nomeCognomeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Il campo Nome e Cognome è obbligatorio."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       if (_isLogin) {
-        // Forza l'istanza su Web a non richiedere l'Enterprise verification se non configurato
         if (kIsWeb) {
           await FirebaseAuth.instance.setSettings(
             appVerificationDisabledForTesting: false,
           );
         }
 
-        // 1. Logica di Accesso (Login)
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
       } else {
-        // 2. Logica di Registrazione
         UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
         if (userCredential.user != null) {
+          await userCredential.user!.updateDisplayName(_nomeCognomeController.text.trim());
+
           await FirebaseFirestore.instance
               .collection('users')
               .doc(userCredential.user!.uid)
               .set({
+            'name': _nomeCognomeController.text.trim(),
             'email': _emailController.text.trim(),
             'role': 'cliente',
             'createdAt': FieldValue.serverTimestamp(),
@@ -79,14 +93,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
-    if (!isKeyboardOpen) {
-      _emailFocus.unfocus();
-      _passwordFocus.unfocus();
-    }
+    // RIMOSSO IL VECCHIO BLOCCO DI UNFOCUS AUTOMATICO CHE CREAVA IL BUG SU WEB/DESKTOP
 
     return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
+      onTap: () => FocusScope.of(context).unfocus(), // Gestisce la chiusura focus quando clicchi sul vuoto
       child: Scaffold(
         body: Center(
           child: SingleChildScrollView(
@@ -105,6 +115,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 24),
+
+                if (!_isLogin) ...[
+                  TextField(
+                    controller: _nomeCognomeController,
+                    focusNode: _nomeCognomeFocus,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome e Cognome',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 TextField(
                   controller: _emailController,

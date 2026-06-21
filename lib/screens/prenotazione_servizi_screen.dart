@@ -24,10 +24,26 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     _recuperaNomeUtente();
   }
 
-  // Recupera il nome dell'utente loggato (o usa la mail come fallback)
+  // Recupera il nome reale dell'utente dal documento di Firestore
   Future<void> _recuperaNomeUtente() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
+      try {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (userDoc.exists && userDoc.data() != null) {
+          final data = userDoc.data() as Map<String, dynamic>;
+          if (data.containsKey('name') && data['name']!.toString().trim().isNotEmpty) {
+            setState(() {
+              _nomeUtente = data['name'];
+            });
+            return; // Nome trovato su Firestore, usciamo dalla funzione
+          }
+        }
+      } catch (e) {
+        debugPrint("Errore nel recupero del nome da Firestore: $e");
+      }
+
+      // Fallback se il documento non ha ancora il campo name
       setState(() {
         _nomeUtente = user.displayName ?? user.email?.split('@')[0] ?? "Cliente";
       });

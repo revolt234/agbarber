@@ -13,6 +13,7 @@ import 'screens/gestione_orari_screen.dart';
 import 'screens/gestione_calendario_screen.dart';
 import 'screens/gestione_turni_operatori_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('it_IT', null);
@@ -92,16 +93,22 @@ class AuthGate extends StatelessWidget {
               return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
 
+            String nomeEstratto = "Cliente"; // Fallback di sicurezza
+
             if (userSnapshot.hasData && userSnapshot.data!.exists) {
               final userData = userSnapshot.data!.data() as Map<String, dynamic>;
               final String ruolo = userData['role'] ?? 'cliente';
+
+              // Recupera il nome inserito in fase di registrazione su Firestore
+              nomeEstratto = userData['name'] ?? user.displayName ?? "Cliente";
 
               if (ruolo == 'barbiere') {
                 return const BarbiereHomePage();
               }
             }
 
-            return const ClienteHomePage();
+            // Passa il nome reale alla home del cliente
+            return ClienteHomePage(nomeUtente: nomeEstratto);
           },
         );
       },
@@ -110,10 +117,12 @@ class AuthGate extends StatelessWidget {
 }
 
 /// -----------------------------------------------------------------------
-/// INTERFACCIA CLIENTE
+/// INTERFACCIA CLIENTE (AGGIORNATA)
 /// -----------------------------------------------------------------------
 class ClienteHomePage extends StatelessWidget {
-  const ClienteHomePage({super.key});
+  final String nomeUtente; // <--- Riceve il nome reale da AuthGate
+
+  const ClienteHomePage({super.key, required this.nomeUtente});
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +158,8 @@ class ClienteHomePage extends StatelessWidget {
           const SizedBox(width: 8),
         ],
       ),
-      body: const PrenotazioneServiziScreen(),
+      // Ora l'app passa il nome direttamente alla schermata interna senza ri-estrarre la mail
+      body: PrenotazioneServiziScreen(),
     );
   }
 }
@@ -323,7 +333,6 @@ class BarbiereHomePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // PULSANTE AGGIORNATO E ATTIVO: Gestione Appuntamenti del Salone
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

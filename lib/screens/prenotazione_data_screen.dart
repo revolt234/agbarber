@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PrenotazioneDataScreen extends StatefulWidget {
   final String servizioId;
@@ -25,6 +26,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
   bool _isLoadingSlot = false;
   bool _isLoadingConfig = true;
+  bool _isSaving = false; // Gestisce il caricamento in sicurezza sul pulsante
 
   Map<String, dynamic> _orariNegozioBase = {};
   Map<String, dynamic> _eccezioniCalendario = {};
@@ -75,7 +77,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       var orariGiorno = _orariNegozioBase[nomeGiorno];
 
       if (orariGiorno != null && orariGiorno['isAperto'] == true) {
-        // Genera slot separati per Mattina e Pomeriggio (Pausa pranzo esclusa automaticamente)
         if (orariGiorno.containsKey('mattina')) {
           _calcolaSlotPerFascia(orariGiorno['mattina'], dataEx);
         }
@@ -85,7 +86,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       }
     } catch (e) {
       debugPrint("Errore slot: $e");
-    } finally { // <--- CORRETTO CON finally
+    } finally {
       setState(() => _isLoadingSlot = false);
     }
   }
@@ -98,7 +99,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       int ora = m ~/ 60;
       int min = m % 60;
 
-      // Applica eventuali turnazioni speciali o mezze giornate del singolo operatore
       if (dataEx != null && dataEx['type'] == 'mezza_giornata') {
         if (dataEx['fascia'] == 'mattina' && ora >= 13) continue;
         if (dataEx['fascia'] == 'pomeriggio' && ora < 13) continue;
@@ -153,7 +153,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                 String nomeGiorno = settimanaAbbr[d.weekday % 7];
 
                 return GestureDetector(
-                  onTap: isChiusoGiorno
+                  onTap: isChiusoGiorno || _isSaving
                       ? null
                       : () {
                     setState(() {
@@ -225,7 +225,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                     bool sel = _barbiereSelezionatoId == id;
 
                     return GestureDetector(
-                      onTap: () {
+                      onTap: _isSaving
+                          ? null
+                          : () {
                         setState(() {
                           _barbiereSelezionatoId = id;
                           _barbiereSelezionatoNome = nome;
@@ -288,7 +290,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                 bool sel = _orarioSelezionato == ora;
 
                 return GestureDetector(
-                  onTap: () => setState(() => _orarioSelezionato = ora),
+                  onTap: _isSaving ? null : () => setState(() => _orarioSelezionato = ora),
                   child: Container(
                     decoration: BoxDecoration(
                       color: sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824),
@@ -315,22 +317,87 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                 minimumSize: const Size.fromHeight(54),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              onPressed: (_barbiereSelezionatoId == null || _orarioSelezionato == null || giornoCorrenteChiuso)
+              onPressed: (_barbiereSelezionatoId == null || _orarioSelezionato == null || giornoCorrenteChiuso || _isSaving)
                   ? null
                   : () {
                 showDialog(
                   context: context,
-                  builder: (context) => AlertDialog(
+                  builder: (dialogContext) => AlertDialog(
                     title: const Text('Conferma Prenotazione'),
                     content: Text('Servizio: ${widget.servizioNome}\nData: $dataStr\nOra: $_orarioSelezionato\nCon: $_barbiereSelezionatoNome'),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Modifica')),
-                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Conferma')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: const Text('Modifica'),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          Navigator.pop(dialogContext); // Chiude l'AlertDialog informativo
+
+                          setState(() => _isSaving = true); // Avvia il caricamento interno
+
+                          try {
+                            final user = FirebaseAuth.instance.currentUser;
+                            if (user == null) throw 'Utente non autenticato';
+
+                            // Recuperiamo dinamicamente il Nome e Cognome reale dell'utente registrato su Firestore
+                            String nomeRealeCliente = "Cliente";
+                            final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                            if (userDoc.exists && userDoc.data() != null) {
+                              nomeRealeCliente = userDoc.data()?['name'] ?? user.displayName ?? "Cliente";
+                            }
+
+                            int prezzoStimato = 15;
+
+                            await FirebaseFirestore.instance.collection('appointments').add({
+                              'date': dataStr,
+                              'slot': _orarioSelezionato,
+                              'barberId': _barbiereSelezionatoId,
+                              'barberName': _barbiereSelezionatoNome,
+                              'userId': user.uid,
+                              'userName': nomeRealeCliente,              // <--- AGGIUNTO PER L'AGENDA ADMIN
+                              'userEmail': user.email ?? 'Cliente anonimo',
+                              'services': [widget.servizioNome],
+                              'totalPrice': prezzoStimato,
+                              'createdAt': FieldValue.serverTimestamp(),
+                            });
+
+                            if (!context.mounted) return;
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Prenotazione effettuata con successo!'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+
+                            Navigator.of(context).popUntil((route) => route.isFirst);
+
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            setState(() => _isSaving = false); // Disattiva il caricamento in caso di errore
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Errore durante la prenotazione: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('Conferma', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
                     ],
                   ),
                 );
               },
-              child: const Text('Conferma Prenotazione', style: TextStyle(color: Color(0xFF121212), fontSize: 18, fontWeight: FontWeight.bold)),
+              child: _isSaving
+                  ? const SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(color: Color(0xFF121212), strokeWidth: 2.5),
+              )
+                  : const Text('Conferma Prenotazione', style: TextStyle(color: Color(0xFF121212), fontSize: 18, fontWeight: FontWeight.bold)),
             ),
           ),
         ],

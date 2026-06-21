@@ -48,30 +48,34 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       ),
       body: Column(
         children: [
-          // 1. SELETTORE DATA GIORNALIERA
+          // 1. SELETTORE DATA GIORNALIERA CON SINTASSI ABBREVIATA SFORZA-PIXEL
           Container(
-            // Nuova riga corretta:
             color: agVerde.withValues(alpha: 0.05),
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
-                  icon: Icon(Icons.chevron_left, color: agVerde, size: 30),
+                  icon: Icon(Icons.chevron_left, color: agVerde, size: 28),
                   onPressed: () {
                     setState(() => _dataSelezionata = _dataSelezionata.subtract(const Duration(days: 1)));
                   },
                 ),
-                TextButton.icon(
-                  onPressed: () => _selezionaData(context),
-                  icon: Icon(Icons.calendar_today, color: agOro),
-                  label: Text(
-                    DateFormat('EEEE d MMMM yyyy', 'it_IT').format(_dataSelezionata).toUpperCase(),
-                    style: TextStyle(color: agVerde, fontWeight: FontWeight.bold, fontSize: 16),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => _selezionaData(context),
+                    icon: Icon(Icons.calendar_today, color: agOro, size: 20),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        DateFormat('E d MMM yyyy', 'it_IT').format(_dataSelezionata).toUpperCase(),
+                        style: TextStyle(color: agVerde, fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                    ),
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.chevron_right, color: agVerde, size: 30),
+                  icon: Icon(Icons.chevron_right, color: agVerde, size: 28),
                   onPressed: () {
                     setState(() => _dataSelezionata = _dataSelezionata.add(const Duration(days: 1)));
                   },
@@ -150,9 +154,11 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   itemBuilder: (context, index) {
                     final data = prenotazioni[index].data() as Map<String, dynamic>;
 
-                    // Estrazione dettagli sicura
                     final String ora = data['slot'] ?? '--:--';
-                    final String clienteEmail = data['userEmail'] ?? 'Cliente';
+
+                    // MODIFICATO QUI: Estrazione del Nome e Cognome reale con fallback dinamici
+                    final String clienteNome = data['userName'] ?? data['displayName'] ?? data['userEmail'] ?? 'Cliente';
+
                     final String operatoreNome = data['barberName'] ?? 'Qualsiasi';
                     final List servizi = data['services'] ?? [];
                     final int prezzoTotale = data['totalPrice'] ?? 0;
@@ -165,7 +171,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                         padding: const EdgeInsets.all(16.0),
                         child: Row(
                           children: [
-                            // Blocco Orario Evidenziato
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
@@ -182,14 +187,14 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               ),
                             ),
                             const SizedBox(width: 16),
-                            // Dettagli appuntamento
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    clienteEmail,
+                                    clienteNome, // <--- Mostra il Nome e Cognome reale dello user
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
@@ -204,7 +209,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                 ],
                               ),
                             ),
-                            // Prezzo
                             Text(
                               '€$prezzoTotale',
                               style: TextStyle(
@@ -227,7 +231,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     );
   }
 
-  // Costruisce la query dinamicamente in base a data e filtri selezionati
   Stream<QuerySnapshot> _costruisciStreamPrenotazioni() {
     Query query = FirebaseFirestore.instance
         .collection('appointments')
@@ -237,7 +240,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       query = query.where('barberId', isEqualTo: _operatoreSelezionato);
     }
 
-    // Ordina i risultati cronologicamente per orario di slot
     return query.orderBy('slot').snapshots();
   }
 }
