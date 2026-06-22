@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "agbarber-bc826"
-  }
+  },
+  "targets": {
+    "agbarber-bc826": {
+      "hosting": {
+        "agbarber": [
+          "agbarber-bc826"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
