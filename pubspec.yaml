@@ -94,6 +94,6 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logoAG.png"
+  image_path: "assets/logoGerry.png"
   adaptive_icon_background_color: "#164638"
-  adaptive_icon_foreground_path: "assets/logoAG.png"
+  adaptive_icon_foreground_path: "assets/logoGerry.png"
