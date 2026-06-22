@@ -14,6 +14,10 @@ import 'screens/gestione_orari_screen.dart';
 import 'screens/gestione_calendario_screen.dart';
 import 'screens/gestione_turni_operatori_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
+// AGGIUNGI L'IMPORT DEL TUO SERVIZIO NOTIFICHE
+import 'services/notification_service.dart';
+
+// ... gli altri tuoi import rimangono uguali ...
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +25,9 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // AGGIUNGI QUESTA RIGA QUI PER ACCENDERE IL SISTEMA NOTIFICHE ALL'AVVIO
+  await NotificationService().init();
 
   runApp(const MyApp());
 }

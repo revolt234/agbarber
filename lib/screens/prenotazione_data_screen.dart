@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+// AGGIUNTO: Importazione del servizio di notifica locale
+import '../services/notification_service.dart';
 
 class PrenotazioneDataScreen extends StatefulWidget {
   final String servizioId;
@@ -375,7 +377,8 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
                             int prezzoStimato = 15;
 
-                            await FirebaseFirestore.instance.collection('appointments').add({
+                            // MODIFICATO: Assegnato il riferimento temporaneo docRef per estrarne l'ID alfanumerico
+                            final docRef = await FirebaseFirestore.instance.collection('appointments').add({
                               'date': dataStr,
                               'slot': _orarioSelezionato,
                               'barberId': _barbiereSelezionatoId,
@@ -387,6 +390,18 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               'totalPrice': prezzoStimato,
                               'createdAt': FieldValue.serverTimestamp(),
                             });
+
+                            // AGGIUNTO: Calcolo e pianificazione della notifica locale con anticipo di 15 minuti
+                            try {
+                              await NotificationService().pianificaNotificaAppuntamento(
+                                idNotifica: docRef.id.hashCode,
+                                dataStr: dataStr,
+                                slotStr: _orarioSelezionato!,
+                                servizi: widget.servizioNome,
+                              );
+                            } catch (e) {
+                              debugPrint("Errore durante la pianificazione locale del promemoria: $e");
+                            }
 
                             if (!context.mounted) return;
 
