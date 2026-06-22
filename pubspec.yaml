@@ -95,6 +95,4 @@ flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   image_path: "assets/logoAG.png"
-  # Opzionale per Android 8.0+: imposta uno sfondo scuro adattivo dietro al logo dorato
-  adaptive_icon_background_color: "#121212"
-  adaptive_icon_foreground_path: "assets/logoAG.png"
+  # Rimuovendo le righe "adaptive_icon_...", costringiamo Android a usare l'immagine intera a pieno schermo
