@@ -93,9 +93,7 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 flutter_launcher_icons:
   android: true
-  ios: true # Lascialo true se prevedi una versione iOS, altrimenti false
-  image_path: "assets/logoAG.png" # <--- CAMBIA CON IL PERCORSO DELLA TUA IMMAGINE
-  # Opzionale: per icone adattive su Android
-  adaptive_icon_background: "#FFFFFF" # Colore di sfondo se la tua icona è trasparente
-  adaptive_icon_foreground: "assets/logoAG.png"
-  # Rimuovendo le righe "adaptive_icon_...", costringiamo Android a usare l'immagine intera a pieno schermo
+  ios: true
+  image_path: "assets/logoAG.png"
+  adaptive_icon_background_color: "#164638"
+  adaptive_icon_foreground_path: "assets/logoAG.png"
