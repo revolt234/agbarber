@@ -330,7 +330,7 @@ class BarbiereHomePage extends StatelessWidget {
                   child: Icon(Icons.edit_calendar, color: Colors.white),
                 ),
                 title: const Text(
-                  'Chiusure Speciali & Ferie',
+                  'Chiusure/Aperture Speciali & Ferie',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                 ),
                 subtitle: const Text('Blocca giornate specifiche sul calendario (es. Ferie d\'Agosto, festività)'),
