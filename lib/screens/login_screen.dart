@@ -15,7 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _nomeCognomeController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _recuperoEmailController = TextEditingController(); // Controller per il recupero password
+  final _recuperoEmailController = TextEditingController();
 
   final FocusNode _nomeCognomeFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
@@ -36,10 +36,18 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // Mostra il dialogo di recupero password stile brand
+  // CORREZIONE UTILITY: Posiziona il cursore alla fine del testo senza selezionarlo
+  void _resettaSelezioneTesto(TextEditingController controller) {
+    final text = controller.text;
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
   void _mostraDialogoRecuperoPassword() {
-    // Pre-compila l'email se l'utente l'ha già scritta nel form principale
     _recuperoEmailController.text = _emailController.text.trim();
+    _resettaSelezioneTesto(_recuperoEmailController);
 
     showDialog(
       context: context,
@@ -61,6 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
             TextField(
               controller: _recuperoEmailController,
               style: const TextStyle(color: Colors.white),
+              onTap: () => _resettaSelezioneTesto(_recuperoEmailController), // Protezione dialogo
               decoration: const InputDecoration(
                 labelText: 'Email',
                 labelStyle: TextStyle(color: Colors.grey),
@@ -91,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 );
                 return;
               }
-              Navigator.pop(context); // Chiude il dialogo
+              Navigator.pop(context);
               _inviaEmailReset(email);
             },
             child: const Text('Invia Link', style: TextStyle(color: Colors.white)),
@@ -101,7 +110,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Esegue l'invio dell'email gestendo la rete assente
   Future<void> _inviaEmailReset(String email) async {
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
@@ -180,12 +188,9 @@ class _LoginScreenState extends State<LoginScreen> {
     } on FirebaseAuthException catch (e) {
       String messaggioErrore = "Si è verificato un errore.";
 
-      // Controllo mirato connessione internet
       if (e.code == 'network-request-failed') {
         messaggioErrore = "Nessuna connessione a Internet. Controlla la tua rete e riprova.";
-      }
-      // Controllo mirato account inesistente o errato
-      else if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+      } else if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
         messaggioErrore = "Non esiste un account registrato con questa email o la password è errata.";
       } else if (e.code == 'wrong-password') {
         messaggioErrore = "Password errata. Riprova.";
@@ -203,7 +208,6 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      // Intercetta errori generici di rete a livello di socket system
       String erroreGenerico = "Si è verificato un errore di rete.";
       if (e is SocketException) {
         erroreGenerico = "Internet non disponibile. Verifica la tua connessione.";
@@ -223,7 +227,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: const Color(0xFF121212), // Uniformato lo sfondo scuro
+        backgroundColor: const Color(0xFF121212),
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -247,6 +251,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _nomeCognomeController,
                     focusNode: _nomeCognomeFocus,
                     style: const TextStyle(color: Colors.white),
+                    onTap: () => _resettaSelezioneTesto(_nomeCognomeController), // CORREZIONE: Cursore pulito al click
+                    onTapOutside: (event) => _nomeCognomeFocus.unfocus(),
                     decoration: const InputDecoration(
                       labelText: 'Nome e Cognome',
                       labelStyle: TextStyle(color: Colors.grey),
@@ -263,6 +269,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _emailController,
                   focusNode: _emailFocus,
                   style: const TextStyle(color: Colors.white),
+                  onTap: () => _resettaSelezioneTesto(_emailController), // CORREZIONE: Cursore pulito al click
+                  onTapOutside: (event) => _emailFocus.unfocus(),
                   decoration: const InputDecoration(
                     labelText: 'Email',
                     labelStyle: TextStyle(color: Colors.grey),
@@ -278,6 +286,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _passwordController,
                   focusNode: _passwordFocus,
                   style: const TextStyle(color: Colors.white),
+                  onTap: () => _resettaSelezioneTesto(_passwordController), // CORREZIONE: Cursore pulito al click
+                  onTapOutside: (event) => _passwordFocus.unfocus(),
                   decoration: const InputDecoration(
                     labelText: 'Password',
                     labelStyle: TextStyle(color: Colors.grey),
@@ -288,7 +298,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: true,
                 ),
 
-                // Pulsante Recupero Password (visibile solo se siamo in modalità Login)
                 if (_isLogin)
                   Align(
                     alignment: Alignment.centerRight,
@@ -317,7 +326,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () => setState(() => _isLogin = !_isLogin),
+                  onPressed: () => setState(() {
+                    _isLogin = !_isLogin;
+                    // Pulisce i campi quando l'utente cambia schermata per sicurezza
+                    _nomeCognomeController.clear();
+                    _emailController.clear();
+                    _passwordController.clear();
+                  }),
                   child: Text(
                     _isLogin
                         ? 'Non hai un account? Registrati qui'

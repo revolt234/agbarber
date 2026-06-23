@@ -20,6 +20,30 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   // Formatta la data per Firestore (es: "2026-06-21")
   String get _dataString => DateFormat('yyyy-MM-dd').format(_dataSelezionata);
 
+  // Trasforma l'orario in minuti (es. "09:40" -> 580)
+  int _minutiDaStringa(String s) {
+    final parti = s.split(':');
+    return int.parse(parti[0]) * 60 + int.parse(parti[1]);
+  }
+
+  // Trasforma i minuti totali in una stringa oraria leggibile (es. 620 -> "10:20")
+  String _stringaDaMinuti(int m) {
+    int ora = m ~/ 60;
+    int min = m % 60;
+    return "${ora.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')}";
+  }
+
+  // CORREZIONE: Calcola dinamicamente la fine del servizio partendo dallo slot iniziale e la durata
+  String _calcolaFineServizio(String oraInizio, int durataMinuti) {
+    try {
+      int minutiInizio = _minutiDaStringa(oraInizio);
+      int minutiFine = minutiInizio + durataMinuti;
+      return _stringaDaMinuti(minutiFine);
+    } catch (e) {
+      return "--:--";
+    }
+  }
+
   Future<void> _selezionaData(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -154,10 +178,22 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   itemBuilder: (context, index) {
                     final data = prenotazioni[index].data() as Map<String, dynamic>;
 
-                    final String ora = data['slot'] ?? '--:--';
+                    final String oraInizio = data['slot'] ?? '--:--';
 
-                    // MODIFICATO QUI: Estrazione del Nome e Cognome reale con fallback dinamici
-                    final String clienteNome = data['userName'] ?? data['displayName'] ?? data['userEmail'] ?? 'Cliente';
+                    // Recupera la durata per calcolare la fine del servizio
+                    int durataServizio = 30;
+                    if (data.containsKey('duration')) {
+                      durataServizio = data['duration'];
+                    } else if (data.containsKey('totalDuration')) {
+                      durataServizio = data['totalDuration'];
+                    } else if (data.containsKey('services_duration')) {
+                      durataServizio = data['services_duration'];
+                    }
+
+                    final String oraFine = _calcolaFineServizio(oraInizio, durataServizio);
+
+                    // Pulito dai vecchi fallbacks email basandoci solo su nome e cognome obbligatori
+                    final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
 
                     final String operatoreNome = data['barberName'] ?? 'Qualsiasi';
                     final List servizi = data['services'] ?? [];
@@ -171,19 +207,34 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                         padding: const EdgeInsets.all(16.0),
                         child: Row(
                           children: [
+                            // MODIFICATO: Mostra chiaramente inizio e fine del servizio
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               decoration: BoxDecoration(
                                 color: agVerde,
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Text(
-                                ora,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    oraInizio,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_drop_down, color: Colors.white, size: 14),
+                                  Text(
+                                    oraFine,
+                                    style: TextStyle(
+                                      color: agOro,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -192,7 +243,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    clienteNome, // <--- Mostra il Nome e Cognome reale dello user
+                                    clienteNome,
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -203,7 +254,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Servizi: ${servizi.join(", ")}',
+                                    'Servizio: ${servizi.join(", ")} ($durataServizio min)',
                                     style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
                                   ),
                                 ],

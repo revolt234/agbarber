@@ -11,13 +11,20 @@ class GestioneServiziScreen extends StatefulWidget {
 class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
   final _nomeController = TextEditingController();
   final _prezzoController = TextEditingController();
-  final _durataController = TextEditingController();
+
+  // Sostituito il controller con una variabile intera per gestire il dropdown
+  int? _durataSelezionata;
+
+  // CORREZIONE: Generazione dinamica dei minuti da 30 a 120 con passaggi di 10 minuti
+  final List<int> _opzioniDurata = List<int>.generate(
+    ((120 - 30) ~/ 10) + 1,
+        (index) => 30 + (index * 10),
+  );
 
   @override
   void dispose() {
     _nomeController.dispose();
     _prezzoController.dispose();
-    _durataController.dispose();
     super.dispose();
   }
 
@@ -27,63 +34,79 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
       // Se passiamo un docId, siamo in modalità MODIFICA: precompiliamo i campi
       _nomeController.text = nomeIniziale ?? '';
       _prezzoController.text = prezzoIniziale?.toString() ?? '';
-      _durataController.text = durataIniziale?.toString() ?? '';
+      // Se la durata memorizzata è presente nelle opzioni, la seleziona, altrimenti mette il default (30)
+      _durataSelezionata = _opzioniDurata.contains(durataIniziale) ? durataIniziale : 30;
     } else {
-      // Altrimenti siamo in modalità INSERIMENTO: svuotiamo i campi
+      // Altrimenti siamo in modalità INSERIMENTO: svuotiamo i campi e impostiamo il valore iniziale del dropdown
       _nomeController.clear();
       _prezzoController.clear();
-      _durataController.clear();
+      _durataSelezionata = 30; // Valore predefinito alla creazione
     }
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(docId == null ? 'Aggiungi Nuovo Servizio' : 'Modifica Servizio'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _nomeController,
-                decoration: const InputDecoration(
-                  labelText: 'Nome Servizio',
-                  border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder( // Utilizzato per aggiornare il dropdown all'interno del dialogo
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(docId == null ? 'Aggiungi Nuovo Servizio' : 'Modifica Servizio'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _nomeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome Servizio',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _prezzoController,
+                      decoration: const InputDecoration(
+                        labelText: 'Prezzo (€)',
+                        border: OutlineInputBorder(),
+                        prefixText: '€ ',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // DropdownButtonFormField con la nuova lista granulare di 10 min in 10 min
+                    DropdownButtonFormField<int>(
+                      initialValue: _durataSelezionata,
+                      decoration: const InputDecoration(
+                        labelText: 'Durata stimata',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _opzioniDurata.map((int minuti) {
+                        return DropdownMenuItem<int>(
+                          value: minuti,
+                          child: Text('$minuti min'),
+                        );
+                      }).toList(),
+                      onChanged: (int? nuovoValore) {
+                        setDialogState(() {
+                          _durataSelezionata = nuovoValore;
+                        });
+                      },
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _prezzoController,
-                decoration: const InputDecoration(
-                  labelText: 'Prezzo (€)',
-                  border: OutlineInputBorder(),
-                  prefixText: '€ ',
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Annulla'),
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _durataController,
-                decoration: const InputDecoration(
-                  labelText: 'Durata stimata (in minuti)',
-                  border: OutlineInputBorder(),
-                  suffixText: ' min',
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF164638)),
+                  onPressed: () => _salvaServizioFirebase(docId),
+                  child: const Text('Salva', style: TextStyle(color: Colors.white)),
                 ),
-                keyboardType: TextInputType.number,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF164638)),
-            onPressed: () => _salvaServizioFirebase(docId),
-            child: const Text('Salva', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+              ],
+            );
+          }
       ),
     );
   }
@@ -92,7 +115,7 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
   Future<void> _salvaServizioFirebase(String? docId) async {
     final nome = _nomeController.text.trim();
     final prezzoSetted = double.tryParse(_prezzoController.text.trim());
-    final durataSetted = int.tryParse(_durataController.text.trim());
+    final durataSetted = _durataSelezionata;
 
     if (nome.isEmpty || prezzoSetted == null || durataSetted == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -175,7 +198,6 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
                     children: [
                       Text('${prezzo.toStringAsFixed(2)} €', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 4),
-                      // NUOVO: Pulsante Modifica (Matita)
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.blue),
                         onPressed: () => _mostraDialogServizio(
@@ -185,7 +207,6 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
                           durataIniziale: durata,
                         ),
                       ),
-                      // Pulsante Elimina (Cestino)
                       IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () => _eliminaServizio(servizioDoc.id),

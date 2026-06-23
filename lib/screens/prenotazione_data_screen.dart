@@ -20,6 +20,13 @@ class PrenotazioneDataScreen extends StatefulWidget {
   State<PrenotazioneDataScreen> createState() => _PrenotazioneDataScreenState();
 }
 
+// Classe di supporto per mappare gli appuntamenti esistenti in minuti
+class IntervalloAppuntamento {
+  final int inizio;
+  final int fine;
+  IntervalloAppuntamento({required this.inizio, required this.fine});
+}
+
 class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   DateTime _dataSelezionata = DateTime.now();
   String? _barbiereSelezionatoId;
@@ -33,7 +40,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   Map<String, dynamic> _orariNegozioBase = {};
   Map<String, dynamic> _eccezioniCalendario = {};
   List<String> _slotOrariCalcolati = [];
-  List<String> _slotOccupatiId = [];
+  List<IntervalloAppuntamento> _appuntamentiOccupati = [];
 
   final List<String> _giorniSettimana = [
     'domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'
@@ -72,7 +79,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     if (_barbiereSelezionatoId == null) return;
     setState(() => _isLoadingSlot = true);
     _slotOrariCalcolati.clear();
-    _slotOccupatiId.clear();
+    _appuntamentiOccupati.clear();
 
     try {
       final String dataStr = _formattaData(_dataSelezionata);
@@ -86,9 +93,27 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       for (var doc in appuntamentiPresi.docs) {
         final datiApp = doc.data();
         if (datiApp.containsKey('slot') && datiApp['slot'] != null) {
-          _slotOccupatiId.add(datiApp['slot']);
+          int inizioMinuti = _minutiDaStringa(datiApp['slot']);
+
+          int durataAppuntamento = 30;
+          if (datiApp.containsKey('duration')) {
+            durataAppuntamento = datiApp['duration'];
+          } else if (datiApp.containsKey('totalDuration')) {
+            durataAppuntamento = datiApp['totalDuration'];
+          } else if (datiApp.containsKey('services_duration')) {
+            durataAppuntamento = datiApp['services_duration'];
+          }
+
+          int fineMinuti = inizioMinuti + durataAppuntamento;
+
+          _appuntamentiOccupati.add(
+              IntervalloAppuntamento(inizio: inizioMinuti, fine: fineMinuti)
+          );
         }
       }
+
+      // Ordiniamo gli appuntamenti per orario di inizio per rendere i controlli fluidi
+      _appuntamentiOccupati.sort((a, b) => a.inizio.compareTo(b.inizio));
 
       final barberEx = await FirebaseFirestore.instance
           .collection('barber_exceptions')
@@ -129,20 +154,71 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     }
   }
 
+  // CORREZIONE GENERAZIONE FLUIDA: Calcola gli incastri dinamici al minuto per evitare buchi temporali
   void _calcolaSlotPerFascia(Map<String, dynamic> fasciaData, Map<String, dynamic>? dataEx) {
     int start = _minutiDaStringa(fasciaData['apertura'] ?? "09:00");
     int end = _minutiDaStringa(fasciaData['chiusura'] ?? "13:00");
 
-    for (int m = start; m + widget.servizioDurata <= end; m += 30) {
-      int ora = m ~/ 60;
-      int min = m % 60;
+    final adesso = DateTime.now();
+    final bool isOggi = _formattaData(_dataSelezionata) == _formattaData(adesso);
+    final int minutiAttuali = (adesso.hour * 60) + adesso.minute;
 
+    // Scansioniamo la giornata con una granularità di 10 minuti per intercettare gli incastri perfetti
+    for (int m = start; m + widget.servizioDurata <= end; m += 10) {
+      if (isOggi && m <= minutiAttuali) {
+        continue;
+      }
+
+      int ora = m ~/ 60;
       if (dataEx != null && dataEx['type'] == 'mezza_giornata') {
         if (dataEx['fascia'] == 'mattina' && ora >= 13) continue;
         if (dataEx['fascia'] == 'pomeriggio' && ora < 13) continue;
       }
 
-      _slotOrariCalcolati.add("${ora.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')}");
+      // 1. Verifichiamo se lo slot si scontra (overlapping) con appuntamenti esistenti
+      int fineSlot = m + widget.servizioDurata;
+      bool siSovrappone = false;
+      for (var app in _appuntamentiOccupati) {
+        if (m < app.fine && fineSlot > app.inizio) {
+          siSovrappone = true;
+          break;
+        }
+      }
+      if (siSovrappone) continue;
+
+      // 2. LOGICA DI INCASTRO FLUIDO: Lo slot deve essere l'apertura, seguire un appuntamento,
+      // oppure rispettare il passo naturale del servizio rispetto all'ultimo blocco libero.
+      // MODIFICATO: Corretto il nome della variabile rimuovendo l'accento iniziale per gli standard Dart
+      bool eIncastroValido = (m == start); // Condizione 1: È l'apertura del turno
+
+      if (!eIncastroValido) {
+        // Condizione 2: Si attacca perfettamente alla fine di un appuntamento precedente
+        for (var app in _appuntamentiOccupati) {
+          if (m == app.fine) {
+            eIncastroValido = true;
+            break;
+          }
+        }
+      }
+
+      if (!eIncastroValido) {
+        // Condizione 3: Calcoliamo lo spazio dall'ultimo vincolo temporale precedente (apertura o fine appuntamento)
+        int ultimoPuntoRiferimento = start;
+        for (var app in _appuntamentiOccupati) {
+          if (app.fine <= m) {
+            ultimoPuntoRiferimento = app.fine;
+          }
+        }
+        // Se lo spazio vuoto è un multiplo esatto della durata del servizio, lo slot è coerente
+        if ((m - ultimoPuntoRiferimento) % widget.servizioDurata == 0) {
+          eIncastroValido = true;
+        }
+      }
+
+      if (eIncastroValido) {
+        int min = m % 60;
+        _slotOrariCalcolati.add("${ora.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')}");
+      }
     }
   }
 
@@ -173,9 +249,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         backgroundColor: const Color(0xFF164638),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      // CORREZIONE 1: Aggiunto SafeArea globale al body per proteggere i contenuti in alto e ai lati
       body: SafeArea(
-        bottom: false, // Lasciamo che sia la bottomNavigationBar a gestire lo spazio inferiore
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -335,25 +409,20 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                   final ora = _slotOrariCalcolati[index];
                   bool sel = _orarioSelezionato == ora;
 
-                  bool occupato = _slotOccupatiId.contains(ora);
-
                   return GestureDetector(
-                    onTap: (_isSaving || occupato) ? null : () => setState(() => _orarioSelezionato = ora),
+                    onTap: _isSaving ? null : () => setState(() => _orarioSelezionato = ora),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: occupato
-                            ? Colors.grey.withAlpha(38)
-                            : (sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824)),
+                        color: sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Center(
                         child: Text(
                           ora,
                           style: TextStyle(
-                            color: occupato ? Colors.grey.shade600 : (sel ? Colors.black : Colors.white),
+                            color: sel ? Colors.black : Colors.white,
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
-                            decoration: occupato ? TextDecoration.lineThrough : null,
                           ),
                         ),
                       ),
@@ -365,9 +434,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
           ],
         ),
       ),
-
-      // CORREZIONE 2: Spostato il pulsante all'interno di SafeArea + bottomNavigationBar.
-      // Questo impedisce categoricamente ai tasti fisici o di navigazione di Android/Pixel di coprire l'interfaccia.
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.only(left: 20.0, right: 20.0, bottom: 16.0),
@@ -421,6 +487,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           final docRef = await FirebaseFirestore.instance.collection('appointments').add({
                             'date': dataStr,
                             'slot': _orarioSelezionato,
+                            'duration': widget.servizioDurata,
                             'barberId': _barbiereSelezionatoId,
                             'barberName': _barbiereSelezionatoNome,
                             'userId': user.uid,

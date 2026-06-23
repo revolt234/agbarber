@@ -61,6 +61,8 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
     };
   }
 
+  int _minutiDaStringa(String s) => int.parse(s.split(':')[0]) * 60 + int.parse(s.split(':')[1]);
+
   Future<void> _selezionaOrario(String giorno, String fascia, bool isApertura) async {
     final String chiaveOrario = isApertura ? 'apertura' : 'chiusura';
     final String orarioAttuale = _orariSettimanali[giorno]![fascia][chiaveOrario] ?? (isApertura ? '09:00' : '13:00');
@@ -71,10 +73,65 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
     final TimeOfDay? tempoScelto = await showTimePicker(
       context: context,
       initialTime: tempoIniziale,
+      builder: (BuildContext context, Widget? child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+          child: child!,
+        );
+      },
     );
 
     if (tempoScelto != null) {
+      final int minutiScelti = (tempoScelto.hour * 60) + tempoScelto.minute;
+      final int limiteMezzogiorno = 13 * 60; // 13:00 espresso in minuti
+
       final stringaOra = '${tempoScelto.hour.toString().padLeft(2, '0')}:${tempoScelto.minute.toString().padLeft(2, '0')}';
+
+      // Recuperiamo gli altri orari attuali per fare i controlli incrociati di coerenza
+      final String mattInizioStr = _orariSettimanali[giorno]!['mattina']['apertura'] ?? "09:00";
+      final String mattFineStr = _orariSettimanali[giorno]!['mattina']['chiusura'] ?? "13:00";
+      final String pomInizioStr = _orariSettimanali[giorno]!['pomeriggio']['apertura'] ?? "14:30";
+      final String pomFineStr = _orariSettimanali[giorno]!['pomeriggio']['chiusura'] ?? "19:30";
+
+      String? messaggioErrore;
+
+      // --- LOGICA DI VALIDAZIONE RIGIDA ---
+      if (fascia == 'mattina') {
+        if (isApertura) {
+          if (minutiScelti >= _minutiDaStringa(mattFineStr)) {
+            messaggioErrore = "L'apertura della mattina deve precedere l'orario di chiusura ($mattFineStr).";
+          }
+        } else {
+          if (minutiScelti > limiteMezzogiorno) {
+            messaggioErrore = "Il turno di mattina deve tassativamente chiudere entro le ore 13:00.";
+          } else if (minutiScelti <= _minutiDaStringa(mattInizioStr)) {
+            messaggioErrore = "La chiusura della mattina deve seguire l'orario di apertura ($mattInizioStr).";
+          }
+        }
+      } else if (fascia == 'pomeriggio') {
+        if (isApertura) {
+          if (minutiScelti < limiteMezzogiorno) {
+            messaggioErrore = "Il turno del pomeriggio non può aprire prima delle ore 13:00.";
+          } else if (minutiScelti >= _minutiDaStringa(pomFineStr)) {
+            messaggioErrore = "L'apertura del pomeriggio deve precedere l'orario di chiusura ($pomFineStr).";
+          }
+        } else {
+          if (minutiScelti <= _minutiDaStringa(pomInizioStr)) {
+            messaggioErrore = "La chiusura del pomeriggio deve seguire l'orario di apertura ($pomInizioStr).";
+          }
+        }
+      }
+
+      if (messaggioErrore != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(messaggioErrore), backgroundColor: Colors.orange),
+          );
+        }
+        return; // Interrompe l'aggiornamento perché l'orario non è valido
+      }
+
       setState(() {
         _orariSettimanali[giorno]![fascia][chiaveOrario] = stringaOra;
       });
@@ -84,7 +141,6 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
   Future<void> _salvaOrari() async {
     setState(() => _isLoading = true);
     try {
-      // Convertiamo la mappa con le chiavi in minuscolo prima di salvare su Firestore
       final Map<String, dynamic> datiDaSalvare = {};
       _orariSettimanali.forEach((giorno, mappaDati) {
         datiDaSalvare[giorno.toLowerCase()] = mappaDati;
@@ -94,7 +150,7 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Orari aggiornati con successo!'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Orari updated con successo!'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
