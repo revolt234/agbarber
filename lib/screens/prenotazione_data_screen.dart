@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// AGGIUNTO: Importazione del servizio di notifica locale
 import '../services/notification_service.dart';
 
 class PrenotazioneDataScreen extends StatefulWidget {
@@ -48,7 +47,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
   Future<void> _inizializzaDati() async {
     try {
-      // CORREZIONE: Forziamo il recupero iniziale da server per garantire la freschezza dei dati di base
       final orariDoc = await FirebaseFirestore.instance
           .collection('settings')
           .doc('orari_negozio')
@@ -79,8 +77,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     try {
       final String dataStr = _formattaData(_dataSelezionata);
 
-      // CORREZIONE FONDAMENTALE: Forziamo il recupero solo da SERVER.
-      // Se si è offline, va in catch e impedisce di mostrare slot vecchi o falsamente liberi.
       final appuntamentiPresi = await FirebaseFirestore.instance
           .collection('appointments')
           .where('date', isEqualTo: dataStr)
@@ -94,7 +90,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         }
       }
 
-      // CORREZIONE: Anche per le eccezioni dello staff forziamo il controllo online sul SERVER
       final barberEx = await FirebaseFirestore.instance
           .collection('barber_exceptions')
           .doc("${dataStr}_$_barbiereSelezionatoId")
@@ -121,7 +116,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     } catch (e) {
       debugPrint("Errore aggiornamento slot (probabilmente offline): $e");
       if (mounted) {
-        // CORREZIONE CODA ERRORI: Cancella i vecchi SnackBar pendenti prima di mostrarne uno nuovo
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -162,7 +156,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoadingConfig) return const Scaffold(backgroundColor: Color(0xFF121212), body: Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C))));
+    if (_isLoadingConfig) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF121212),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C))),
+      );
+    }
 
     final String dataStr = _formattaData(_dataSelezionata);
     final bool giornoCorrenteChiuso = _isChiuso(_dataSelezionata);
@@ -174,319 +173,318 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         backgroundColor: const Color(0xFF164638),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. SELEZIONE GIORNO
-          const Padding(
-            padding: EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
-            child: Text('Seleziona il giorno:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
-          ),
-          SizedBox(
-            height: 90,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: 14,
-              itemBuilder: (ctx, i) {
-                DateTime d = DateTime.now().add(Duration(days: i));
-                bool isChiusoGiorno = _isChiuso(d);
-                bool sel = _formattaData(d) == dataStr;
+      // CORREZIONE 1: Aggiunto SafeArea globale al body per proteggere i contenuti in alto e ai lati
+      body: SafeArea(
+        bottom: false, // Lasciamo che sia la bottomNavigationBar a gestire lo spazio inferiore
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. SELEZIONE GIORNO
+            const Padding(
+              padding: EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
+              child: Text('Seleziona il giorno:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
+            ),
+            SizedBox(
+              height: 90,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: 14,
+                itemBuilder: (ctx, i) {
+                  DateTime d = DateTime.now().add(Duration(days: i));
+                  bool isChiusoGiorno = _isChiuso(d);
+                  bool sel = _formattaData(d) == dataStr;
 
-                final List<String> settimanaAbbr = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
-                String nomeGiorno = settimanaAbbr[d.weekday % 7];
+                  final List<String> settimanaAbbr = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+                  String nomeGiorno = settimanaAbbr[d.weekday % 7];
 
-                return GestureDetector(
-                  onTap: isChiusoGiorno || _isSaving
-                      ? null
-                      : () {
-                    setState(() {
-                      _dataSelezionata = d;
-                      _orarioSelezionato = null;
-                    });
-                    _aggiornaSlotOrari();
-                  },
-                  child: Container(
-                    width: 65,
-                    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: sel
-                          ? const Color(0xFFE2B13C)
-                          : (isChiusoGiorno ? Colors.red.withAlpha(51) : const Color(0xFF1C2824)),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isChiusoGiorno ? Colors.red.shade800 : Colors.transparent,
-                        width: isChiusoGiorno ? 1.5 : 0,
+                  return GestureDetector(
+                    onTap: isChiusoGiorno || _isSaving
+                        ? null
+                        : () {
+                      setState(() {
+                        _dataSelezionata = d;
+                        _orarioSelezionato = null;
+                      });
+                      _aggiornaSlotOrari();
+                    },
+                    child: Container(
+                      width: 65,
+                      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: sel
+                            ? const Color(0xFFE2B13C)
+                            : (isChiusoGiorno ? Colors.red.withAlpha(51) : const Color(0xFF1C2824)),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isChiusoGiorno ? Colors.red.shade800 : Colors.transparent,
+                          width: isChiusoGiorno ? 1.5 : 0,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(nomeGiorno, style: TextStyle(color: isChiusoGiorno ? Colors.red.shade300 : (sel ? Colors.black : Colors.grey), fontSize: 13)),
+                          const SizedBox(height: 4),
+                          Text('${d.day}', style: TextStyle(color: isChiusoGiorno ? Colors.red.shade300 : (sel ? Colors.black : Colors.white), fontSize: 18, fontWeight: FontWeight.bold)),
+                        ],
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(nomeGiorno, style: TextStyle(color: isChiusoGiorno ? Colors.red.shade300 : (sel ? Colors.black : Colors.grey), fontSize: 13)),
-                        const SizedBox(height: 4),
-                        Text('${d.day}', style: TextStyle(color: isChiusoGiorno ? Colors.red.shade300 : (sel ? Colors.black : Colors.white), fontSize: 18, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
 
-          // 2. SELEZIONE OPERATORE
-          const Padding(
-            padding: EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
-            child: Text('Scegli chi ti guiderà:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
-          ),
-          SizedBox(
-            height: 110,
-            child: giornoCorrenteChiuso
-                ? const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20.0),
-                child: Text(
-                  'Il salone è chiuso in questa data. Scegli un giorno attivo sopra.',
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 15),
-                  textAlign: TextAlign.center,
+            // 2. SELEZIONE OPERATORE
+            const Padding(
+              padding: EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
+              child: Text('Scegli chi ti guiderà:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
+            ),
+            SizedBox(
+              height: 110,
+              child: giornoCorrenteChiuso
+                  ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Text(
+                    'Il salone è chiuso in questa data. Scegli un giorno attivo sopra.',
+                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 15),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
+              )
+                  : StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
+                builder: (ctx, snap) {
+                  if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)));
+                  final barbieri = snap.data!.docs;
+
+                  return ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: barbieri.length,
+                    itemBuilder: (context, index) {
+                      var doc = barbieri[index];
+                      var data = doc.data() as Map<String, dynamic>;
+                      final id = doc.id;
+                      final nome = data['name'] ?? 'Staff';
+                      bool sel = _barbiereSelezionatoId == id;
+
+                      return GestureDetector(
+                        onTap: _isSaving
+                            ? null
+                            : () {
+                          setState(() {
+                            _barbiereSelezionatoId = id;
+                            _barbiereSelezionatoNome = nome;
+                            _orarioSelezionato = null;
+                          });
+                          _aggiornaSlotOrari();
+                        },
+                        child: Container(
+                          width: 100,
+                          margin: const EdgeInsets.symmetric(horizontal: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1C2824),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: sel ? const Color(0xFFE2B13C) : Colors.transparent, width: 2),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: sel ? const Color(0xFFE2B13C) : const Color(0xFF164638),
+                                child: Icon(Icons.person, color: sel ? Colors.black : Colors.white),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(nome, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
-            )
-                : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
-              builder: (ctx, snap) {
-                if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)));
-                final barbieri = snap.data!.docs;
-
-                return ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: barbieri.length,
-                  itemBuilder: (context, index) {
-                    var doc = barbieri[index];
-                    var data = doc.data() as Map<String, dynamic>;
-                    final id = doc.id;
-                    final nome = data['name'] ?? 'Staff';
-                    bool sel = _barbiereSelezionatoId == id;
-
-                    return GestureDetector(
-                      onTap: _isSaving
-                          ? null
-                          : () {
-                        setState(() {
-                          _barbiereSelezionatoId = id;
-                          _barbiereSelezionatoNome = nome;
-                          _orarioSelezionato = null;
-                        });
-                        _aggiornaSlotOrari();
-                      },
-                      child: Container(
-                        width: 100,
-                        margin: const EdgeInsets.symmetric(horizontal: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1C2824),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: sel ? const Color(0xFFE2B13C) : Colors.transparent, width: 2),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: sel ? const Color(0xFFE2B13C) : const Color(0xFF164638),
-                              child: Icon(Icons.person, color: sel ? Colors.black : Colors.white),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(nome, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
             ),
-          ),
 
-          // 3. GRIGLIA ORARI DINAMICI
-          const Padding(
-            padding: EdgeInsets.only(left: 20.0, top: 20, bottom: 8),
-            child: Text('Orari disponibili:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
-          ),
-          Expanded(
-            child: giornoCorrenteChiuso
-                ? const SizedBox.shrink()
-                : (_barbiereSelezionatoId == null
-                ? const Center(child: Text('Seleziona un operatore per vedere gli orari.', style: TextStyle(color: Colors.grey)))
-                : (_isLoadingSlot
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)))
-                : (_slotOrariCalcolati.isEmpty
-                ? const Center(child: Text('Nessun orario disponibile o operatore fuori turno.', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)))
-                : GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 2.2,
-              ),
-              itemCount: _slotOrariCalcolati.length,
-              itemBuilder: (context, index) {
-                final ora = _slotOrariCalcolati[index];
-                bool sel = _orarioSelezionato == ora;
+            // 3. GRIGLIA ORARI DINAMICI
+            const Padding(
+              padding: EdgeInsets.only(left: 20.0, top: 20, bottom: 8),
+              child: Text('Orari disponibili:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
+            ),
+            Expanded(
+              child: giornoCorrenteChiuso
+                  ? const SizedBox.shrink()
+                  : (_barbiereSelezionatoId == null
+                  ? const Center(child: Text('Seleziona un operatore per vedere gli orari.', style: TextStyle(color: Colors.grey)))
+                  : (_isLoadingSlot
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)))
+                  : (_slotOrariCalcolati.isEmpty
+                  ? const Center(child: Text('Nessun orario disponibile o operatore fuori turno.', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)))
+                  : GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 2.2,
+                ),
+                itemCount: _slotOrariCalcolati.length,
+                itemBuilder: (context, index) {
+                  final ora = _slotOrariCalcolati[index];
+                  bool sel = _orarioSelezionato == ora;
 
-                bool occupato = _slotOccupatiId.contains(ora);
+                  bool occupato = _slotOccupatiId.contains(ora);
 
-                return GestureDetector(
-                  onTap: (_isSaving || occupato) ? null : () => setState(() => _orarioSelezionato = ora),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: occupato
-                          ? Colors.grey.withAlpha(38)
-                          : (sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824)),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Center(
-                      child: Text(
-                        ora,
-                        style: TextStyle(
-                          color: occupato ? Colors.grey.shade600 : (sel ? Colors.black : Colors.white),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          decoration: occupato ? TextDecoration.lineThrough : null,
+                  return GestureDetector(
+                    onTap: (_isSaving || occupato) ? null : () => setState(() => _orarioSelezionato = ora),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: occupato
+                            ? Colors.grey.withAlpha(38)
+                            : (sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text(
+                          ora,
+                          style: TextStyle(
+                            color: occupato ? Colors.grey.shade600 : (sel ? Colors.black : Colors.white),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            decoration: occupato ? TextDecoration.lineThrough : null,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
-            )))),
-          ),
+                  );
+                },
+              )))),
+            ),
+          ],
+        ),
+      ),
 
-          // 4. BOTTONE CONFERMA PRENOTAZIONE
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE2B13C),
-                minimumSize: const Size.fromHeight(54),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              onPressed: (_barbiereSelezionatoId == null || _orarioSelezionato == null || giornoCorrenteChiuso || _isSaving)
-                  ? null
-                  : () {
-                showDialog(
-                  context: context,
-                  builder: (dialogContext) => AlertDialog(
-                    title: const Text('Conferma Prenotazione'),
-                    content: Text('Servizio: ${widget.servizioNome}\nData: $dataStr\nOra: $_orarioSelezionato\nCon: $_barbiereSelezionatoNome'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        child: const Text('Modifica'),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          Navigator.pop(dialogContext);
+      // CORREZIONE 2: Spostato il pulsante all'interno di SafeArea + bottomNavigationBar.
+      // Questo impedisce categoricamente ai tasti fisici o di navigazione di Android/Pixel di coprire l'interfaccia.
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(left: 20.0, right: 20.0, bottom: 16.0),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE2B13C),
+              minimumSize: const Size.fromHeight(54),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: (_barbiereSelezionatoId == null || _orarioSelezionato == null || giornoCorrenteChiuso || _isSaving)
+                ? null
+                : () {
+              showDialog(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                  title: const Text('Conferma Prenotazione'),
+                  content: Text('Servizio: ${widget.servizioNome}\nData: $dataStr\nOra: $_orarioSelezionato\nCon: $_barbiereSelezionatoNome'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Modifica'),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        Navigator.pop(dialogContext);
 
-                          setState(() => _isSaving = true);
+                        setState(() => _isSaving = true);
+
+                        try {
+                          await FirebaseFirestore.instance
+                              .collection('settings')
+                              .doc('orari_negozio')
+                              .get(const GetOptions(source: Source.server));
+
+                          final user = FirebaseAuth.instance.currentUser;
+                          if (user == null) throw 'Utente non autenticato';
+
+                          String nomeRealeCliente = "Cliente";
+
+                          final userDoc = await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(user.uid)
+                              .get(const GetOptions(source: Source.server));
+
+                          if (userDoc.exists && userDoc.data() != null) {
+                            nomeRealeCliente = userDoc.data()?['name'] ?? user.displayName ?? "Cliente";
+                          }
+
+                          int prezzoStimato = 15;
+
+                          final docRef = await FirebaseFirestore.instance.collection('appointments').add({
+                            'date': dataStr,
+                            'slot': _orarioSelezionato,
+                            'barberId': _barbiereSelezionatoId,
+                            'barberName': _barbiereSelezionatoNome,
+                            'userId': user.uid,
+                            'userName': nomeRealeCliente,
+                            'userEmail': user.email ?? 'Cliente anonimo',
+                            'services': [widget.servizioNome],
+                            'totalPrice': prezzoStimato,
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
 
                           try {
-                            // CORREZIONE CRUCIALE: Test immediato e reale di connessione verso il SERVER.
-                            // Se internet è assente o è caduto un attimo prima, lancerà un'eccezione interrompendo il salvataggio locale.
-                            await FirebaseFirestore.instance
-                                .collection('settings')
-                                .doc('orari_negozio')
-                                .get(const GetOptions(source: Source.server));
-
-                            final user = FirebaseAuth.instance.currentUser;
-                            if (user == null) throw 'Utente non autenticato';
-
-                            String nomeRealeCliente = "Cliente";
-
-                            // Forziamo anche qui il recupero dell'anagrafica da SERVER
-                            final userDoc = await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(user.uid)
-                                .get(const GetOptions(source: Source.server));
-
-                            if (userDoc.exists && userDoc.data() != null) {
-                              nomeRealeCliente = userDoc.data()?['name'] ?? user.displayName ?? "Cliente";
-                            }
-
-                            int prezzoStimato = 15;
-
-                            // SALVATAGGIO REALE DELL'APPUNTAMENTO
-                            final docRef = await FirebaseFirestore.instance.collection('appointments').add({
-                              'date': dataStr,
-                              'slot': _orarioSelezionato,
-                              'barberId': _barbiereSelezionatoId,
-                              'barberName': _barbiereSelezionatoNome,
-                              'userId': user.uid,
-                              'userName': nomeRealeCliente,
-                              'userEmail': user.email ?? 'Cliente anonimo',
-                              'services': [widget.servizioNome],
-                              'totalPrice': prezzoStimato,
-                              'createdAt': FieldValue.serverTimestamp(),
-                            });
-
-                            // PIANIFICAZIONE DELLA NOTIFICA LOCALE
-                            try {
-                              await NotificationService().pianificaNotificaAppuntamento(
-                                idNotifica: docRef.id.hashCode,
-                                dataStr: dataStr,
-                                slotStr: _orarioSelezionato!,
-                                servizi: widget.servizioNome,
-                              );
-                            } catch (e) {
-                              debugPrint("Errore durante la pianificazione locale del promemoria: $e");
-                            }
-
-                            if (!context.mounted) return;
-
-                            // CORREZIONE CODA ERRORI: Se va a buon fine, ripuliamo gli avvisi d'errore passati
-                            ScaffoldMessenger.of(context).clearSnackBars();
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Prenotazione effettuata con successo!'),
-                                backgroundColor: Colors.green,
-                              ),
+                            await NotificationService().pianificaNotificaAppuntamento(
+                              idNotifica: docRef.id.hashCode,
+                              dataStr: dataStr,
+                              slotStr: _orarioSelezionato!,
+                              servizi: widget.servizioNome,
                             );
-
-                            Navigator.of(context).popUntil((route) => route.isFirst);
-
                           } catch (e) {
-                            if (!context.mounted) return;
-                            setState(() => _isSaving = false);
-
-                            // CORREZIONE CODA ERRORI: Cancella i vecchi SnackBar accumulati prima di mostrarne uno nuovo
-                            ScaffoldMessenger.of(context).clearSnackBars();
-
-                            // Blocco definitivo: avvisiamo l'utente che il salvataggio è fallito causa assenza di rete
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Errore di connessione. Impossibile salvare la prenotazione offline.'),
-                                backgroundColor: Colors.red,
-                                duration: Duration(seconds: 4),
-                              ),
-                            );
+                            debugPrint("Errore durante la pianificazione locale del promemoria: $e");
                           }
-                        },
-                        child: const Text('Conferma', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                );
-              },
-              child: _isSaving
-                  ? const SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(color: Color(0xFF121212), strokeWidth: 2.5),
-              )
-                  : const Text('Conferma Prenotazione', style: TextStyle(color: Color(0xFF121212), fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
+
+                          if (!context.mounted) return;
+
+                          ScaffoldMessenger.of(context).clearSnackBars();
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Prenotazione effettuata con successo!'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+
+                          Navigator.of(context).popUntil((route) => route.isFirst);
+
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          setState(() => _isSaving = false);
+
+                          ScaffoldMessenger.of(context).clearSnackBars();
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Errore di connessione. Impossibile salvare la prenotazione offline.'),
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('Conferma', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              );
+            },
+            child: _isSaving
+                ? const SizedBox(
+              height: 24,
+              width: 24,
+              child: CircularProgressIndicator(color: Color(0xFF121212), strokeWidth: 2.5),
+            )
+                : const Text('Conferma Prenotazione', style: TextStyle(color: Color(0xFF121212), fontSize: 18, fontWeight: FontWeight.bold)),
           ),
-        ],
+        ),
       ),
     );
   }
