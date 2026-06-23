@@ -19,24 +19,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: _user!.email!);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Email di reset della password inviata! Controlla la tua posta.'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email di reset della password inviata! Controlla la tua posta.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Errore: $e'), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore: $e'), backgroundColor: Colors.red),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   // Funzione per eliminare l'account definitivamente
   Future<void> _eliminaAccount() async {
-    // Mostriamo prima un dialogo di conferma per sicurezza
     bool confermato = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -61,25 +64,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
     try {
       await _user?.delete();
-      Navigator.pop(context); // Torna indietro (l'AuthGate farà il resto)
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account deleted successfully.')),
-      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account eliminato con successo.')),
+        );
+
+        // CORREZIONE DEFINITIVA: Sradica tutte le vecchie schermate e rimanda all'AuthGate di partenza
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      }
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'requires-recent-login') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Per sicurezza, effettua nuovamente il login prima di eliminare l\'account.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Errore: ${e.message}'), backgroundColor: Colors.red),
-        );
+      if (mounted) {
+        if (e.code == 'requires-recent-login') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Per sicurezza, effettua nuovamente il login prima di eliminare l\'account.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Errore: ${e.message}'), backgroundColor: Colors.red),
+          );
+        }
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -88,8 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     const Color agVerde = Color(0xFF164638);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), // Assicura lo sfondo scuro coerente
-      // MODIFICATO: Inserito lo stesso ed identico stile dell'AppBar con logo a sinistra del brand
+      backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.only(left: 12.0),
@@ -108,16 +117,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         backgroundColor: agVerde,
         centerTitle: true,
-        automaticallyImplyLeading: false, // Rimuove la freccia di back nativa visto che è una scheda fissa della BottomBar
+        automaticallyImplyLeading: false,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)))
           : ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Card con info Utente
           Card(
-            color: const Color(0xFF1C2824), // Sfondo scuro per la card in palette
+            color: const Color(0xFF1C2824),
             elevation: 2,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
@@ -158,7 +166,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Text('Opzioni Sicurezza', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
           const Divider(color: agVerde),
 
-          // Modifica Password
           ListTile(
             leading: const Icon(Icons.lock_reset, color: Color(0xFFE2B13C)),
             title: const Text('Modifica Password', style: TextStyle(color: Colors.white)),
@@ -167,14 +174,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: _cambiaPassword,
           ),
 
-          // Logout
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.orange),
             title: const Text('Disconnetti', style: TextStyle(color: Colors.white)),
             subtitle: const Text('Esci dal tuo account corrente', style: TextStyle(color: Colors.grey)),
             trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-            onTap: () {
-              FirebaseAuth.instance.signOut();
+            onTap: () async {
+              await FirebaseAuth.instance.signOut();
+              if (mounted) {
+                // CORREZIONE ANCHE QUI: Pulisce la navigazione al logout per tornare alla login
+                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+              }
             },
           ),
 
@@ -182,7 +192,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Text('Zona Pericolo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)),
           const Divider(color: Colors.red),
 
-          // Elimina Account
           ListTile(
             leading: const Icon(Icons.delete_forever, color: Colors.red),
             title: const Text('Elimina Account', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),

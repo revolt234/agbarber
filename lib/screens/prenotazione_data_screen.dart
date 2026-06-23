@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -47,10 +48,18 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
   Future<void> _inizializzaDati() async {
     try {
-      final orariDoc = await FirebaseFirestore.instance.collection('settings').doc('orari_negozio').get();
+      // CORREZIONE: Forziamo il recupero iniziale da server per garantire la freschezza dei dati di base
+      final orariDoc = await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('orari_negozio')
+          .get(const GetOptions(source: Source.server));
+
       if (orariDoc.exists) _orariNegozioBase = orariDoc.data() ?? {};
 
-      final eccezioniSnap = await FirebaseFirestore.instance.collection('calendar_exceptions').get();
+      final eccezioniSnap = await FirebaseFirestore.instance
+          .collection('calendar_exceptions')
+          .get(const GetOptions(source: Source.server));
+
       for (var doc in eccezioniSnap.docs) {
         _eccezioniCalendario[doc.id] = doc.data();
       }
@@ -70,12 +79,13 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     try {
       final String dataStr = _formattaData(_dataSelezionata);
 
-      // 1. SCARICA GLI APPUNTAMENTI GIÀ ESISTENTI PER EVITARE I DUPLICATI
+      // CORREZIONE FONDAMENTALE: Forziamo il recupero solo da SERVER.
+      // Se si è offline, va in catch e impedisce di mostrare slot vecchi o falsamente liberi.
       final appuntamentiPresi = await FirebaseFirestore.instance
           .collection('appointments')
           .where('date', isEqualTo: dataStr)
           .where('barberId', isEqualTo: _barbiereSelezionatoId)
-          .get();
+          .get(const GetOptions(source: Source.server));
 
       for (var doc in appuntamentiPresi.docs) {
         final datiApp = doc.data();
@@ -84,8 +94,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         }
       }
 
-      // 2. Controllo assenze dello staff
-      final barberEx = await FirebaseFirestore.instance.collection('barber_exceptions').doc("${dataStr}_$_barbiereSelezionatoId").get();
+      // CORREZIONE: Anche per le eccezioni dello staff forziamo il controllo online sul SERVER
+      final barberEx = await FirebaseFirestore.instance
+          .collection('barber_exceptions')
+          .doc("${dataStr}_$_barbiereSelezionatoId")
+          .get(const GetOptions(source: Source.server));
+
       final dataEx = barberEx.exists ? barberEx.data() : null;
 
       if (dataEx != null && dataEx['type'] == 'assente') {
@@ -105,7 +119,17 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         }
       }
     } catch (e) {
-      debugPrint("Errore slot: $e");
+      debugPrint("Errore aggiornamento slot (probabilmente offline): $e");
+      if (mounted) {
+        // CORREZIONE CODA ERRORI: Cancella i vecchi SnackBar pendenti prima di mostrarne uno nuovo
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Errore di connessione nel caricamento degli orari.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     } finally {
       setState(() => _isLoadingSlot = false);
     }
@@ -188,7 +212,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                     decoration: BoxDecoration(
                       color: sel
                           ? const Color(0xFFE2B13C)
-                          : (isChiusoGiorno ? Colors.red.withValues(alpha: 0.2) : const Color(0xFF1C2824)),
+                          : (isChiusoGiorno ? Colors.red.withAlpha(51) : const Color(0xFF1C2824)),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isChiusoGiorno ? Colors.red.shade800 : Colors.transparent,
@@ -316,7 +340,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: occupato
-                          ? Colors.grey.withValues(alpha: 0.15)
+                          ? Colors.grey.withAlpha(38)
                           : (sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824)),
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -366,18 +390,31 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           setState(() => _isSaving = true);
 
                           try {
+                            // CORREZIONE CRUCIALE: Test immediato e reale di connessione verso il SERVER.
+                            // Se internet è assente o è caduto un attimo prima, lancerà un'eccezione interrompendo il salvataggio locale.
+                            await FirebaseFirestore.instance
+                                .collection('settings')
+                                .doc('orari_negozio')
+                                .get(const GetOptions(source: Source.server));
+
                             final user = FirebaseAuth.instance.currentUser;
                             if (user == null) throw 'Utente non autenticato';
 
                             String nomeRealeCliente = "Cliente";
-                            final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+
+                            // Forziamo anche qui il recupero dell'anagrafica da SERVER
+                            final userDoc = await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(user.uid)
+                                .get(const GetOptions(source: Source.server));
+
                             if (userDoc.exists && userDoc.data() != null) {
                               nomeRealeCliente = userDoc.data()?['name'] ?? user.displayName ?? "Cliente";
                             }
 
                             int prezzoStimato = 15;
 
-                            // MODIFICATO: Assegnato il riferimento temporaneo docRef per estrarne l'ID alfanumerico
+                            // SALVATAGGIO REALE DELL'APPUNTAMENTO
                             final docRef = await FirebaseFirestore.instance.collection('appointments').add({
                               'date': dataStr,
                               'slot': _orarioSelezionato,
@@ -391,7 +428,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               'createdAt': FieldValue.serverTimestamp(),
                             });
 
-                            // AGGIUNTO: Calcolo e pianificazione della notifica locale con anticipo di 15 minuti
+                            // PIANIFICAZIONE DELLA NOTIFICA LOCALE
                             try {
                               await NotificationService().pianificaNotificaAppuntamento(
                                 idNotifica: docRef.id.hashCode,
@@ -404,6 +441,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                             }
 
                             if (!context.mounted) return;
+
+                            // CORREZIONE CODA ERRORI: Se va a buon fine, ripuliamo gli avvisi d'errore passati
+                            ScaffoldMessenger.of(context).clearSnackBars();
 
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -418,10 +458,15 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                             if (!context.mounted) return;
                             setState(() => _isSaving = false);
 
+                            // CORREZIONE CODA ERRORI: Cancella i vecchi SnackBar accumulati prima di mostrarne uno nuovo
+                            ScaffoldMessenger.of(context).clearSnackBars();
+
+                            // Blocco definitivo: avvisiamo l'utente che il salvataggio è fallito causa assenza di rete
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Errore durante la prenotazione: $e'),
+                              const SnackBar(
+                                content: Text('Errore di connessione. Impossibile salvare la prenotazione offline.'),
                                 backgroundColor: Colors.red,
+                                duration: Duration(seconds: 4),
                               ),
                             );
                           }
