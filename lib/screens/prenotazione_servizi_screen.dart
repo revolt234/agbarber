@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'prenotazione_data_screen.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class PrenotazioneServiziScreen extends StatefulWidget {
   const PrenotazioneServiziScreen({super.key});
@@ -89,6 +90,14 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
   // AGGIUNTO: Metodo per controllare la connettività di rete reale in modo istantaneo
   Future<bool> _controllaConnessioneReale() async {
+    // Se l'app sta girando sul Web (Browser)
+    if (kIsWeb) {
+      // Evitiamo controlli IP/DNS che sul browser falliscono.
+      // Ritorniamo direttamente true per sbloccare il tasto su Web.
+      return true;
+    }
+
+    // Se l'app sta girando su Smartphone (Android / iOS)
     try {
       final risultato = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
       return risultato.isNotEmpty && risultato[0].rawAddress.isNotEmpty;
