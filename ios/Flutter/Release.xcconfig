@@ -1,2 +1,3 @@
 #include "Generated.xcconfig"
         DEVELOPMENT_TEAM = 8A98KU468H
+PROVISIONING_PROFILE_SPECIFIER = agbarber_appstore
