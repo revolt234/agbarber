@@ -30,7 +30,9 @@
     <key>UIBackgroundModes</key>
     <array>
         <string>remote-notification</string>
+        <string>processing</string>
     </array>
+
     <key>NSUserNotificationUsageDescription</key>
     <string>AG Barber richiede il permesso di inviarti promemoria 15 minuti prima dei tuoi appuntamenti.</string>
 
@@ -61,12 +63,12 @@
     <string>LaunchScreen</string>
     <key>UIMainStoryboardFile</key>
     <string>Main</string>
+
     <key>UISupportedInterfaceOrientations</key>
     <array>
        <string>UIInterfaceOrientationPortrait</string>
-       <string>UIInterfaceOrientationLandscapeLeft</string>
-       <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
        <string>UIInterfaceOrientationPortrait</string>

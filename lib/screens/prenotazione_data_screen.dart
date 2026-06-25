@@ -397,12 +397,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                   : (_slotOrariCalcolati.isEmpty
                   ? const Center(child: Text('Nessun orario disponibile o operatore fuori turno.', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)))
                   : GridView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 2.2,
+                  // MODIFICATO: Passato da 4 a 3 colonne per dare molto più spazio orizzontale
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 12, // Leggermente aumentato lo spazio verticale tra i bottoni
+                  crossAxisSpacing: 12, // Leggermente aumentato lo spazio orizzontale
+                  // MODIFICATO: Ridotto il ratio per rendere i bottoni più alti e cicciotti
+                  childAspectRatio: 1.8,
                 ),
                 itemCount: _slotOrariCalcolati.length,
                 itemBuilder: (context, index) {
@@ -414,7 +416,11 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14), // Arrotondato un po' di più per estetica
+                        border: Border.all(
+                          color: sel ? Colors.white : Colors.transparent,
+                          width: 1.5,
+                        ),
                       ),
                       child: Center(
                         child: Text(
@@ -422,7 +428,8 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           style: TextStyle(
                             color: sel ? Colors.black : Colors.white,
                             fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            // MODIFICATO: Aumentato il font da 14 a 18 per una leggibilità perfetta
+                            fontSize: 18,
                           ),
                         ),
                       ),

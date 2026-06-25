@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Richiesto per la gestione dell'orientamento
 import 'package:firebase_core/firebase_core.dart';
 import 'screens/visualizzazione_prenotazioni_screen.dart';
 import 'firebase_options.dart';
@@ -14,10 +16,7 @@ import 'screens/gestione_orari_screen.dart';
 import 'screens/gestione_calendario_screen.dart';
 import 'screens/gestione_turni_operatori_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
-// AGGIUNGI L'IMPORT DEL TUO SERVIZIO NOTIFICHE
 import 'services/notification_service.dart';
-
-// ... gli altri tuoi import rimangono uguali ...
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,8 +25,34 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // AGGIUNGI QUESTA RIGA QUI PER ACCENDERE IL SISTEMA NOTIFICHE ALL'AVVIO
+  // Accensione del sistema notifiche all'avvio
   await NotificationService().init();
+
+  // --- CONTROLLO ORIENTAMENTO DINAMICO (SOLO TABLET IN LANDSCAPE) ---
+  final views = WidgetsBinding.instance.platformDispatcher.views;
+  if (views.isNotEmpty) {
+    final data = MediaQueryData.fromView(views.first);
+    bool isTablet = data.size.shortestSide >= 600;
+
+    if (isTablet) {
+      // Se tablet: sblocca tutte le rotazioni
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      // Se smartphone: blocca tassativamente in verticale
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    }
+  } else {
+    // Fallback di sicurezza in caso di mancata inizializzazione della view al millesimo di secondo
+    await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  }
 
   runApp(const MyApp());
 }
@@ -161,7 +186,6 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
         ),
         backgroundColor: agVerde,
         centerTitle: true,
-        // RIMOSSO IL VECCHIO ICONBUTTON DELL'OMINO DALLE ACTIONS DI DESTRA
         actions: const [
           SizedBox(width: 48), // Mantiene la simmetria visiva con il logo a sinistra
         ],
