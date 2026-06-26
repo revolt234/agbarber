@@ -336,7 +336,9 @@
              CLANG_WARN_SUSPICIOUS_MOVE = YES;
              CLANG_WARN_UNREACHABLE_CODE = YES;
              CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
+             CODE_SIGN_STYLE = Manual;
+             DEVELOPMENT_TEAM = 8A98KU468H;
              COPY_PHASE_STRIP = NO;
              DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
              ENABLE_NS_ASSERTIONS = NO;
@@ -366,6 +368,8 @@
              ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
              CLANG_ENABLE_MODULES = YES;
              CODE_SIGN_STYLE = Manual;
+             DEVELOPMENT_TEAM = 8A98KU468H;
+             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
              CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
              ENABLE_BITCODE = NO;
              INFOPLIST_FILE = Runner/Info.plist;
@@ -386,6 +390,8 @@
           buildSettings = {
              BUNDLE_LOADER = "$(TEST_HOST)";
              CODE_SIGN_STYLE = Manual;
+             DEVELOPMENT_TEAM = 8A98KU468H;
+             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
              CURRENT_PROJECT_VERSION = 1;
              GENERATE_INFOPLIST_FILE = YES;
              MARKETING_VERSION = 1.0;
@@ -403,6 +409,8 @@
           buildSettings = {
              BUNDLE_LOADER = "$(TEST_HOST)";
              CODE_SIGN_STYLE = Manual;
+             DEVELOPMENT_TEAM = 8A98KU468H;
+             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
              CURRENT_PROJECT_VERSION = 1;
              GENERATE_INFOPLIST_FILE = YES;
              MARKETING_VERSION = 1.0;
@@ -418,6 +426,8 @@
           buildSettings = {
              BUNDLE_LOADER = "$(TEST_HOST)";
              CODE_SIGN_STYLE = Manual;
+             DEVELOPMENT_TEAM = 8A98KU468H;
+             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
              CURRENT_PROJECT_VERSION = 1;
              GENERATE_INFOPLIST_FILE = YES;
              MARKETING_VERSION = 1.0;
@@ -457,7 +467,9 @@
              CLANG_WARN_SUSPICIOUS_MOVE = YES;
              CLANG_WARN_UNREACHABLE_CODE = YES;
              CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
+             CODE_SIGN_STYLE = Manual;
+             DEVELOPMENT_TEAM = 8A98KU468H;
              COPY_PHASE_STRIP = NO;
              DEBUG_INFORMATION_FORMAT = dwarf;
              ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -514,7 +526,9 @@
              CLANG_WARN_SUSPICIOUS_MOVE = YES;
              CLANG_WARN_UNREACHABLE_CODE = YES;
              CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
+             CODE_SIGN_STYLE = Manual;
+             DEVELOPMENT_TEAM = 8A98KU468H;
              COPY_PHASE_STRIP = NO;
              DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
              ENABLE_NS_ASSERTIONS = NO;
@@ -546,6 +560,8 @@
              ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
              CLANG_ENABLE_MODULES = YES;
              CODE_SIGN_STYLE = Manual;
+             DEVELOPMENT_TEAM = 8A98KU468H;
+             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
              CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
              ENABLE_BITCODE = NO;
              INFOPLIST_FILE = Runner/Info.plist;
@@ -569,6 +585,8 @@
              ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
              CLANG_ENABLE_MODULES = YES;
              CODE_SIGN_STYLE = Manual;
+             DEVELOPMENT_TEAM = 8A98KU468H;
+             "CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
              CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
              ENABLE_BITCODE = NO;
              INFOPLIST_FILE = Runner/Info.plist;
