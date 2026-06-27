@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Richiesto per la gestione dell'orientamento
@@ -28,32 +27,6 @@ void main() async {
   // Accensione del sistema notifiche all'avvio
   await NotificationService().init();
 
-  // --- CONTROLLO ORIENTAMENTO DINAMICO (SOLO TABLET IN LANDSCAPE) ---
-  final views = WidgetsBinding.instance.platformDispatcher.views;
-  if (views.isNotEmpty) {
-    final data = MediaQueryData.fromView(views.first);
-    bool isTablet = data.size.shortestSide >= 600;
-
-    if (isTablet) {
-      // Se tablet: sblocca tutte le rotazioni
-      await SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
-    } else {
-      // Se smartphone: blocca tassativamente in verticale
-      await SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-      ]);
-    }
-  } else {
-    // Fallback di sicurezza in caso di mancata inizializzazione della view al millesimo di secondo
-    await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  }
-
   runApp(const MyApp());
 }
 
@@ -62,6 +35,33 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // --- CONTROLLO ORIENTAMENTO DINAMICO (SOLO TABLET IN LANDSCAPE) ---
+    // Spostato qui per garantire l'inizializzazione nativa della View su iOS
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    if (views.isNotEmpty) {
+      final data = MediaQueryData.fromView(views.first);
+      bool isTablet = data.size.shortestSide >= 600;
+
+      if (isTablet) {
+        // Se tablet: sblocca tutte le rotazioni
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+      } else {
+        // Se smartphone: blocca tassativamente in verticale
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+        ]);
+      }
+    } else {
+      // Fallback di sicurezza in caso di mancata inizializzazione della view al millesimo di secondo
+      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    }
+
     // Definizione dei colori ufficiali del logo AG Barber
     const Color agVerde = Color(0xFF164638);
     const Color agOro = Color(0xFFE2B13C);
