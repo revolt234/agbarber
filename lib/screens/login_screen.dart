@@ -186,7 +186,11 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } on FirebaseAuthException catch (e) {
-      String messaggioErrore = "Si è verificato un errore.";
+      // STAMPA L'ERRORE REALE NELLA CONSOLE DI APPETIZE PER VEDERLO
+      debugPrint("Firebase Auth Error Code: ${e.code}");
+      debugPrint("Firebase Auth Error Message: ${e.message}");
+
+      String messaggioErrore = "Si è verificato un errore: ${e.message}"; // Mostra l'errore reale a schermo
 
       if (e.code == 'network-request-failed') {
         messaggioErrore = "Nessuna connessione a Internet. Controlla la tua rete e riprova.";
