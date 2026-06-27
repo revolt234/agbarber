@@ -20,7 +20,6 @@ class PrenotazioneDataScreen extends StatefulWidget {
   State<PrenotazioneDataScreen> createState() => _PrenotazioneDataScreenState();
 }
 
-// Classe di supporto per mappare gli appuntamenti esistenti in minuti
 class IntervalloAppuntamento {
   final int inizio;
   final int fine;
@@ -41,6 +40,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   Map<String, dynamic> _eccezioniCalendario = {};
   List<String> _slotOrariCalcolati = [];
   List<IntervalloAppuntamento> _appuntamentiOccupati = [];
+
+  final Map<String, int> _conteggioSlotPerGiorno = {};
+  bool _isPreloadingGiorni = false;
 
   final List<String> _giorniSettimana = [
     'domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'
@@ -68,11 +70,151 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       for (var doc in eccezioniSnap.docs) {
         _eccezioniCalendario[doc.id] = doc.data();
       }
+
+      await _precaricaDisponibilitaGiorni();
+
       setState(() => _isLoadingConfig = false);
     } catch (e) {
       debugPrint("Errore inizializzazione: $e");
       setState(() => _isLoadingConfig = false);
     }
+  }
+
+  Future<void> _precaricaDisponibilitaGiorni() async {
+    setState(() => _isPreloadingGiorni = true);
+
+    try {
+      final barbersSnap = await FirebaseFirestore.instance.collection('barbers').get();
+      final barbieri = barbersSnap.docs;
+
+      List<Future<void>> compitiDiCaricamento = [];
+
+      for (int i = 0; i < 14; i++) {
+        DateTime giorno = DateTime.now().add(Duration(days: i));
+        String dataStr = _formattaData(giorno);
+
+        if (_isChiuso(giorno)) {
+          _conteggioSlotPerGiorno[dataStr] = 0;
+          continue;
+        }
+
+        compitiDiCaricamento.add(() async {
+          int slotLiberiTotaliGiorno = 0;
+
+          final appuntamentiGiornoSnap = await FirebaseFirestore.instance
+              .collection('appointments')
+              .where('date', isEqualTo: dataStr)
+              .get(const GetOptions(source: Source.server));
+
+          List<Future<DocumentSnapshot>> richiesteEccezioni = [];
+          for (var bDoc in barbieri) {
+            richiesteEccezioni.add(
+                FirebaseFirestore.instance
+                    .collection('barber_exceptions')
+                    .doc("${dataStr}_${bDoc.id}")
+                    .get(const GetOptions(source: Source.server))
+            );
+          }
+
+          final risultatiEccezioni = await Future.wait(richiesteEccezioni);
+
+          for (int index = 0; index < barbieri.length; index++) {
+            final bDoc = barbieri[index];
+            final String bId = bDoc.id;
+            final barberExDoc = risultatiEccezioni[index];
+
+            final dataEx = barberExDoc.exists ? barberExDoc.data() as Map<String, dynamic>? : null;
+            if (dataEx != null && dataEx['type'] == 'assente') continue;
+
+            List<IntervalloAppuntamento> occupatiBarbiere = [];
+            for (var doc in appuntamentiGiornoSnap.docs) {
+              final datiApp = doc.data();
+              if (datiApp['barberId'] == bId && datiApp.containsKey('slot') && datiApp['slot'] != null) {
+                int inizioMinuti = _minutiDaStringa(datiApp['slot']);
+                int durataApp = datiApp['duration'] ?? datiApp['totalDuration'] ?? datiApp['services_duration'] ?? 30;
+                occupatiBarbiere.add(IntervalloAppuntamento(inizio: inizioMinuti, fine: inizioMinuti + durataApp));
+              }
+            }
+
+            String nomeGiorno = _giorniSettimana[giorno.weekday % 7];
+            var orariGiorno = _orariNegozioBase[nomeGiorno];
+
+            if (orariGiorno != null && orariGiorno['isAperto'] == true) {
+              if (orariGiorno.containsKey('mattina')) {
+                slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['mattina'], dataEx, giorno, occupatiBarbiere);
+              }
+              if (orariGiorno.containsKey('pomeriggio')) {
+                slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['pomeriggio'], dataEx, giorno, occupatiBarbiere);
+              }
+            }
+          }
+
+          _conteggioSlotPerGiorno[dataStr] = slotLiberiTotaliGiorno;
+        }());
+      }
+
+      await Future.wait(compitiDiCaricamento);
+
+    } catch (e) {
+      debugPrint("Errore nel precaricamento parallelo dei contatori giorni: $e");
+    } finally {
+      setState(() => _isPreloadingGiorni = false);
+    }
+  }
+
+  int _contaSlotLiberiFascia(Map<String, dynamic> fasciaData, Map<String, dynamic>? dataEx, DateTime giorno, List<IntervalloAppuntamento> occupati) {
+    int start = _minutiDaStringa(fasciaData['apertura'] ?? "09:00");
+    int end = _minutiDaStringa(fasciaData['chiusura'] ?? "13:00");
+
+    final adesso = DateTime.now();
+    final bool isOggi = _formattaData(giorno) == _formattaData(adesso);
+    final int minutesAttuali = (adesso.hour * 60) + adesso.minute;
+
+    int contatore = 0;
+
+    for (int m = start; m + widget.servizioDurata <= end; m += 10) {
+      if (isOggi && m <= minutesAttuali) continue;
+
+      int ora = m ~/ 60;
+      if (dataEx != null && dataEx['type'] == 'mezza_giornata') {
+        if (dataEx['fascia'] == 'mattina' && ora >= 13) continue;
+        if (dataEx['fascia'] == 'pomeriggio' && ora < 13) continue;
+      }
+
+      int fineSlot = m + widget.servizioDurata;
+      bool siSovrappone = false;
+      for (var app in occupati) {
+        if (m < app.fine && fineSlot > app.inizio) {
+          siSovrappone = true;
+          break;
+        }
+      }
+      if (siSovrappone) continue;
+
+      bool eIncastroValido = (m == start);
+      if (!eIncastroValido) {
+        for (var app in occupati) {
+          if (m == app.fine) {
+            eIncastroValido = true;
+            break;
+          }
+        }
+      }
+      if (!eIncastroValido) {
+        int ultimoPuntoRiferimento = start;
+        for (var app in occupati) {
+          if (app.fine <= m) {
+            ultimoPuntoRiferimento = app.fine;
+          }
+        }
+        if ((m - ultimoPuntoRiferimento) % widget.servizioDurata == 0) {
+          eIncastroValido = true;
+        }
+      }
+
+      if (eIncastroValido) contatore++;
+    }
+    return contatore;
   }
 
   Future<void> _aggiornaSlotOrari() async {
@@ -94,25 +236,13 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         final datiApp = doc.data();
         if (datiApp.containsKey('slot') && datiApp['slot'] != null) {
           int inizioMinuti = _minutiDaStringa(datiApp['slot']);
-
-          int durataAppuntamento = 30;
-          if (datiApp.containsKey('duration')) {
-            durataAppuntamento = datiApp['duration'];
-          } else if (datiApp.containsKey('totalDuration')) {
-            durataAppuntamento = datiApp['totalDuration'];
-          } else if (datiApp.containsKey('services_duration')) {
-            durataAppuntamento = datiApp['services_duration'];
-          }
-
+          int durataAppuntamento = datiApp['duration'] ?? datiApp['totalDuration'] ?? datiApp['services_duration'] ?? 30;
           int fineMinuti = inizioMinuti + durataAppuntamento;
 
-          _appuntamentiOccupati.add(
-              IntervalloAppuntamento(inizio: inizioMinuti, fine: fineMinuti)
-          );
+          _appuntamentiOccupati.add(IntervalloAppuntamento(inizio: inizioMinuti, fine: fineMinuti));
         }
       }
 
-      // Ordiniamo gli appuntamenti per orario di inizio per rendere i controlli fluidi
       _appuntamentiOccupati.sort((a, b) => a.inizio.compareTo(b.inizio));
 
       final barberEx = await FirebaseFirestore.instance
@@ -154,20 +284,16 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     }
   }
 
-  // CORREZIONE GENERAZIONE FLUIDA: Calcola gli incastri dinamici al minuto per evitare buchi temporali
   void _calcolaSlotPerFascia(Map<String, dynamic> fasciaData, Map<String, dynamic>? dataEx) {
     int start = _minutiDaStringa(fasciaData['apertura'] ?? "09:00");
     int end = _minutiDaStringa(fasciaData['chiusura'] ?? "13:00");
 
     final adesso = DateTime.now();
     final bool isOggi = _formattaData(_dataSelezionata) == _formattaData(adesso);
-    final int minutiAttuali = (adesso.hour * 60) + adesso.minute;
+    final int minutesAttuali = (adesso.hour * 60) + adesso.minute;
 
-    // Scansioniamo la giornata con una granularità di 10 minuti per intercettare gli incastri perfetti
     for (int m = start; m + widget.servizioDurata <= end; m += 10) {
-      if (isOggi && m <= minutiAttuali) {
-        continue;
-      }
+      if (isOggi && m <= minutesAttuali) continue;
 
       int ora = m ~/ 60;
       if (dataEx != null && dataEx['type'] == 'mezza_giornata') {
@@ -175,7 +301,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         if (dataEx['fascia'] == 'pomeriggio' && ora < 13) continue;
       }
 
-      // 1. Verifichiamo se lo slot si scontra (overlapping) con appuntamenti esistenti
       int fineSlot = m + widget.servizioDurata;
       bool siSovrappone = false;
       for (var app in _appuntamentiOccupati) {
@@ -186,13 +311,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       }
       if (siSovrappone) continue;
 
-      // 2. LOGICA DI INCASTRO FLUIDO: Lo slot deve essere l'apertura, seguire un appuntamento,
-      // oppure rispettare il passo naturale del servizio rispetto all'ultimo blocco libero.
-      // MODIFICATO: Corretto il nome della variabile rimuovendo l'accento iniziale per gli standard Dart
-      bool eIncastroValido = (m == start); // Condizione 1: È l'apertura del turno
+      bool eIncastroValido = (m == start);
 
       if (!eIncastroValido) {
-        // Condizione 2: Si attacca perfettamente alla fine di un appuntamento precedente
         for (var app in _appuntamentiOccupati) {
           if (m == app.fine) {
             eIncastroValido = true;
@@ -202,14 +323,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       }
 
       if (!eIncastroValido) {
-        // Condizione 3: Calcoliamo lo spazio dall'ultimo vincolo temporale precedente (apertura o fine appuntamento)
         int ultimoPuntoRiferimento = start;
         for (var app in _appuntamentiOccupati) {
           if (app.fine <= m) {
             ultimoPuntoRiferimento = app.fine;
           }
         }
-        // Se lo spazio vuoto è un multiplo esatto della durata del servizio, lo slot è coerente
         if ((m - ultimoPuntoRiferimento) % widget.servizioDurata == 0) {
           eIncastroValido = true;
         }
@@ -232,7 +351,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoadingConfig) {
+    if (_isLoadingConfig || _isPreloadingGiorni) {
       return const Scaffold(
         backgroundColor: Color(0xFF121212),
         body: Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C))),
@@ -259,21 +378,38 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
               child: Text('Seleziona il giorno:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
             ),
             SizedBox(
-              height: 90,
+              height: 95,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: 14,
                 itemBuilder: (ctx, i) {
                   DateTime d = DateTime.now().add(Duration(days: i));
+                  String loopDataStr = _formattaData(d);
                   bool isChiusoGiorno = _isChiuso(d);
-                  bool sel = _formattaData(d) == dataStr;
+                  bool sel = loopDataStr == dataStr;
+
+                  int slotDisponibili = _conteggioSlotPerGiorno[loopDataStr] ?? 0;
+                  bool isSoldOut = !isChiusoGiorno && slotDisponibili == 0;
+
+                  Color coloreSfondoCard;
+                  if (isChiusoGiorno) {
+                    coloreSfondoCard = Colors.red.withAlpha(51);
+                  } else if (isSoldOut) {
+                    coloreSfondoCard = const Color(0xFF0A0A0A);
+                  } else if (slotDisponibili > 15) {
+                    coloreSfondoCard = const Color(0xFF1B4D2A);
+                  } else if (slotDisponibili > 10 && slotDisponibili <= 15) {
+                    coloreSfondoCard = const Color(0xFF8A7300);
+                  } else {
+                    coloreSfondoCard = const Color(0xFFB25E00);
+                  }
 
                   final List<String> settimanaAbbr = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
                   String nomeGiorno = settimanaAbbr[d.weekday % 7];
 
                   return GestureDetector(
-                    onTap: isChiusoGiorno || _isSaving
+                    onTap: isChiusoGiorno || isSoldOut || _isSaving
                         ? null
                         : () {
                       setState(() {
@@ -283,24 +419,46 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                       _aggiornaSlotOrari();
                     },
                     child: Container(
-                      width: 65,
-                      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      width: 70,
+                      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
                       decoration: BoxDecoration(
-                        color: sel
-                            ? const Color(0xFFE2B13C)
-                            : (isChiusoGiorno ? Colors.red.withAlpha(51) : const Color(0xFF1C2824)),
+                        color: sel ? const Color(0xFFE2B13C) : coloreSfondoCard,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: isChiusoGiorno ? Colors.red.shade800 : Colors.transparent,
-                          width: isChiusoGiorno ? 1.5 : 0,
+                          color: sel
+                              ? Colors.white
+                              : (isSoldOut ? Colors.red.shade900 : (isChiusoGiorno ? Colors.red.shade800 : Colors.transparent)),
+                          width: sel || isSoldOut || isChiusoGiorno ? 1.5 : 0,
                         ),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(nomeGiorno, style: TextStyle(color: isChiusoGiorno ? Colors.red.shade300 : (sel ? Colors.black : Colors.grey), fontSize: 13)),
-                          const SizedBox(height: 4),
-                          Text('${d.day}', style: TextStyle(color: isChiusoGiorno ? Colors.red.shade300 : (sel ? Colors.black : Colors.white), fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text(
+                              nomeGiorno,
+                              style: TextStyle(
+                                  color: sel ? Colors.black : (isChiusoGiorno || isSoldOut ? Colors.red.shade300 : Colors.white70),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500
+                              )
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                              '${d.day}',
+                              style: TextStyle(
+                                  color: sel ? Colors.black : (isChiusoGiorno || isSoldOut ? Colors.red.shade300 : Colors.white),
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold
+                              )
+                          ),
+                          if (isSoldOut) ...[
+                            const SizedBox(height: 2),
+                            const Text(
+                              'SOLD OUT',
+                              style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.4),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -399,11 +557,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                   : GridView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  // MODIFICATO: Passato da 4 a 3 colonne per dare molto più spazio orizzontale
                   crossAxisCount: 3,
-                  mainAxisSpacing: 12, // Leggermente aumentato lo spazio verticale tra i bottoni
-                  crossAxisSpacing: 12, // Leggermente aumentato lo spazio orizzontale
-                  // MODIFICATO: Ridotto il ratio per rendere i bottoni più alti e cicciotti
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
                   childAspectRatio: 1.8,
                 ),
                 itemCount: _slotOrariCalcolati.length,
@@ -416,7 +572,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824),
-                        borderRadius: BorderRadius.circular(14), // Arrotondato un po' di più per estetica
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: sel ? Colors.white : Colors.transparent,
                           width: 1.5,
@@ -428,7 +584,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           style: TextStyle(
                             color: sel ? Colors.black : Colors.white,
                             fontWeight: FontWeight.bold,
-                            // MODIFICATO: Aumentato il font da 14 a 18 per una leggibilità perfetta
                             fontSize: 18,
                           ),
                         ),
@@ -470,16 +625,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                         setState(() => _isSaving = true);
 
                         try {
-                          await FirebaseFirestore.instance
-                              .collection('settings')
-                              .doc('orari_negozio')
-                              .get(const GetOptions(source: Source.server));
-
                           final user = FirebaseAuth.instance.currentUser;
                           if (user == null) throw 'Utente non autenticato';
 
                           String nomeRealeCliente = "Cliente";
 
+                          // Recuperiamo il nome utente prima della transazione
                           final userDoc = await FirebaseFirestore.instance
                               .collection('users')
                               .doc(user.uid)
@@ -491,23 +642,63 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
                           int prezzoStimato = 15;
 
-                          final docRef = await FirebaseFirestore.instance.collection('appointments').add({
-                            'date': dataStr,
-                            'slot': _orarioSelezionato,
-                            'duration': widget.servizioDurata,
-                            'barberId': _barbiereSelezionatoId,
-                            'barberName': _barbiereSelezionatoNome,
-                            'userId': user.uid,
-                            'userName': nomeRealeCliente,
-                            'userEmail': user.email ?? 'Cliente anonimo',
-                            'services': [widget.servizioNome],
-                            'totalPrice': prezzoStimato,
-                            'createdAt': FieldValue.serverTimestamp(),
+                          // Calcoliamo i minuti correnti dello slot richiesto per il controllo collisioni
+                          int nuovoInizioMinuti = _minutiDaStringa(_orarioSelezionato!);
+                          int nuovoFineMinuti = nuovoInizioMinuti + widget.servizioDurata;
+
+                          // MODIFICATO: ESECUZIONE TRANSAZIONE ATOMICA DI FIRESTORE PER EVITARE DOPPIE PRENOTAZIONI CONTEMPORANEE
+                          String? risultatoIncastroId = await FirebaseFirestore.instance.runTransaction<String?>((transaction) async {
+                            // 1. Legge dal server tutti gli appuntamenti di quel giorno e di quel barbiere registrati fino a questo istante
+                            final querySnapshot = await FirebaseFirestore.instance
+                                .collection('appointments')
+                                .where('date', isEqualTo: dataStr)
+                                .where('barberId', isEqualTo: _barbiereSelezionatoId)
+                                .get(const GetOptions(source: Source.server));
+
+                            // 2. Verifica la sovrapposizione temporale applicando lo stesso algoritmo di calcolo degli slot
+                            for (var doc in querySnapshot.docs) {
+                              final datiApp = doc.data();
+                              if (datiApp.containsKey('slot') && datiApp['slot'] != null) {
+                                int appInizio = _minutiDaStringa(datiApp['slot']);
+                                int appDurata = datiApp['duration'] ?? datiApp['totalDuration'] ?? datiApp['services_duration'] ?? 30;
+                                int appFine = appInizio + appDurata;
+
+                                // Controllo Overlapping: se i due intervalli di tempo si intersecano
+                                if (nuovoInizioMinuti < appFine && nuovoFineMinuti > appInizio) {
+                                  // Lo slot è appena stato occupato da un altro utente (es. tuo cugino)
+                                  return null;
+                                }
+                              }
+                            }
+
+                            // 3. Se non ci sono collisioni orarie, procede alla scrittura atomica
+                            final nuovoDocRef = FirebaseFirestore.instance.collection('appointments').doc();
+                            transaction.set(nuovoDocRef, {
+                              'date': dataStr,
+                              'slot': _orarioSelezionato,
+                              'duration': widget.servizioDurata,
+                              'barberId': _barbiereSelezionatoId,
+                              'barberName': _barbiereSelezionatoNome,
+                              'userId': user.uid,
+                              'userName': nomeRealeCliente,
+                              'userEmail': user.email ?? 'Cliente anonimo',
+                              'services': [widget.servizioNome],
+                              'totalPrice': prezzoStimato,
+                              'createdAt': FieldValue.serverTimestamp(),
+                            });
+
+                            return nuovoDocRef.id;
                           });
+
+                          // Gestione dell'esito della transazione
+                          if (risultatoIncastroId == null) {
+                            // La transazione ha intercettato il tentativo di prenotazione duplicata
+                            throw 'SLOT_OCCUPATO';
+                          }
 
                           try {
                             await NotificationService().pianificaNotificaAppuntamento(
-                              idNotifica: docRef.id.hashCode,
+                              idNotifica: risultatoIncastroId.hashCode,
                               dataStr: dataStr,
                               slotStr: _orarioSelezionato!,
                               servizi: widget.servizioNome,
@@ -517,9 +708,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           }
 
                           if (!context.mounted) return;
-
                           ScaffoldMessenger.of(context).clearSnackBars();
-
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Prenotazione effettuata con successo!'),
@@ -532,14 +721,23 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                         } catch (e) {
                           if (!context.mounted) return;
                           setState(() => _isSaving = false);
-
                           ScaffoldMessenger.of(context).clearSnackBars();
 
+                          String messaggioErrore = 'Errore di connessione. Impossibile salvare la prenotazione.';
+                          Color coloreSfondo = Colors.red;
+
+                          if (e == 'SLOT_OCCUPATO') {
+                            messaggioErrore = 'Spiacenti! Questo orario è stato appena prenotato da un altro cliente. Scegli un altro slot.';
+                            coloreSfondo = Colors.orange.shade900;
+                            // Aggiorna gli orari a schermo per mostrare il blocco reale
+                            _aggiornaSlotOrari();
+                          }
+
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Errore di connessione. Impossibile salvare la prenotazione offline.'),
-                              backgroundColor: Colors.red,
-                              duration: Duration(seconds: 4),
+                            SnackBar(
+                              content: Text(messaggioErrore),
+                              backgroundColor: coloreSfondo,
+                              duration: const Duration(seconds: 5),
                             ),
                           );
                         }

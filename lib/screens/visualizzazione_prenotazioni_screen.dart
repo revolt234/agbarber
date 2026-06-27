@@ -13,35 +13,35 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   DateTime _dataSelezionata = DateTime.now();
   String? _operatoreSelezionato; // null significa "Tutti"
 
+  // Configurazione Griglia Oraria (Modificabile in base ai tuoi orari di apertura)
+  final int oraInizioGiornata = 8;  // 08:00
+  final int oraFineGiornata = 20;   // 20:00
+  final double altezzaPerMinuto = 1.6; // Incrementato leggermente per dare più spazio agli slot di 30 min
+  final double larghezzaColonnaOra = 65.0;
+
   // Colori del brand AG Barber
   final Color agVerde = const Color(0xFF164638);
   final Color agOro = const Color(0xFFE2B13C);
+  final Color agScuro = const Color(0xFF121212);
 
-  // Formatta la data per Firestore (es: "2026-06-21")
   String get _dataString => DateFormat('yyyy-MM-dd').format(_dataSelezionata);
 
-  // Trasforma l'orario in minuti (es. "09:40" -> 580)
   int _minutiDaStringa(String s) {
     final parti = s.split(':');
     return int.parse(parti[0]) * 60 + int.parse(parti[1]);
   }
 
-  // Trasforma i minuti totali in una stringa oraria leggibile (es. 620 -> "10:20")
   String _stringaDaMinuti(int m) {
     int ora = m ~/ 60;
     int min = m % 60;
     return "${ora.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')}";
   }
 
-  // CORREZIONE: Calcola dinamicamente la fine del servizio partendo dallo slot iniziale e la durata
-  String _calcolaFineServizio(String oraInizio, int durataMinuti) {
-    try {
-      int minutiInizio = _minutiDaStringa(oraInizio);
-      int minutiFine = minutiInizio + durataMinuti;
-      return _stringaDaMinuti(minutiFine);
-    } catch (e) {
-      return "--:--";
-    }
+  int _estraiDurata(Map<String, dynamic> data) {
+    if (data.containsKey('duration')) return data['duration'];
+    if (data.containsKey('totalDuration')) return data['totalDuration'];
+    if (data.containsKey('services_duration')) return data['services_duration'];
+    return 30; // default 30 min
   }
 
   Future<void> _selezionaData(BuildContext context) async {
@@ -58,12 +58,116 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     }
   }
 
+  // Mostra il Popup dal basso con tutti i dettagli dell'appuntamento selezionato
+  void _mostraDettagliAppuntamento(Map<String, dynamic> data, String oraInizioStr, String oraFineStr, int durata) {
+    final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
+    final String operatoreNome = data['barberName'] ?? 'Qualsiasi';
+    final List servizi = data['services'] ?? [];
+    final int prezzoTotale = data['totalPrice'] ?? 0;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      clienteNome.toUpperCase(),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: agVerde,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '€$prezzoTotale',
+                      style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(color: Colors.grey, height: 24),
+              Row(
+                children: [
+                  Icon(Icons.access_time, color: agOro, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Orario: $oraInizioStr - $oraFineStr ($durata min)',
+                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.person, color: agOro, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Operatore: $operatoreNome',
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.content_cut, color: agOro, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Servizio: ${servizi.join(", ")}',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: agVerde,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('CHIUDI', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final int inizioMinutiTotali = oraInizioGiornata * 60;
+    final int fineMinutiTotali = oraFineGiornata * 60;
+    final int minutiTotaliGiornata = fineMinutiTotali - inizioMinutiTotali;
+    final double altezzaTotaleGriglia = minutiTotaliGiornata * altezzaPerMinuto;
+
     return Scaffold(
+      backgroundColor: agScuro,
       appBar: AppBar(
         title: const Text(
-          'AGENDA APPUNTAMENTI',
+          'AGENDA CALENDARIO',
           style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1, color: Colors.white),
         ),
         backgroundColor: agVerde,
@@ -72,15 +176,15 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       ),
       body: Column(
         children: [
-          // 1. SELETTORE DATA GIORNALIERA CON SINTASSI ABBREVIATA SFORZA-PIXEL
+          // 1. SELETTORE DATA
           Container(
-            color: agVerde.withValues(alpha: 0.05),
+            color: Colors.white.withValues(alpha: 0.05),
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
-                  icon: Icon(Icons.chevron_left, color: agVerde, size: 28),
+                  icon: const Icon(Icons.chevron_left, color: Colors.white, size: 28),
                   onPressed: () {
                     setState(() => _dataSelezionata = _dataSelezionata.subtract(const Duration(days: 1)));
                   },
@@ -93,13 +197,13 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                       fit: BoxFit.scaleDown,
                       child: Text(
                         DateFormat('E d MMM yyyy', 'it_IT').format(_dataSelezionata).toUpperCase(),
-                        style: TextStyle(color: agVerde, fontWeight: FontWeight.bold, fontSize: 15),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                     ),
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.chevron_right, color: agVerde, size: 28),
+                  icon: const Icon(Icons.chevron_right, color: Colors.white, size: 28),
                   onPressed: () {
                     setState(() => _dataSelezionata = _dataSelezionata.add(const Duration(days: 1)));
                   },
@@ -108,7 +212,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
             ),
           ),
 
-          // 2. FILTRO OPERATORI (ORIZZONTALE)
+          // 2. FILTRO OPERATORI
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
             builder: (context, snapshot) {
@@ -150,9 +254,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
             },
           ),
 
-          const Divider(height: 1),
+          const Divider(height: 1, color: Colors.grey),
 
-          // 3. LISTA DELLE PRENOTAZIONI IN TEMPO REALE
+          // 3. CALENDARIO CON TIMELINE AD ALTA PRECISIONE (30 MIN)
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _costruisciStreamPrenotazioni(),
@@ -161,118 +265,191 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'Nessuna prenotazione per questa giornata.',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  );
+                final prenotazioniDocs = snapshot.data?.docs ?? [];
+
+                List<Map<String, dynamic>> elementiCalendario = [];
+                for (var doc in prenotazioniDocs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final String oraInizio = data['slot'] ?? '08:00';
+                  final int inizioMinuti = _minutiDaStringa(oraInizio);
+                  final int durata = _estraiDurata(data);
+                  final int fineMinuti = inizioMinuti + durata;
+
+                  int colonna = 0;
+                  while (true) {
+                    bool collisione = elementiCalendario.any((e) =>
+                    e['colonna'] == colonna &&
+                        ((inizioMinuti >= e['inizio'] && inizioMinuti < e['fine']) ||
+                            (fineMinuti > e['inizio'] && fineMinuti <= e['fine']) ||
+                            (inizioMinuti <= e['inizio'] && fineMinuti >= e['fine'])));
+                    if (!collisione) break;
+                    colonna++;
+                  }
+
+                  elementiCalendario.add({
+                    'data': data,
+                    'inizio': inizioMinuti,
+                    'fine': fineMinuti,
+                    'durata': durata,
+                    'colonna': colonna,
+                  });
                 }
 
-                final prenotazioni = snapshot.data!.docs;
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: prenotazioni.length,
-                  itemBuilder: (context, index) {
-                    final data = prenotazioni[index].data() as Map<String, dynamic>;
-
-                    final String oraInizio = data['slot'] ?? '--:--';
-
-                    // Recupera la durata per calcolare la fine del servizio
-                    int durataServizio = 30;
-                    if (data.containsKey('duration')) {
-                      durataServizio = data['duration'];
-                    } else if (data.containsKey('totalDuration')) {
-                      durataServizio = data['totalDuration'];
-                    } else if (data.containsKey('services_duration')) {
-                      durataServizio = data['services_duration'];
-                    }
-
-                    final String oraFine = _calcolaFineServizio(oraInizio, durataServizio);
-
-                    // Pulito dai vecchi fallbacks email basandoci solo su nome e cognome obbligatori
-                    final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
-
-                    final String operatoreNome = data['barberName'] ?? 'Qualsiasi';
-                    final List servizi = data['services'] ?? [];
-                    final int prezzoTotale = data['totalPrice'] ?? 0;
-
-                    return Card(
-                      elevation: 3,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          children: [
-                            // MODIFICATO: Mostra chiaramente inizio e fine del servizio
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                return SingleChildScrollView(
+                  child: SizedBox(
+                    height: altezzaTotaleGriglia,
+                    child: Stack(
+                      children: [
+                        // Righello Orario ad alta precisione: Include frazioni di mezz'ora (:00 e :30)
+                        for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
+                          // Linea dell'ora esatta (es. 09:00)
+                          Positioned(
+                            top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              height: 30 * altezzaPerMinuto,
                               decoration: BoxDecoration(
-                                color: agVerde,
-                                borderRadius: BorderRadius.circular(8),
+                                border: Border(
+                                  top: BorderSide(color: Colors.grey.withValues(alpha: 0.25), width: 1.2),
+                                ),
                               ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    oraInizio,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                  const Icon(Icons.arrow_drop_down, color: Colors.white, size: 14),
-                                  Text(
-                                    oraFine,
-                                    style: TextStyle(
-                                      color: agOro,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
+                              child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    clienteNome,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                    overflow: TextOverflow.ellipsis,
+                                  Container(
+                                    width: larghezzaColonnaOra,
+                                    padding: const EdgeInsets.only(top: 4, left: 8),
+                                    child: Text(
+                                      "${i.toString().padLeft(2, '0')}:00",
+                                      style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Taglio con: $operatoreNome',
-                                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Servizio: ${servizi.join(", ")} ($durataServizio min)',
-                                    style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
-                                  ),
+                                  const Expanded(child: SizedBox.shrink()),
                                 ],
                               ),
                             ),
-                            Text(
-                              '€$prezzoTotale',
-                              style: TextStyle(
-                                color: agVerde,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
+                          ),
+                          // Linea della mezz'ora (es. 09:30)
+                          Positioned(
+                            top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              height: 30 * altezzaPerMinuto,
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(color: Colors.grey.withValues(alpha: 0.12), width: 1, style: BorderStyle.solid),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: larghezzaColonnaOra,
+                                    padding: const EdgeInsets.only(top: 2, left: 8),
+                                    child: Text(
+                                      "${i.toString().padLeft(2, '0')}:30",
+                                      style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w500),
+                                    ),
+                                  ),
+                                  const Expanded(child: SizedBox.shrink()),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
+                        ],
+                        // Linea finale di chiusura (es. 20:00)
+                        Positioned(
+                          top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
+                          left: 0,
+                          right: 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                top: BorderSide(color: Colors.grey.withValues(alpha: 0.25), width: 1.2),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    );
-                  },
+
+                        // Generazione dinamica dei blocchi appuntamento proporzionali al tempo
+                        for (var elem in elementiCalendario) ...[
+                          (() {
+                            final data = elem['data'];
+                            final int inizioMinuti = elem['inizio'];
+                            final int durata = elem['durata'];
+                            final int colonna = elem['colonna'];
+
+                            final double topPos = (inizioMinuti - inizioMinutiTotali) * altezzaPerMinuto;
+                            final double altezzaBlocco = durata * altezzaPerMinuto;
+
+                            final int maxCollisioniSuQuestoSlot = elementiCalendario
+                                .where((e) => (inizioMinuti < e['fine'] && elem['fine'] > e['inizio']))
+                                .map((e) => e['colonna'] as int)
+                                .fold(0, (max, col) => col > max ? col : max) + 1;
+
+                            final double larghezzaDisponibile = MediaQuery.of(context).size.width - larghezzaColonnaOra - 20;
+                            final double larghezzaCard = larghezzaDisponibile / maxCollisioniSuQuestoSlot;
+                            final double leftPos = larghezzaColonnaOra + (colonna * larghezzaCard) + 4;
+
+                            final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
+                            final int prezzoTotale = data['totalPrice'] ?? 0;
+                            final String oraInizioStr = data['slot'] ?? '--:--';
+                            final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
+
+                            return Positioned(
+                              top: topPos + 2,
+                              left: leftPos,
+                              width: larghezzaCard - 4,
+                              height: altezzaBlocco - 4,
+                              child: GestureDetector(
+                                onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: agVerde.withValues(alpha: 0.95),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: agOro, width: 1.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.4),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      )
+                                    ],
+                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              clienteNome,
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '€$prezzoTotale',
+                                            style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }()),
+                        ],
+                      ],
+                    ),
+                  ),
                 );
               },
             ),
