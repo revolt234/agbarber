@@ -312,6 +312,9 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFE2B13C),
+                      foregroundColor: const Color(0xFF121212), // CORREZIONE: Forza il testo attivo a essere visibile e scuro sul fondo oro
+                      disabledBackgroundColor: Colors.white.withValues(alpha: 0.12),
+                      disabledForegroundColor: Colors.white.withValues(alpha: 0.35),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       elevation: 2,
@@ -356,7 +359,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                         : null,
                     child: const Text(
                       'Prosegui',
-                      style: TextStyle(color: Color(0xFF121212), fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),

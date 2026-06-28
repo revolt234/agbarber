@@ -16,6 +16,10 @@ import 'screens/gestione_calendario_screen.dart';
 import 'screens/gestione_turni_operatori_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'services/notification_service.dart';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -101,8 +105,102 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controllaAggiornamentoObbligatorio();
+    });
+  }
+
+  Future<void> _controllaAggiornamentoObbligatorio() async {
+    try {
+      final remoteConfig = FirebaseRemoteConfig.instance;
+
+      await remoteConfig.setConfigSettings(RemoteConfigSettings(
+        fetchTimeout: const Duration(minutes: 1),
+        minimumFetchInterval: kDebugMode ? const Duration(minutes: 5) : const Duration(hours: 4),
+      ));
+
+      await remoteConfig.fetchAndActivate();
+
+      String versioneMinima = remoteConfig.getString('version_minima_richiesta');
+      if (versioneMinima.isEmpty) return;
+
+      PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      String versioneAttuale = packageInfo.version;
+
+      if (_deveAggiornare(versioneAttuale, versioneMinima)) {
+        _mostraDialogBloccante();
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint("Errore Remote Config: $e");
+      }
+    }
+  }
+
+  bool _deveAggiornare(String installata, String minima) {
+    try {
+      List<int> vInst = installata.split('.').map(int.parse).toList();
+      List<int> vMin = minima.split('.').map(int.parse).toList();
+
+      for (int i = 0; i < vMin.length; i++) {
+        if (i >= vInst.length) return true;
+        if (vInst[i] < vMin[i]) return true;
+        if (vInst[i] > vMin[i]) return false;
+      }
+    } catch (e) {
+      return false;
+    }
+    return false;
+  }
+
+  void _mostraDialogBloccante() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            backgroundColor: const Color(0xFF1E1E1E),
+            title: const Text(
+              "Aggiornamento Obbligatorio 🚀",
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            content: const Text(
+              "Una nuova versione di AG Barber è disponibile nello store ufficiale. "
+                  "Per garantire la massima stabilità nella prenotazione degli slot orari, aggiorna l'applicazione prima di procedere.",
+              style: TextStyle(color: Colors.grey),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  final url = Uri.parse("https://play.google.com/store/apps/details?id=com.LoSco.nonspreco");
+                  if (await canLaunchUrl(url)) {
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                  }
+                },
+                child: const Text(
+                  "AGGIORNA ORA",
+                  style: TextStyle(color: Color(0xFFE2B13C), fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
