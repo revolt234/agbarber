@@ -13,20 +13,30 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
     const Color agVerde = Color(0xFF164638);
     const Color agOro = Color(0xFFE2B13C);
 
+    // Rilevazione dinamica del tema attivo sul dispositivo
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Tavolozza di colori dinamici e adattivi
+    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
+    final Color coloreTestoLogin = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreSfondoCard = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
+    final Color coloreTestoPrimarioCard = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreTestoSecondarioCard = isDarkMode ? Colors.grey : Colors.black54;
+
     if (user == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF121212),
+      return Scaffold(
+        backgroundColor: coloreSfondoSchermata,
         body: Center(
           child: Text(
             'Effettua il login per vedere le prenotazioni.',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: coloreTestoLogin),
           ),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: coloreSfondoSchermata,
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.only(left: 12.0),
@@ -59,7 +69,7 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return _buildEmptyState(agOro);
+            return _buildEmptyState(agOro, isDarkMode);
           }
 
           final adesso = DateTime.now();
@@ -77,7 +87,6 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
               if (adesso.isBefore(limiteVisualizzazione)) {
                 prenotazioniValide.add(doc);
               } else {
-                // AGGIORNATO: Elimina fisicamente e definitivamente il documento da Firestore
                 FirebaseFirestore.instance
                     .collection('appointments')
                     .doc(doc.id)
@@ -90,7 +99,7 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
           }
 
           if (prenotazioniValide.isEmpty) {
-            return _buildEmptyState(agOro);
+            return _buildEmptyState(agOro, isDarkMode);
           }
 
           return ListView.builder(
@@ -114,11 +123,15 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
               } catch (_) {}
 
               return Card(
-                color: const Color(0xFF1C2824),
+                color: coloreSfondoCard,
                 margin: const EdgeInsets.only(bottom: 12),
+                elevation: isDarkMode ? 0 : 2,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: agVerde, width: 1),
+                  side: BorderSide(
+                    color: isDarkMode ? agVerde : Colors.grey.shade300,
+                    width: 1,
+                  ),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -134,8 +147,8 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                     ),
                     title: Text(
                       '${servizi.join(", ")}',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: coloreTestoPrimarioCard,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
@@ -147,12 +160,12 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                         children: [
                           Text(
                             '$dataFormattata alle ore $ora',
-                            style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+                            style: TextStyle(color: coloreTestoSecondarioCard, fontWeight: FontWeight.w500),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             'Specialista: $barber',
-                            style: const TextStyle(color: Colors.grey),
+                            style: TextStyle(color: coloreTestoSecondarioCard),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -166,7 +179,6 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // INTEGRATO: Tasto di disdetta ed eliminazione dell'appuntamento attivo
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 28),
                       tooltip: 'Annulla Appuntamento',
@@ -174,14 +186,14 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                         final bool? conferma = await showDialog<bool>(
                           context: context,
                           builder: (context) => AlertDialog(
-                            backgroundColor: const Color(0xFF1C2824),
-                            title: const Text(
+                            backgroundColor: isDarkMode ? const Color(0xFF1C2824) : Colors.white,
+                            title: Text(
                                 'Annulla Appuntamento',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)
                             ),
-                            content: const Text(
+                            content: Text(
                                 'Sei sicuro di voler cancellare questa prenotazione? L\'orario tornerà disponibile per gli altri clienti.',
-                                style: TextStyle(color: Colors.grey)
+                                style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54)
                             ),
                             actions: [
                               TextButton(
@@ -238,7 +250,7 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyState(Color agOro) {
+  Widget _buildEmptyState(Color agOro, bool isDarkMode) {
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -251,19 +263,19 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
               color: agOro.withValues(alpha: 0.6),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Nessun appuntamento attivo',
               style: TextStyle(
                 fontSize: 18,
-                color: Colors.white,
+                color: isDarkMode ? Colors.white : Colors.black87,
                 fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'I tuoi prossimi appuntamenti compariranno qui.',
-              style: TextStyle(color: Colors.grey, fontSize: 14),
+              style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54, fontSize: 14),
               textAlign: TextAlign.center,
             ),
           ],

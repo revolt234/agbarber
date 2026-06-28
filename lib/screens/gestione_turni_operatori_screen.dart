@@ -28,11 +28,39 @@ class _GestioneTurniOperatoriScreenState
       return;
     }
 
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     final DateTime? dataScelta = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      locale: const Locale('it', 'IT'), // MODIFICATO: Imposta la lingua del calendario in italiano
+      builder: (context, child) {
+        // AGGIUNTO: Garantisce la perfetta leggibilità dei testi adattando i colori al tema attivo (chiaro/scuro)
+        return Theme(
+          data: isDarkMode
+              ? ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFFE2B13C),
+              onPrimary: Colors.black,
+              surface: Color(0xFF1E1E1E),
+              onSurface: Colors.white,
+            ),
+            dialogBackgroundColor: const Color(0xFF1E1E1E),
+          )
+              : ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF164638),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black87,
+            ),
+            dialogBackgroundColor: Colors.white,
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (dataScelta != null) {

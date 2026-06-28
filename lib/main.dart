@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Richiesto per la gestione dell'orientamento
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'screens/visualizzazione_prenotazioni_screen.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
@@ -73,7 +74,14 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'AG Barber',
       debugShowCheckedModeBanner: false,
-
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('it', 'IT'), // Configura l'italiano come lingua supportata
+      ],
       // TEMA CHIARO
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -165,6 +173,7 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   void _mostraDialogBloccante() {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -172,15 +181,15 @@ class _AuthGateState extends State<AuthGate> {
         return PopScope(
           canPop: false,
           child: AlertDialog(
-            backgroundColor: const Color(0xFF1E1E1E),
-            title: const Text(
+            backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            title: Text(
               "Aggiornamento Obbligatorio 🚀",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
             ),
-            content: const Text(
+            content: Text(
               "Una nuova versione di AG Barber è disponibile nello store ufficiale. "
                   "Per garantire la massima stabilità nella prenotazione degli slot orari, aggiorna l'applicazione prima di procedere.",
-              style: TextStyle(color: Colors.grey),
+              style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54),
             ),
             actions: [
               TextButton(
@@ -267,8 +276,13 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
     const Color agVerde = Color(0xFF164638);
     const Color agOro = Color(0xFFE2B13C);
 
+    // MODIFICATO: Rilevazione dinamica del tema di sistema per rendere adattiva l'area inferiore delle schede (tasti e sfondi)
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color coloreSfondoAdattivo = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
+    final Color coloreNavAdattiva = isDarkMode ? const Color(0xFF121212) : Colors.white;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: coloreSfondoAdattivo, // MODIFICATO: Sfondo della pagina ora dinamico
       appBar: _indiceSelezionato == 0
           ? AppBar(
         leading: Padding(
@@ -303,9 +317,9 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
           });
         },
         type: BottomNavigationBarType.fixed,
-        backgroundColor: const Color(0xFF121212),
+        backgroundColor: coloreNavAdattiva, // MODIFICATO: Lo sfondo dell'area dei tasti si adatta dinamicamente
         selectedItemColor: agOro,
-        unselectedItemColor: Colors.grey,
+        unselectedItemColor: isDarkMode ? Colors.grey : Colors.grey.shade600, // MODIFICATO: Ottimizzato il colore dei tasti non selezionati
         selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
         unselectedLabelStyle: const TextStyle(fontSize: 12),
         items: const [

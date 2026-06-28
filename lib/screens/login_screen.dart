@@ -49,13 +49,15 @@ class _LoginScreenState extends State<LoginScreen> {
     _recuperoEmailController.text = _emailController.text.trim();
     _resettaSelezioneTesto(_recuperoEmailController);
 
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text(
+        backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        title: Text(
           'Recupero Password',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -68,20 +70,20 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _recuperoEmailController,
-              maxLength: 45, // Limite max 50 caratteri richiesto
-              style: const TextStyle(color: Colors.white),
+              maxLength: 45, // Mantenuto limite a 45 come da tuo codice originale
+              style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
               onTap: () => _resettaSelezioneTesto(_recuperoEmailController), // Protezione dialogo
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Email',
-                labelStyle: TextStyle(color: Colors.grey),
+                labelStyle: const TextStyle(color: Colors.grey),
                 counterText: "", // Nasconde il contatore numerico di default per pulizia estetica
-                enabledBorder: OutlineInputBorder(
+                enabledBorder: const OutlineInputBorder(
                   borderSide: BorderSide(color: Color(0xFF164638)),
                 ),
-                focusedBorder: OutlineInputBorder(
+                focusedBorder: const OutlineInputBorder(
                   borderSide: BorderSide(color: Color(0xFFE2B13C)),
                 ),
-                prefixIcon: Icon(Icons.email, color: Color(0xFFE2B13C)),
+                prefixIcon: const Icon(Icons.email, color: Color(0xFFE2B13C)),
               ),
               keyboardType: TextInputType.emailAddress,
             ),
@@ -188,11 +190,10 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } on FirebaseAuthException catch (e) {
-      // STAMPA L'ERRORE REALE NELLA CONSOLE DI APPETIZE PER VEDERLO
       debugPrint("Firebase Auth Error Code: ${e.code}");
       debugPrint("Firebase Auth Error Message: ${e.message}");
 
-      String messaggioErrore = "Si è verificato un errore: ${e.message}"; // Mostra l'errore reale a schermo
+      String messaggioErrore = "Si è verificato un errore: ${e.message}";
 
       if (e.code == 'network-request-failed') {
         messaggioErrore = "Nessuna connessione a Internet. Controlla la tua rete e riprova.";
@@ -230,10 +231,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // MODIFICATO: Rilevazione dinamica del tema (Light/Dark) per l'intera pagina
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Tavolozza dinamica adattiva basata sul tema di sistema
+    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
+    final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreTestoInput = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreBordiInput = isDarkMode ? Colors.grey : Colors.grey.shade400;
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: const Color(0xFF121212),
+        backgroundColor: coloreSfondoSchermata, // MODIFICATO: Ora lo sfondo cambia dinamicamente
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -248,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 32),
                 Text(
                   _isLogin ? 'Accedi a AG Barber' : 'Crea il tuo Account',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: coloreTestoTitoli),
                 ),
                 const SizedBox(height: 24),
 
@@ -256,17 +266,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _nomeCognomeController,
                     focusNode: _nomeCognomeFocus,
-                    maxLength: 45, // Limite max 50 caratteri richiesto
-                    style: const TextStyle(color: Colors.white),
-                    onTap: () => _resettaSelezioneTesto(_nomeCognomeController), // CORREZIONE: Cursore pulito al click
+                    maxLength: 45,
+                    style: TextStyle(color: coloreTestoInput),
+                    onTap: () => _resettaSelezioneTesto(_nomeCognomeController),
                     onTapOutside: (event) => _nomeCognomeFocus.unfocus(),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Nome e Cognome',
-                      labelStyle: TextStyle(color: Colors.grey),
-                      counterText: "", // Nasconde la barra del contatore numerico
-                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                      focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
-                      prefixIcon: Icon(Icons.person, color: Color(0xFFE2B13C)),
+                      labelStyle: const TextStyle(color: Colors.grey),
+                      counterText: "",
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
+                      prefixIcon: const Icon(Icons.person, color: Color(0xFFE2B13C)),
                     ),
                     textCapitalization: TextCapitalization.words,
                   ),
@@ -276,17 +286,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _emailController,
                   focusNode: _emailFocus,
-                  maxLength: 45, // Limite max 50 caratteri richiesto
-                  style: const TextStyle(color: Colors.white),
-                  onTap: () => _resettaSelezioneTesto(_emailController), // CORREZIONE: Cursore pulito al click
+                  maxLength: 45,
+                  style: TextStyle(color: coloreTestoInput),
+                  onTap: () => _resettaSelezioneTesto(_emailController),
                   onTapOutside: (event) => _emailFocus.unfocus(),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Email',
-                    labelStyle: TextStyle(color: Colors.grey),
-                    counterText: "", // Nasconde la barra del contatore numerico
-                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
-                    prefixIcon: Icon(Icons.email, color: Color(0xFFE2B13C)),
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    counterText: "",
+                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
+                    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
+                    prefixIcon: const Icon(Icons.email, color: Color(0xFFE2B13C)),
                   ),
                   keyboardType: TextInputType.emailAddress,
                 ),
@@ -295,17 +305,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _passwordController,
                   focusNode: _passwordFocus,
-                  maxLength: 45, // Limite max 50 caratteri richiesto
-                  style: const TextStyle(color: Colors.white),
-                  onTap: () => _resettaSelezioneTesto(_passwordController), // CORREZIONE: Cursore pulito al click
+                  maxLength: 45,
+                  style: TextStyle(color: coloreTestoInput),
+                  onTap: () => _resettaSelezioneTesto(_passwordController),
                   onTapOutside: (event) => _passwordFocus.unfocus(),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Password',
-                    labelStyle: TextStyle(color: Colors.grey),
-                    counterText: "", // Nasconde la barra del contatore numerico
-                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
-                    prefixIcon: Icon(Icons.lock, color: Color(0xFFE2B13C)),
+                    labelStyle: const TextStyle(color: Colors.grey),
+                    counterText: "",
+                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
+                    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
+                    prefixIcon: const Icon(Icons.lock, color: Color(0xFFE2B13C)),
                   ),
                   obscureText: true,
                 ),
@@ -340,7 +350,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextButton(
                   onPressed: () => setState(() {
                     _isLogin = !_isLogin;
-                    // Pulisce i campi quando l'utente cambia schermata per sicurezza
                     _nomeCognomeController.clear();
                     _emailController.clear();
                     _passwordController.clear();

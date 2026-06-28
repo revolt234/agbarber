@@ -43,6 +43,8 @@ dependencies:
   firebase_remote_config: ^6.5.3
   package_info_plus: ^10.2.0
   url_launcher: ^6.3.2
+  flutter_localizations:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:

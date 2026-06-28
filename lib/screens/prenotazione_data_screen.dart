@@ -362,9 +362,17 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
     final String dataStr = _formattaData(_dataSelezionata);
     final bool giornoCorrenteChiuso = _isChiuso(_dataSelezionata);
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Colori adattivi
+    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
+    final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
+    final Color coloreTestoCardSpenta = isDarkMode ? Colors.white : Colors.black87;
+    // ----------------------------
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: coloreSfondoSchermata,
       appBar: AppBar(
         title: const Text('Scegli Data e Barber', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF164638),
@@ -375,9 +383,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 1. SELEZIONE GIORNO
-            const Padding(
-              padding: EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
-              child: Text('Seleziona il giorno:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
+            Padding(
+              padding: const EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
+              child: Text('Seleziona il giorno:', style: TextStyle(color: coloreTestoTitoli, fontSize: 14, fontWeight: FontWeight.bold)),
             ),
             SizedBox(
               height: 95,
@@ -439,7 +447,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           Text(
                               nomeGiorno,
                               style: TextStyle(
-                                  color: sel ? Colors.black : (isChiusoGiorno || isSoldOut ? Colors.red.shade300 : Colors.white70),
+                                  color: sel ? Colors.black : (isChiusoGiorno || isSoldOut ? Colors.red.shade300 : (isDarkMode ? Colors.white70 : Colors.black54)),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500
                               )
@@ -448,7 +456,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           Text(
                               '${d.day}',
                               style: TextStyle(
-                                  color: sel ? Colors.black : (isChiusoGiorno || isSoldOut ? Colors.red.shade300 : Colors.white),
+                                  color: sel ? Colors.black : (isChiusoGiorno || isSoldOut ? Colors.red.shade300 : (isDarkMode ? Colors.white : Colors.black87)),
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold
                               )
@@ -470,9 +478,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
             ),
 
             // 2. SELEZIONE OPERATORE
-            const Padding(
-              padding: EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
-              child: Text('Scegli chi ti guiderà:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
+            Padding(
+              padding: const EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
+              child: Text('Scegli chi ti guiderà:', style: TextStyle(color: coloreTestoTitoli, fontSize: 14, fontWeight: FontWeight.bold)),
             ),
             SizedBox(
               height: 110,
@@ -519,9 +527,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           width: 100,
                           margin: const EdgeInsets.symmetric(horizontal: 6),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1C2824),
+                            color: sel ? const Color(0xFFE2B13C).withValues(alpha: 0.15) : coloreSfondoCardSpenta,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: sel ? const Color(0xFFE2B13C) : Colors.transparent, width: 2),
+                            border: Border.all(
+                              color: sel ? const Color(0xFFE2B13C) : (isDarkMode ? Colors.transparent : Colors.grey.shade300),
+                              width: 2,
+                            ),
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -531,7 +542,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                 child: Icon(Icons.person, color: sel ? Colors.black : Colors.white),
                               ),
                               const SizedBox(height: 8),
-                              Text(nome, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                              Text(
+                                nome,
+                                style: TextStyle(
+                                  color: sel ? const Color(0xFFE2B13C) : coloreTestoCardSpenta,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -543,15 +561,15 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
             ),
 
             // 3. GRIGLIA ORARI DINAMICI
-            const Padding(
-              padding: EdgeInsets.only(left: 20.0, top: 20, bottom: 8),
-              child: Text('Orari disponibili:', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
+            Padding(
+              padding: const EdgeInsets.only(left: 20.0, top: 20, bottom: 8),
+              child: Text('Orari disponibili:', style: TextStyle(color: coloreTestoTitoli, fontSize: 14, fontWeight: FontWeight.bold)),
             ),
             Expanded(
               child: giornoCorrenteChiuso
                   ? const SizedBox.shrink()
                   : (_barbiereSelezionatoId == null
-                  ? const Center(child: Text('Seleziona un operatore per vedere gli orari.', style: TextStyle(color: Colors.grey)))
+                  ? Center(child: Text('Seleziona un operatore per vedere gli orari.', style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54)))
                   : (_isLoadingSlot
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)))
                   : (_slotOrariCalcolati.isEmpty
@@ -573,10 +591,10 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                     onTap: _isSaving ? null : () => setState(() => _orarioSelezionato = ora),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: sel ? const Color(0xFFE2B13C) : const Color(0xFF1C2824),
+                        color: sel ? const Color(0xFFE2B13C) : coloreSfondoCardSpenta,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: sel ? Colors.white : Colors.transparent,
+                          color: sel ? Colors.white : (isDarkMode ? Colors.transparent : Colors.grey.shade300),
                           width: 1.5,
                         ),
                       ),
@@ -584,7 +602,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                         child: Text(
                           ora,
                           style: TextStyle(
-                            color: sel ? Colors.black : Colors.white,
+                            color: sel ? Colors.black : coloreTestoCardSpenta,
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
                           ),
@@ -613,8 +631,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
               showDialog(
                 context: context,
                 builder: (dialogContext) => AlertDialog(
-                  title: const Text('Conferma Prenotazione'),
-                  content: Text('Servizio: ${widget.servizioNome}\nData: $dataStr\nOra: $_orarioSelezionato\nCon: $_barbiereSelezionatoNome'),
+                  backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                  title: Text('Conferma Prenotazione', style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87)),
+                  content: Text(
+                    'Servizio: ${widget.servizioNome}\nData: $dataStr\nOra: $_orarioSelezionato\nCon: $_barbiereSelezionatoNome',
+                    style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black87),
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(dialogContext),
@@ -632,7 +654,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
                           String nomeRealeCliente = "Cliente";
 
-                          // Recuperiamo il nome utente prima della transazione
                           final userDoc = await FirebaseFirestore.instance
                               .collection('users')
                               .doc(user.uid)
@@ -642,20 +663,16 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                             nomeRealeCliente = userDoc.data()?['name'] ?? user.displayName ?? "Cliente";
                           }
 
-                          // Calcoliamo i minuti corrents dello slot richiesto per il controllo collisioni
                           int nuovoInizioMinuti = _minutiDaStringa(_orarioSelezionato!);
                           int nuovoFineMinuti = nuovoInizioMinuti + widget.servizioDurata;
 
-                          // MODIFICATO: ESECUZIONE TRANSAZIONE ATOMICA DI FIRESTORE PER EVITARE DOPPIE PRENOTAZIONI CONTEMPORANEE
                           String? risultatoIncastroId = await FirebaseFirestore.instance.runTransaction<String?>((transaction) async {
-                            // 1. Legge dal server tutti gli appuntamenti di quel giorno e di quel barbiere registrati fino a questo istante
                             final querySnapshot = await FirebaseFirestore.instance
                                 .collection('appointments')
                                 .where('date', isEqualTo: dataStr)
                                 .where('barberId', isEqualTo: _barbiereSelezionatoId)
                                 .get(const GetOptions(source: Source.server));
 
-                            // 2. Verifica la sovrapposizione temporale applicando lo stesso algoritmo di calcolo degli slot
                             for (var doc in querySnapshot.docs) {
                               final datiApp = doc.data();
                               if (datiApp.containsKey('slot') && datiApp['slot'] != null) {
@@ -663,15 +680,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                 int appDurata = datiApp['duration'] ?? datiApp['totalDuration'] ?? datiApp['services_duration'] ?? 30;
                                 int appFine = appInizio + appDurata;
 
-                                // Controllo Overlapping: se i due intervalli di tempo si intersecano
                                 if (nuovoInizioMinuti < appFine && nuovoFineMinuti > appInizio) {
-                                  // Lo slot è appena stato occupato da un altro utente (es. tuo cugino)
                                   return null;
                                 }
                               }
                             }
 
-                            // 3. Se non ci sono collisioni orarie, procede alla scrittura atomica
                             final nuovoDocRef = FirebaseFirestore.instance.collection('appointments').doc();
                             transaction.set(nuovoDocRef, {
                               'date': dataStr,
@@ -683,16 +697,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               'userName': nomeRealeCliente,
                               'userEmail': user.email ?? 'Cliente anonimo',
                               'services': [widget.servizioNome],
-                              'totalPrice': widget.servizioPrezzo.round(), // MODIFICATO: Salvataggio dinamico del prezzo reale ereditato dal widget
+                              'totalPrice': widget.servizioPrezzo.round(),
                               'createdAt': FieldValue.serverTimestamp(),
                             });
 
-                            return nuovoDocRef.id;
+                            return nuovoDocRef.id; // Corretto con la "u": ora punta a 'nuovoDocRef'
                           });
 
-                          // Gestione dell'esito della transazione
                           if (risultatoIncastroId == null) {
-                            // La transazione ha intercettato il tentativo di prenotazione duplicata
                             throw 'SLOT_OCCUPATO';
                           }
 
@@ -729,7 +741,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           if (e == 'SLOT_OCCUPATO') {
                             messaggioErrore = 'Spiacenti! Questo orario è stato appena prenotato da un altro cliente. Scegli un altro slot.';
                             coloreSfondo = Colors.orange.shade900;
-                            // Aggiorna gli orari a schermo per mostrare il blocco reale
                             _aggiornaSlotOrari();
                           }
 

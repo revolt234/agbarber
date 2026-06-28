@@ -45,11 +45,36 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   }
 
   Future<void> _selezionaData(BuildContext context) async {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _dataSelezionata,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      locale: const Locale('it', 'IT'),
+      builder: (context, child) {
+        return Theme(
+          data: isDarkMode
+              ? ThemeData.dark().copyWith(
+            colorScheme: ColorScheme.dark(
+              primary: agOro,
+              onPrimary: Colors.black,
+              surface: const Color(0xFF1E1E1E),
+              onSurface: Colors.white,
+            ), dialogTheme: DialogThemeData(backgroundColor: const Color(0xFF1E1E1E)),
+          )
+              : ThemeData.light().copyWith(
+            colorScheme: ColorScheme.light(
+              primary: agVerde,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black87,
+            ), dialogTheme: DialogThemeData(backgroundColor: Colors.white),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null && picked != _dataSelezionata) {
       setState(() {
@@ -65,13 +90,16 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     final List servizi = data['services'] ?? [];
     final int prezzoTotale = data['totalPrice'] ?? 0;
 
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
+        final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
         return Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
@@ -84,7 +112,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   Expanded(
                     child: Text(
                       clienteNome.toUpperCase(),
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                      style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 20),
                     ),
                   ),
                   Container(
@@ -100,14 +128,14 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   ),
                 ],
               ),
-              const Divider(color: Colors.grey, height: 24),
+              Divider(color: isDarkMode ? Colors.grey : Colors.grey.shade300, height: 24),
               Row(
                 children: [
                   Icon(Icons.access_time, color: agOro, size: 20),
                   const SizedBox(width: 8),
                   Text(
                     'Orario: $oraInizioStr - $oraFineStr ($durata min)',
-                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+                    style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
@@ -118,7 +146,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   const SizedBox(width: 8),
                   Text(
                     'Operatore: $operatoreNome',
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
                   ),
                 ],
               ),
@@ -131,7 +159,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   Expanded(
                     child: Text(
                       'Servizio: ${servizi.join(", ")}',
-                      style: const TextStyle(color: Colors.white70, fontSize: 14, fontStyle: FontStyle.italic),
+                      style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14, fontStyle: FontStyle.italic),
                     ),
                   ),
                 ],
@@ -158,13 +186,23 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
   @override
   Widget build(BuildContext context) {
+    // MODIFICATO: Rilevazione dinamica del tema di sistema attivo sul telefono
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Configurazione dei colori dinamici
+    final Color coloreSfondoSchermata = isDarkMode ? agScuro : const Color(0xFFF4F6F5);
+    final Color coloreSfondoBarraData = isDarkMode ? Colors.white.withValues(alpha: 0.05) : Colors.white;
+    final Color coloreTestoSecondario = isDarkMode ? Colors.white70 : Colors.black54;
+    final Color coloreLineeDivisione = isDarkMode ? Colors.grey.withValues(alpha: 0.25) : Colors.grey.shade300;
+    final Color coloreLineeMezzora = isDarkMode ? Colors.grey.withValues(alpha: 0.12) : Colors.grey.shade200;
+
     final int inizioMinutiTotali = oraInizioGiornata * 60;
     final int fineMinutiTotali = oraFineGiornata * 60;
     final int minutiTotaliGiornata = fineMinutiTotali - inizioMinutiTotali;
     final double altezzaTotaleGriglia = minutiTotaliGiornata * altezzaPerMinuto;
 
     return Scaffold(
-      backgroundColor: agScuro,
+      backgroundColor: coloreSfondoSchermata,
       appBar: AppBar(
         title: const Text(
           'AGENDA CALENDARIO',
@@ -178,13 +216,13 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         children: [
           // 1. SELETTORE DATA
           Container(
-            color: Colors.white.withValues(alpha: 0.05),
+            color: coloreSfondoBarraData,
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.chevron_left, color: Colors.white, size: 28),
+                  icon: Icon(Icons.chevron_left, color: isDarkMode ? Colors.white : agVerde, size: 28),
                   onPressed: () {
                     setState(() => _dataSelezionata = _dataSelezionata.subtract(const Duration(days: 1)));
                   },
@@ -197,13 +235,13 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                       fit: BoxFit.scaleDown,
                       child: Text(
                         DateFormat('E d MMM yyyy', 'it_IT').format(_dataSelezionata).toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                        style: TextStyle(color: isDarkMode ? Colors.white : agVerde, fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                     ),
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.chevron_right, color: Colors.white, size: 28),
+                  icon: Icon(Icons.chevron_right, color: isDarkMode ? Colors.white : agVerde, size: 28),
                   onPressed: () {
                     setState(() => _dataSelezionata = _dataSelezionata.add(const Duration(days: 1)));
                   },
@@ -254,7 +292,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
             },
           ),
 
-          const Divider(height: 1, color: Colors.grey),
+          Divider(height: 1, color: isDarkMode ? Colors.grey : Colors.grey.shade400),
 
           // 3. CALENDARIO CON TIMELINE AD ALTA PRECISIONE (30 MIN)
           Expanded(
@@ -311,7 +349,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               height: 30 * altezzaPerMinuto,
                               decoration: BoxDecoration(
                                 border: Border(
-                                  top: BorderSide(color: Colors.grey.withValues(alpha: 0.25), width: 1.2),
+                                  top: BorderSide(color: coloreLineeDivisione, width: 1.2),
                                 ),
                               ),
                               child: Row(
@@ -322,7 +360,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                     padding: const EdgeInsets.only(top: 4, left: 8),
                                     child: Text(
                                       "${i.toString().padLeft(2, '0')}:00",
-                                      style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                                      style: TextStyle(color: coloreTestoSecondario, fontSize: 12, fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                   const Expanded(child: SizedBox.shrink()),
@@ -339,7 +377,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               height: 30 * altezzaPerMinuto,
                               decoration: BoxDecoration(
                                 border: Border(
-                                  top: BorderSide(color: Colors.grey.withValues(alpha: 0.12), width: 1, style: BorderStyle.solid),
+                                  top: BorderSide(color: coloreLineeMezzora, width: 1, style: BorderStyle.solid),
                                 ),
                               ),
                               child: Row(
@@ -350,7 +388,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                     padding: const EdgeInsets.only(top: 2, left: 8),
                                     child: Text(
                                       "${i.toString().padLeft(2, '0')}:30",
-                                      style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w500),
+                                      style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w500),
                                     ),
                                   ),
                                   const Expanded(child: SizedBox.shrink()),
@@ -367,7 +405,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                           child: Container(
                             decoration: BoxDecoration(
                               border: Border(
-                                top: BorderSide(color: Colors.grey.withValues(alpha: 0.25), width: 1.2),
+                                top: BorderSide(color: coloreLineeDivisione, width: 1.2),
                               ),
                             ),
                           ),
@@ -412,7 +450,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                     border: Border.all(color: agOro, width: 1.2),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.4),
+                                        color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.15),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       )

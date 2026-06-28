@@ -40,11 +40,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // Funzione per eliminare l'account definitivamente
   Future<void> _eliminaAccount() async {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     bool confermato = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Elimina Account'),
-        content: const Text('Sei sicuro? Questa azione è irreversibile e cancellerà tutti i tuoi dati.'),
+        backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        title: Text(
+          'Elimina Account',
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Sei sicuro? Questa azione è irreversibile e cancellerà tutti i tuoi dati.',
+          style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -96,9 +105,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     const Color agVerde = Color(0xFF164638);
+    const Color agOro = Color(0xFFE2B13C);
+
+    // MODIFICATO: Rilevazione del tema (Light/Dark) per garantire consistenza estetica
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Colori adattivi per l'interfaccia utente
+    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
+    final Color coloreSfondoCard = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
+    final Color coloreTestoPrimario = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreTestoSecondario = isDarkMode ? Colors.grey : Colors.black54;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: coloreSfondoSchermata,
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.only(left: 12.0),
@@ -120,16 +139,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         automaticallyImplyLeading: false,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)))
+          ? const Center(child: CircularProgressIndicator(color: agOro))
           : ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           Card(
-            color: const Color(0xFF1C2824),
-            elevation: 2,
+            color: coloreSfondoCard,
+            elevation: isDarkMode ? 2 : 1,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              side: const BorderSide(color: agVerde, width: 1),
+              side: BorderSide(color: isDarkMode ? agVerde : Colors.grey.shade300, width: 1),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -137,7 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   const CircleAvatar(
                     radius: 30,
-                    backgroundColor: Color(0xFFE2B13C),
+                    backgroundColor: agOro,
                     child: Icon(Icons.person, size: 35, color: Colors.white),
                   ),
                   const SizedBox(width: 16),
@@ -145,13 +164,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Account Cliente',
-                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                          style: TextStyle(fontSize: 14, color: coloreTestoSecondario),
                         ),
                         Text(
                           _user?.email ?? 'Nessuna email',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: coloreTestoPrimario),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -163,22 +182,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 24),
 
-          const Text('Opzioni Sicurezza', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
+          Text('Opzioni Sicurezza', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: coloreTestoSecondario)),
           const Divider(color: agVerde),
 
           ListTile(
-            leading: const Icon(Icons.lock_reset, color: Color(0xFFE2B13C)),
-            title: const Text('Modifica Password', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Ricevi un link via email per reimpostare la password', style: TextStyle(color: Colors.grey)),
-            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            leading: const Icon(Icons.lock_reset, color: agOro),
+            title: Text('Modifica Password', style: TextStyle(color: coloreTestoPrimario)),
+            subtitle: Text('Ricevi un link via email per reimpostare la password', style: TextStyle(color: coloreTestoSecondario)),
+            trailing: Icon(Icons.chevron_right, color: coloreTestoSecondario),
             onTap: _cambiaPassword,
           ),
 
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.orange),
-            title: const Text('Disconnetti', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Esci dal tuo account corrente', style: TextStyle(color: Colors.grey)),
-            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            title: Text('Disconnetti', style: TextStyle(color: coloreTestoPrimario)),
+            subtitle: Text('Esci dal tuo account corrente', style: TextStyle(color: coloreTestoSecondario)),
+            trailing: Icon(Icons.chevron_right, color: coloreTestoSecondario),
             onTap: () async {
               await FirebaseAuth.instance.signOut();
               if (mounted) {
@@ -195,7 +214,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ListTile(
             leading: const Icon(Icons.delete_forever, color: Colors.red),
             title: const Text('Elimina Account', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-            subtitle: const Text('Cancella permanentemente il tuo profilo da AG Barber', style: TextStyle(color: Colors.grey)),
+            subtitle: Text('Cancella permanentemente il tuo profilo da AG Barber', style: TextStyle(color: coloreTestoSecondario)),
             onTap: _eliminaAccount,
           ),
         ],

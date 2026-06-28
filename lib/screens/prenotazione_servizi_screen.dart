@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io'; // AGGIUNTO: Per verificare lo stato della rete reale
+import 'dart:io'; // Per verificare lo stato della rete reale
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -88,16 +88,10 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     }
   }
 
-  // AGGIUNTO: Metodo per controllare la connettività di rete reale in modo istantaneo
   Future<bool> _controllaConnessioneReale() async {
-    // Se l'app sta girando sul Web (Browser)
     if (kIsWeb) {
-      // Evitiamo controlli IP/DNS che sul browser falliscono.
-      // Ritorniamo direttamente true per sbloccare il tasto su Web.
       return true;
     }
-
-    // Se l'app sta girando su Smartphone (Android / iOS)
     try {
       final risultato = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
       return risultato.isNotEmpty && risultato[0].rawAddress.isNotEmpty;
@@ -108,13 +102,22 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // MODIFICATO: Rilevazione del tema attivo sul telefono (Light/Dark)
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Configurazione dei colori dinamici della pagina
+    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
+    final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final Color coloreTestoCardSpenta = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreIconaCardSpenta = isDarkMode ? const Color(0xFFE2B13C) : const Color(0xFF164638);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: coloreSfondoSchermata, // MODIFICATO: Sfondo adattivo
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot>(
           stream: _servicesStream,
           builder: (context, snapshot) {
-            // CORREZIONE: Gestiamo l'errore se Firestore fallisce esplicitamente il recupero.
             final bool haErroreConnessione = snapshot.hasError;
             final bool haDatiValidi = snapshot.hasData && snapshot.data!.docs.isNotEmpty;
             final bool puoProseguire = !haErroreConnessione && haDatiValidi && _servizioSelezionatoId != null;
@@ -142,7 +145,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                       )
                           : Text(
                         'Ciao, $_nomeUtente!',
-                        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: coloreTestoTitoli, fontSize: 24, fontWeight: FontWeight.bold), // MODIFICATO: Testo adattivo
                       ),
                       const SizedBox(height: 16),
                       Row(
@@ -164,16 +167,16 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                             ),
                           ),
                           const SizedBox(width: 14),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'AG The gentleman\nBarber di Abate Gerardo',
-                                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, height: 1.2),
+                                  style: TextStyle(color: coloreTestoTitoli, fontSize: 16, fontWeight: FontWeight.bold, height: 1.2), // MODIFICATO: Testo adattivo
                                 ),
-                                SizedBox(height: 4),
-                                Text(
+                                const SizedBox(height: 4),
+                                const Text(
                                   'Via Sacco Giovanni, 18\nCapaccio Paestum',
                                   style: TextStyle(color: Colors.grey, fontSize: 12),
                                 ),
@@ -199,10 +202,10 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                               children: [
                                 const Icon(Icons.wifi_off, color: Color(0xFFE2B13C), size: 48),
                                 const SizedBox(height: 16),
-                                const Text(
+                                Text(
                                   'Connessione internet assente\no instabile.',
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.white, fontSize: 16),
+                                  style: TextStyle(color: coloreTestoTitoli, fontSize: 16), // MODIFICATO: Testo adattivo
                                 ),
                                 const SizedBox(height: 16),
                                 ElevatedButton.icon(
@@ -231,7 +234,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                       }
 
                       if (!haDatiValidi) {
-                        return const Center(child: Text('Nessun servizio disponibile al momento.', style: TextStyle(color: Colors.white)));
+                        return Center(child: Text('Nessun servizio disponibile al momento.', style: TextStyle(color: coloreTestoTitoli))); // MODIFICATO: Testo adattivo
                       }
 
                       final servizi = snapshot.data!.docs;
@@ -262,7 +265,10 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                               margin: const EdgeInsets.only(bottom: 14),
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                               decoration: BoxDecoration(
-                                color: isSelezionato ? const Color(0xFFFFF6E0) : Colors.white,
+                                // MODIFICATO: Sfondo card e bordi che variano dinamicamente in base a selezione e darkmode
+                                color: isSelezionato
+                                    ? (isDarkMode ? const Color(0xFFFFF1CC) : const Color(0xFFFFF6E0))
+                                    : coloreSfondoCardSpenta,
                                 borderRadius: BorderRadius.circular(18),
                                 border: Border.all(
                                   color: isSelezionato ? const Color(0xFFE2B13C) : Colors.transparent,
@@ -273,7 +279,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                 children: [
                                   Icon(
                                     nome.toLowerCase().contains('barba') ? Icons.chair : Icons.content_cut,
-                                    color: const Color(0xFF164638),
+                                    color: isSelezionato ? const Color(0xFF164638) : coloreIconaCardSpenta, // MODIFICATO: Icona adattiva
                                     size: 28,
                                   ),
                                   const SizedBox(width: 16),
@@ -283,19 +289,27 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                       children: [
                                         Text(
                                           nome,
-                                          style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+                                          style: TextStyle(
+                                              color: isSelezionato ? Colors.black : coloreTestoCardSpenta, // MODIFICATO: Testo adattivo
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold
+                                          ),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
                                           '$durata min',
-                                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                          style: TextStyle(color: isSelezionato ? Colors.grey.shade700 : Colors.grey.shade500, fontSize: 12), // MODIFICATO: Sottotesto adattivo
                                         ),
                                       ],
                                     ),
                                   ),
                                   Text(
                                     '${prezzo.toStringAsFixed(2).replaceAll('.', ',')} €',
-                                    style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                        color: isSelezionato ? Colors.black : coloreTestoCardSpenta, // MODIFICATO: Prezzo adattivo
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold
+                                    ),
                                   ),
                                 ],
                               ),
@@ -312,9 +326,9 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFE2B13C),
-                      foregroundColor: const Color(0xFF121212), // CORREZIONE: Forza il testo attivo a essere visibile e scuro sul fondo oro
-                      disabledBackgroundColor: Colors.white.withValues(alpha: 0.12),
-                      disabledForegroundColor: Colors.white.withValues(alpha: 0.35),
+                      foregroundColor: const Color(0xFF121212),
+                      disabledBackgroundColor: isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.08), // MODIFICATO: Disabilitato adattivo
+                      disabledForegroundColor: isDarkMode ? Colors.white.withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.25), // MODIFICATO: Testo disabilitato adattivo
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       elevation: 2,
@@ -329,11 +343,10 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                         ),
                       );
 
-                      // CONTROLLO DI SICUREZZA: Eseguiamo una verifica reale e istantanea dello stato della rete
                       bool online = await _controllaConnessioneReale();
 
                       if (!context.mounted) return;
-                      Navigator.pop(context); // Chiude il Dialog di caricamento
+                      Navigator.pop(context);
 
                       if (online) {
                         Navigator.push(
@@ -343,7 +356,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                               servizioId: _servizioSelezionatoId!,
                               servizioNome: _datiServizioSelezionato?['name'] ?? 'Servizio',
                               servizioDurata: _datiServizioSelezionato?['duration'] ?? 30,
-                              servizioPrezzo: (_datiServizioSelezionato?['price'] ?? 0.0).toDouble(), // AGGIUNTO: Trasmette il prezzo reale alla schermata successiva
+                              servizioPrezzo: (_datiServizioSelezionato?['price'] ?? 0.0).toDouble(),
                             ),
                           ),
                         );
