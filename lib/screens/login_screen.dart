@@ -68,11 +68,13 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _recuperoEmailController,
+              maxLength: 45, // Limite max 50 caratteri richiesto
               style: const TextStyle(color: Colors.white),
               onTap: () => _resettaSelezioneTesto(_recuperoEmailController), // Protezione dialogo
               decoration: const InputDecoration(
                 labelText: 'Email',
                 labelStyle: TextStyle(color: Colors.grey),
+                counterText: "", // Nasconde il contatore numerico di default per pulizia estetica
                 enabledBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: Color(0xFF164638)),
                 ),
@@ -254,12 +256,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _nomeCognomeController,
                     focusNode: _nomeCognomeFocus,
+                    maxLength: 45, // Limite max 50 caratteri richiesto
                     style: const TextStyle(color: Colors.white),
                     onTap: () => _resettaSelezioneTesto(_nomeCognomeController), // CORREZIONE: Cursore pulito al click
                     onTapOutside: (event) => _nomeCognomeFocus.unfocus(),
                     decoration: const InputDecoration(
                       labelText: 'Nome e Cognome',
                       labelStyle: TextStyle(color: Colors.grey),
+                      counterText: "", // Nasconde la barra del contatore numerico
                       enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
                       focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
                       prefixIcon: Icon(Icons.person, color: Color(0xFFE2B13C)),
@@ -272,12 +276,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _emailController,
                   focusNode: _emailFocus,
+                  maxLength: 45, // Limite max 50 caratteri richiesto
                   style: const TextStyle(color: Colors.white),
                   onTap: () => _resettaSelezioneTesto(_emailController), // CORREZIONE: Cursore pulito al click
                   onTapOutside: (event) => _emailFocus.unfocus(),
                   decoration: const InputDecoration(
                     labelText: 'Email',
                     labelStyle: TextStyle(color: Colors.grey),
+                    counterText: "", // Nasconde la barra del contatore numerico
                     enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
                     focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
                     prefixIcon: Icon(Icons.email, color: Color(0xFFE2B13C)),
@@ -289,12 +295,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _passwordController,
                   focusNode: _passwordFocus,
+                  maxLength: 45, // Limite max 50 caratteri richiesto
                   style: const TextStyle(color: Colors.white),
                   onTap: () => _resettaSelezioneTesto(_passwordController), // CORREZIONE: Cursore pulito al click
                   onTapOutside: (event) => _passwordFocus.unfocus(),
                   decoration: const InputDecoration(
                     labelText: 'Password',
                     labelStyle: TextStyle(color: Colors.grey),
+                    counterText: "", // Nasconde la barra del contatore numerico
                     enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
                     focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
                     prefixIcon: Icon(Icons.lock, color: Color(0xFFE2B13C)),
