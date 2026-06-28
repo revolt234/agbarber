@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'login_screen.dart'; // Importato per permettere il reindirizzamento al login
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -140,6 +141,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: agOro))
+          : (_user == null
+          ? Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.account_circle,
+                size: 100,
+                color: agOro.withValues(alpha: 0.6),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Profilo non configurato',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: coloreTestoPrimario,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Accedi o crea un account per gestire il tuo profilo e le tue preferenze.',
+                style: TextStyle(color: coloreTestoSecondario, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: agVerde,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(220, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 2,
+                ),
+                onPressed: () {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                        (route) => false,
+                  );
+                },
+                child: const Text(
+                  'ACCEDI / REGISTRATI',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+        ),
+      )
           : ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
@@ -169,7 +225,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: TextStyle(fontSize: 14, color: coloreTestoSecondario),
                         ),
                         Text(
-                          _user?.email ?? 'Nessuna email',
+                          _user.email ?? 'Nessuna email',
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: coloreTestoPrimario),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -201,7 +257,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () async {
               await FirebaseAuth.instance.signOut();
               if (mounted) {
-                // CORREZIONE ANCHE QUI: Pulisce la navigazione al logout per tornare alla login
                 Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
               }
             },
@@ -218,7 +273,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: _eliminaAccount,
           ),
         ],
-      ),
+      )),
     );
   }
 }

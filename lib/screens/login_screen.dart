@@ -70,13 +70,13 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _recuperoEmailController,
-              maxLength: 45, // Mantenuto limite a 45 come da tuo codice originale
+              maxLength: 45,
               style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
-              onTap: () => _resettaSelezioneTesto(_recuperoEmailController), // Protezione dialogo
+              onTap: () => _resettaSelezioneTesto(_recuperoEmailController),
               decoration: InputDecoration(
                 labelText: 'Email',
                 labelStyle: const TextStyle(color: Colors.grey),
-                counterText: "", // Nasconde il contatore numerico di default per pulizia estetica
+                counterText: "",
                 enabledBorder: const OutlineInputBorder(
                   borderSide: BorderSide(color: Color(0xFF164638)),
                 ),
@@ -189,6 +189,13 @@ class _LoginScreenState extends State<LoginScreen> {
           });
         }
       }
+
+      // MODIFICATO: Invece del semplice pop che rompe lo stack reattivo dell'AuthGate,
+      // usiamo pushNamedAndRemoveUntil per azzerare lo stack delle rotte rimandando alla rotta principale ("/") in totale sicurezza.
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      }
+
     } on FirebaseAuthException catch (e) {
       debugPrint("Firebase Auth Error Code: ${e.code}");
       debugPrint("Firebase Auth Error Message: ${e.message}");
@@ -231,10 +238,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // MODIFICATO: Rilevazione dinamica del tema (Light/Dark) per l'intera pagina
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Tavolozza dinamica adattiva basata sul tema di sistema
     final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
     final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
     final Color coloreTestoInput = isDarkMode ? Colors.white : Colors.black87;
@@ -243,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: coloreSfondoSchermata, // MODIFICATO: Ora lo sfondo cambia dinamicamente
+        backgroundColor: coloreSfondoSchermata,
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -359,6 +364,33 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? 'Non hai un account? Registrati qui'
                         : 'Hai già un account? Accedi',
                     style: const TextStyle(color: Color(0xFFE2B13C)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // CORRETTO: Protezione contro la schermata nera.
+                // Controlla se c'è una rotta precedente valida a cui tornare; in caso contrario, azzera lo stack e torna alla radice.
+                OutlinedButton(
+                  onPressed: () {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.pop(context);
+                    } else {
+                      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                    }
+                  },
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF164638), width: 1.5),
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text(
+                    'CONTINUA COME OSPITE',
+                    style: TextStyle(
+                      color: Color(0xFF164638),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      letterSpacing: 1.1,
+                    ),
                   ),
                 ),
               ],

@@ -216,8 +216,9 @@ class _AuthGateState extends State<AuthGate> {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
+        // MODIFICATO: Se non ci sono credenziali d'accesso, l'app avvia la Home in modalità Ospite per Apple Review compliance
         if (!snapshot.hasData) {
-          return const LoginScreen();
+          return const ClienteHomePage(nomeUtente: "Ospite");
         }
 
         final User user = snapshot.data!;

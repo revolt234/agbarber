@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'prenotazione_data_screen.dart';
+import 'login_screen.dart'; // Importato per permettere il reindirizzamento alla LoginScreen
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class PrenotazioneServiziScreen extends StatefulWidget {
@@ -81,7 +82,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     } else {
       if (mounted) {
         setState(() {
-          _nomeUtente = "Cliente";
+          _nomeUtente = "Ospite"; // Impostato esplicitamente a Ospite per coerenza visiva
           _isLoadingNome = false;
         });
       }
@@ -98,6 +99,60 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     } catch (_) {
       return false;
     }
+  }
+
+  // Funzione di supporto per mostrare il popup di avviso per l'Ospite
+  void _mostraDialogoRegistrazioneObbligatoria() {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          title: Text(
+            "Accesso Richiesto 🔐",
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            "Per poter completare la prenotazione dei servizi ed inserire il tuo appuntamento in agenda, è necessario creare un account o effettuare l'accesso.",
+            style: TextStyle(
+              color: isDarkMode ? Colors.grey.shade400 : Colors.black54,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'ANNULLA',
+                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF164638),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.pop(context); // Chiude il dialogo corrente
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                );
+              },
+              child: const Text(
+                'ACCEDI / REGISTRATI',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -335,6 +390,13 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                     ),
                     onPressed: puoProseguire
                         ? () async {
+                      // INTERCETTAZIONE OSPITE: Controlla se l'utente non è autenticato prima di procedere
+                      final utenteCorrente = FirebaseAuth.instance.currentUser;
+                      if (utenteCorrente == null) {
+                        _mostraDialogoRegistrazioneObbligatoria();
+                        return;
+                      }
+
                       showDialog(
                         context: context,
                         barrierDismissible: false,
