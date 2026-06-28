@@ -8,12 +8,14 @@ class PrenotazioneDataScreen extends StatefulWidget {
   final String servizioId;
   final String servizioNome;
   final int servizioDurata;
+  final double servizioPrezzo; // AGGIUNTO: Parametro per ricevere il prezzo reale dalla schermata precedente
 
   const PrenotazioneDataScreen({
     super.key,
     required this.servizioId,
     required this.servizioNome,
     required this.servizioDurata,
+    required this.servizioPrezzo, // AGGIUNTO: Richiesto nel costruttore
   });
 
   @override
@@ -640,9 +642,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                             nomeRealeCliente = userDoc.data()?['name'] ?? user.displayName ?? "Cliente";
                           }
 
-                          int prezzoStimato = 15;
-
-                          // Calcoliamo i minuti correnti dello slot richiesto per il controllo collisioni
+                          // Calcoliamo i minuti corrents dello slot richiesto per il controllo collisioni
                           int nuovoInizioMinuti = _minutiDaStringa(_orarioSelezionato!);
                           int nuovoFineMinuti = nuovoInizioMinuti + widget.servizioDurata;
 
@@ -683,7 +683,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               'userName': nomeRealeCliente,
                               'userEmail': user.email ?? 'Cliente anonimo',
                               'services': [widget.servizioNome],
-                              'totalPrice': prezzoStimato,
+                              'totalPrice': widget.servizioPrezzo.round(), // MODIFICATO: Salvataggio dinamico del prezzo reale ereditato dal widget
                               'createdAt': FieldValue.serverTimestamp(),
                             });
 

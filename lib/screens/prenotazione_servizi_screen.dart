@@ -343,6 +343,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                               servizioId: _servizioSelezionatoId!,
                               servizioNome: _datiServizioSelezionato?['name'] ?? 'Servizio',
                               servizioDurata: _datiServizioSelezionato?['duration'] ?? 30,
+                              servizioPrezzo: (_datiServizioSelezionato?['price'] ?? 0.0).toDouble(), // AGGIUNTO: Trasmette il prezzo reale alla schermata successiva
                             ),
                           ),
                         );
