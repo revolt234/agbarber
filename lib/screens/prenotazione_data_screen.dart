@@ -141,11 +141,21 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
             String nomeGiorno = _giorniSettimana[giorno.weekday % 7];
             var orariGiorno = _orariNegozioBase[nomeGiorno];
 
+            // MODIFICATO: Se c'è un'apertura straordinaria nelle eccezioni, sovrascrivi gli orari base usando quelli salvati nel pop-up
+            final bool haAperturaStraordinaria = _eccezioniCalendario[dataStr]?['status'] == 'aperto';
+            if (haAperturaStraordinaria) {
+              orariGiorno = {
+                'isAperto': true,
+                'mattina': _eccezioniCalendario[dataStr]?['mattina'],
+                'pomeriggio': _eccezioniCalendario[dataStr]?['pomeriggio'],
+              };
+            }
+
             if (orariGiorno != null && orariGiorno['isAperto'] == true) {
-              if (orariGiorno.containsKey('mattina')) {
+              if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
                 slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['mattina'], dataEx, giorno, occupatiBarbiere);
               }
-              if (orariGiorno.containsKey('pomeriggio')) {
+              if (orariGiorno.containsKey('pomeriggio') && orariGiorno['pomeriggio'] != null) {
                 slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['pomeriggio'], dataEx, giorno, occupatiBarbiere);
               }
             }
@@ -262,11 +272,21 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       String nomeGiorno = _giorniSettimana[_dataSelezionata.weekday % 7];
       var orariGiorno = _orariNegozioBase[nomeGiorno];
 
+      // MODIFICATO: Se c'è un'apertura straordinaria attiva, sovrascrivi l'orario standard del giorno con quello salvato nel pop-up
+      final bool haAperturaStraordinaria = _eccezioniCalendario[dataStr]?['status'] == 'aperto';
+      if (haAperturaStraordinaria) {
+        orariGiorno = {
+          'isAperto': true,
+          'mattina': _eccezioniCalendario[dataStr]?['mattina'],
+          'pomeriggio': _eccezioniCalendario[dataStr]?['pomeriggio'],
+        };
+      }
+
       if (orariGiorno != null && orariGiorno['isAperto'] == true) {
-        if (orariGiorno.containsKey('mattina')) {
+        if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
           _calcolaSlotPerFascia(orariGiorno['mattina'], dataEx);
         }
-        if (orariGiorno.containsKey('pomeriggio')) {
+        if (orariGiorno.containsKey('pomeriggio') && orariGiorno['pomeriggio'] != null) {
           _calcolaSlotPerFascia(orariGiorno['pomeriggio'], dataEx);
         }
       }
@@ -347,7 +367,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   String _formattaData(DateTime d) => "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
   bool _isChiuso(DateTime d) {
-    if (_eccezioniCalendario[_formattaData(d)]?['status'] == 'chiuso') return true;
+    final stringaGiorno = _formattaData(d);
+    if (_eccezioniCalendario.containsKey(stringaGiorno)) {
+      // Se c'è un'eccezione salvata, comanda lei: restituisce true se lo status è 'chiuso'
+      return _eccezioniCalendario[stringaGiorno]?['status'] == 'chiuso';
+    }
+    // Altrimenti, se non ci sono eccezioni, fa fede l'orario base del lunedì/domenica ecc.
     return _orariNegozioBase[_giorniSettimana[d.weekday % 7]]?['isAperto'] == false;
   }
 

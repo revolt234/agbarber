@@ -12,63 +12,133 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
   final _notaController = TextEditingController();
   String _statusScelto = 'chiuso';
 
+  // Struttura oraria predefinita per le aperture straordinarie
+  Map<String, dynamic> _orariStraordinari = {
+    'mattina': {'apertura': '09:00', 'chiusura': '13:00'},
+    'pomeriggio': {'apertura': '14:30', 'chiusura': '19:30'},
+  };
+
   @override
   void dispose() {
     _notaController.dispose();
     super.dispose();
   }
 
-  // Mostra il DatePicker nativo per scegliere il giorno esatto sul calendario
   Future<void> _selezionaGiornoEccezione() async {
     final DateTime? dataScelta = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
-      firstDate: DateTime.now(), // Non ha senso bloccare giorni passati
-      lastDate: DateTime.now().add(const Duration(days: 365)), // Fino a un anno avanti
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
 
     if (dataScelta != null) {
-      // Formattiamo la data come stringa YYYY-MM-DD per usarla come ID del documento
       final String dataFormattata = "${dataScelta.year}-${dataScelta.month.toString().padLeft(2, '0')}-${dataScelta.day.toString().padLeft(2, '0')}";
       _mostraDialogConfiguraGiorno(dataFormattata);
     }
   }
 
-  // Pop-up per decidere se il giorno scelto è Chiuso o Aperto con una nota
+  Future<void> _cambiaOrarioStraordinario(BuildContext context, StateSetter setDialogState, String fascia, String tipo) async {
+    final stringaAttuale = _orariStraordinari[fascia][tipo];
+    final parti = stringaAttuale.split(':');
+    final tempoIniziale = TimeOfDay(hour: int.parse(parti[0]), minute: int.parse(parti[1]));
+
+    final TimeOfDay? tempoScelto = await showTimePicker(
+      context: context,
+      initialTime: tempoIniziale,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
+    );
+
+    if (tempoScelto != null) {
+      final stringaOra = '${tempoScelto.hour.toString().padLeft(2, '0')}:${tempoScelto.minute.toString().padLeft(2, '0')}';
+      setDialogState(() {
+        _orariStraordinari[fascia][tipo] = stringaOra;
+      });
+    }
+  }
+
   void _mostraDialogConfiguraGiorno(String dataFormattata) {
     _notaController.clear();
     _statusScelto = 'chiuso';
+    // Reset orari predefiniti ad ogni apertura dialogo
+    _orariStraordinari = {
+      'mattina': {'apertura': '09:00', 'chiusura': '13:00'},
+      'pomeriggio': {'apertura': '14:30', 'chiusura': '19:30'},
+    };
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text('Configura Giorno ($dataFormattata)'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: _statusScelto,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: const [
-                  DropdownMenuItem(value: 'chiuso', child: Text('Chiuso tutto il giorno')),
-                  DropdownMenuItem(value: 'aperto', child: Text('Apertura Straordinaria')),
-                ],
-                onChanged: (valore) {
-                  if (valore != null) {
-                    setDialogState(() => _statusScelto = valore);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _notaController,
-                decoration: const InputDecoration(
-                  labelText: 'Motivazione (es. Ferie, Santo Patrono)',
-                  border: OutlineInputBorder(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: _statusScelto,
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
+                  items: const [
+                    DropdownMenuItem(value: 'chiuso', child: Text('Chiuso tutto il giorno')),
+                    DropdownMenuItem(value: 'aperto', child: Text('Apertura Straordinaria')),
+                  ],
+                  onChanged: (valore) {
+                    if (valore != null) {
+                      setDialogState(() => _statusScelto = valore);
+                    }
+                  },
                 ),
-              ),
-            ],
+                if (_statusScelto == 'aperto') ...[
+                  const SizedBox(height: 16),
+                  const Text("Orari Apertura Straordinaria", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Divider(),
+                  // Mattina
+                  const Text("Turno Mattina", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => _cambiaOrarioStraordinario(context, setDialogState, 'mattina', 'apertura'),
+                        child: Text(_orariStraordinari['mattina']['apertura'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                      const Icon(Icons.arrow_forward, size: 16),
+                      TextButton(
+                        onPressed: () => _cambiaOrarioStraordinario(context, setDialogState, 'mattina', 'chiusura'),
+                        child: Text(_orariStraordinari['mattina']['chiusura'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Pomeriggio
+                  const Text("Turno Pomeriggio", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => _cambiaOrarioStraordinario(context, setDialogState, 'pomeriggio', 'apertura'),
+                        child: Text(_orariStraordinari['pomeriggio']['apertura'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                      const Icon(Icons.arrow_forward, size: 16),
+                      TextButton(
+                        onPressed: () => _cambiaOrarioStraordinario(context, setDialogState, 'pomeriggio', 'chiusura'),
+                        child: Text(_orariStraordinari['pomeriggio']['chiusura'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _notaController,
+                  decoration: const InputDecoration(
+                    labelText: 'Motivazione (es. Ferie, Santo Patrono)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -88,15 +158,24 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
 
   Future<void> _salvaEccezioneFirebase(String dataFormattata) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('calendar_exceptions')
-          .doc(dataFormattata)
-          .set({
+      final Map<String, dynamic> mappaSalvataggio = {
         'date': dataFormattata,
         'status': _statusScelto,
         'nota': _notaController.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      // Se è aperto, includiamo gli orari inseriti nel pop-up dentro il documento
+      if (_statusScelto == 'aperto') {
+        mappaSalvataggio['mattina'] = _orariStraordinari['mattina'];
+        mappaSalvataggio['pomeriggio'] = _orariStraordinari['pomeriggio'];
+      }
+
+      await FirebaseFirestore.instance
+          .collection('calendar_exceptions')
+          .doc(dataFormattata)
+          .set(mappaSalvataggio);
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
