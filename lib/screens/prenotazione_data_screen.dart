@@ -697,7 +697,8 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               'userName': nomeRealeCliente,
                               'userEmail': user.email ?? 'Cliente anonimo',
                               'services': [widget.servizioNome],
-                              'totalPrice': widget.servizioPrezzo.round(),
+                              // MODIFICA QUESTA RIGA: Rimuovi il .round() per salvare il prezzo esatto come double decimale
+                              'totalPrice': widget.servizioPrezzo,
                               'createdAt': FieldValue.serverTimestamp(),
                             });
 

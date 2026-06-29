@@ -33,7 +33,7 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
     if (docId != null) {
       // Se passiamo un docId, siamo in modalità MODIFICA: precompiliamo i campi
       _nomeController.text = nomeIniziale ?? '';
-      _prezzoController.text = prezzoIniziale?.toString() ?? '';
+      _prezzoController.text = prezzoIniziale?.toStringAsFixed(2) ?? '';
       // Se la durata memorizzata è presente nelle opzioni, la seleziona, altrimenti mette il default (30)
       _durataSelezionata = _opzioniDurata.contains(durataIniziale) ? durataIniziale : 30;
     } else {
