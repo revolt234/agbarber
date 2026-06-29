@@ -84,12 +84,12 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   }
 
   // Mostra il Popup dal basso con tutti i dettagli dell'appuntamento selezionato
-  // Mostra il Popup dal basso con tutti i dettagli dell'appuntamento selezionato
   void _mostraDettagliAppuntamento(Map<String, dynamic> data, String oraInizioStr, String oraFineStr, int durata) {
     final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
     final String operatoreNome = data['barberName'] ?? 'Qualsiasi';
     final List servizi = data['services'] ?? [];
-    final int prezzoTotale = data['totalPrice'] ?? 0;
+    // MODIFICATO: Lettura del prezzo convertito a double per evitare crash legati al tipo
+    final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
 
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
@@ -126,7 +126,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '€$prezzoTotale',
+                        // MODIFICATO: Formattazione del prezzo double con decimali e virgola
+                        '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
                         style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 18),
                       ),
                     ),
@@ -439,7 +440,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               final double leftPos = larghezzaColonnaOra + (colonna * larghezzaCard) + 4;
 
                               final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
-                              final int prezzoTotale = data['totalPrice'] ?? 0;
+                              // MODIFICATO: Lettura adattiva del prezzo in double per la visualizzazione sulla griglia
+                              final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
                               final String oraInizioStr = data['slot'] ?? '--:--';
                               final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
 
@@ -480,7 +482,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
-                                              '€$prezzoTotale',
+                                              // MODIFICATO: Formattazione del prezzo double con decimali e virgola anche nei blocchi griglia
+                                              '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
                                               style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 13),
                                             ),
                                           ],
