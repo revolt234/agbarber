@@ -84,6 +84,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   }
 
   // Mostra il Popup dal basso con tutti i dettagli dell'appuntamento selezionato
+  // Mostra il Popup dal basso con tutti i dettagli dell'appuntamento selezionato
   void _mostraDettagliAppuntamento(Map<String, dynamic> data, String oraInizioStr, String oraFineStr, int durata) {
     final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
     final String operatoreNome = data['barberName'] ?? 'Qualsiasi';
@@ -95,89 +96,93 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     showModalBottomSheet(
       context: context,
       backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+      useSafeArea: true, // AGGIUNTO: Forza il foglio modale a rispettare le zone di sistema (barra dei tasti/gesture)
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
         final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      clienteNome.toUpperCase(),
-                      style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 20),
+        // MODIFICATO: Avvolto il contenuto in un SafeArea per spingere i testi e il bottone sopra i tasti Android
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        clienteNome.toUpperCase(),
+                        style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 20),
+                      ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: agVerde,
-                      borderRadius: BorderRadius.circular(8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: agVerde,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '€$prezzoTotale',
+                        style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
                     ),
-                    child: Text(
-                      '€$prezzoTotale',
-                      style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                  ),
-                ],
-              ),
-              Divider(color: isDarkMode ? Colors.grey : Colors.grey.shade300, height: 24),
-              Row(
-                children: [
-                  Icon(Icons.access_time, color: agOro, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Orario: $oraInizioStr - $oraFineStr ($durata min)',
-                    style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(Icons.person, color: agOro, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Operatore: $operatoreNome',
-                    style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.content_cut, color: agOro, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Servizio: ${servizi.join(", ")}',
-                      style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14, fontStyle: FontStyle.italic),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: agVerde,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('CHIUDI', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ],
                 ),
-              ),
-            ],
+                Divider(color: isDarkMode ? Colors.grey : Colors.grey.shade300, height: 24),
+                Row(
+                  children: [
+                    Icon(Icons.access_time, color: agOro, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Orario: $oraInizioStr - $oraFineStr ($durata min)',
+                      style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.person, color: agOro, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Operatore: $operatoreNome',
+                      style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.content_cut, color: agOro, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Servizio: ${servizi.join(", ")}',
+                        style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14, fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: agVerde,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('CHIUDI', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
