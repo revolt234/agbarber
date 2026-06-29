@@ -353,7 +353,12 @@ class BarbiereHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Rilevazione dinamica del tema di sistema (Light/Dark) per rendere adattivo lo sfondo
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color coloreSfondoAdattivo = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
+
     return Scaffold(
+      backgroundColor: coloreSfondoAdattivo,
       appBar: AppBar(
         title: const Text(
             'DASHBOARD BARBIERE',
@@ -368,176 +373,179 @@ class BarbiereHomePage extends StatelessWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Center(
-              child: Column(
-                children: [
-                  Icon(Icons.content_cut, size: 80, color: Color(0xFF164638)),
-                  SizedBox(height: 16),
-                  Text(
-                    'Benvenuto Barber Admin!',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      // MODIFICATO: Avvolto il body in un SafeArea per respingere i tasti di navigazione dello smartphone dello staff
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.content_cut, size: 80, color: Color(0xFF164638)),
+                    SizedBox(height: 16),
+                    Text(
+                      'Benvenuto Barber Admin!',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 8),
+                    Text('Pannello di controllo e gestione del negozio.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF164638),
+                    child: Icon(Icons.design_services, color: Colors.white),
                   ),
-                  SizedBox(height: 8),
-                  Text('Pannello di controllo e gestione del negozio.'),
-                ],
+                  title: const Text(
+                    'Gestione Listino Servizi',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  subtitle: const Text('Aggiungi, modifica o elimina i servizi offerti e i relativi prezzi'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const GestioneServiziScreen()),
+                    );
+                  },
+                ),
               ),
-            ),
-            const SizedBox(height: 40),
+              const SizedBox(height: 16),
 
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFF164638),
-                  child: Icon(Icons.design_services, color: Colors.white),
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF164638),
+                    child: Icon(Icons.people, color: Colors.white),
+                  ),
+                  title: const Text(
+                    'Gestione Staff / Operatori',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  subtitle: const Text('Aggiungi o rimuovi i dipendenti del salone (es. Gerardo, Jessica)'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const GestioneOperatoriScreen()),
+                    );
+                  },
                 ),
-                title: const Text(
-                  'Gestione Listino Servizi',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                subtitle: const Text('Aggiungi, modifica o elimina i servizi offerti e i relativi prezzi'),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const GestioneServiziScreen()),
-                  );
-                },
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFF164638),
-                  child: Icon(Icons.people, color: Colors.white),
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF164638),
+                    child: Icon(Icons.calendar_month, color: Colors.white),
+                  ),
+                  title: const Text(
+                    'Orari di Apertura',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  subtitle: const Text('Imposta i giorni di chiusura e le fasce orarie lavorative'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const GestioneOrariScreen()),
+                    );
+                  },
                 ),
-                title: const Text(
-                  'Gestione Staff / Operatori',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                subtitle: const Text('Aggiungi o rimuovi i dipendenti del salone (es. Gerardo, Jessica)'),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const GestioneOperatoriScreen()),
-                  );
-                },
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFF164638),
-                  child: Icon(Icons.calendar_month, color: Colors.white),
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF164638),
+                    child: Icon(Icons.edit_calendar, color: Colors.white),
+                  ),
+                  title: const Text(
+                    'Chiusure/Aperture Speciali & Ferie',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  subtitle: const Text('Blocca giornate specifiche sul calendario (es. Ferie d\'Agosto, festività)'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const GestioneCalendarioScreen()),
+                    );
+                  },
                 ),
-                title: const Text(
-                  'Orari di Apertura',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                subtitle: const Text('Imposta i giorni di chiusura e le fasce orarie lavorative'),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const GestioneOrariScreen()),
-                  );
-                },
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFF164638),
-                  child: Icon(Icons.edit_calendar, color: Colors.white),
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF164638),
+                    child: Icon(Icons.person_search, color: Colors.white),
+                  ),
+                  title: const Text(
+                    'Orari e Turni Staff',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  subtitle: const Text('Gestisci assenze o mezze giornate lavorative di ogni dipendente'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const GestioneTurniOperatoriScreen()),
+                    );
+                  },
                 ),
-                title: const Text(
-                  'Chiusure/Aperture Speciali & Ferie',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                subtitle: const Text('Blocca giornate specifiche sul calendario (es. Ferie d\'Agosto, festività)'),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const GestioneCalendarioScreen()),
-                  );
-                },
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFF164638),
-                  child: Icon(Icons.person_search, color: Colors.white),
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF164638),
+                    child: Icon(Icons.calendar_today, color: Colors.white),
+                  ),
+                  title: const Text(
+                    'Agendamento & Prenotazioni',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  subtitle: const Text('Visualizza, filtra e controlla gli appuntamenti ricevuti in tempo reale'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const VisualizzazionePrenotazioniScreen()),
+                    );
+                  },
                 ),
-                title: const Text(
-                  'Orari e Turni Staff',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                subtitle: const Text('Gestisci assenze o mezze giornate lavorative di ogni dipendente'),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const GestioneTurniOperatoriScreen()),
-                  );
-                },
               ),
-            ),
-            const SizedBox(height: 16),
-
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFF164638),
-                  child: Icon(Icons.calendar_today, color: Colors.white),
-                ),
-                title: const Text(
-                  'Agendamento & Prenotazioni',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                subtitle: const Text('Visualizza, filtra e controlla gli appuntamenti ricevuti in tempo reale'),
-                trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const VisualizzazionePrenotazioniScreen()),
-                  );
-                },
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

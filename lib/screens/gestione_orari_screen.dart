@@ -209,89 +209,92 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
             )
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-        padding: const EdgeInsets.all(16.0),
-        itemCount: _giorniUi.length,
-        itemBuilder: (context, index) {
-          final giorno = _giorniUi[index];
-          final infoGiorno = _orariSettimanali[giorno]!;
-          final bool isAperto = infoGiorno['isAperto'] ?? false;
+      // MODIFICATO: Avvolto il body in un SafeArea per evitare che la fine della lista scorra sotto i tasti di navigazione
+      body: SafeArea(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView.builder(
+          padding: const EdgeInsets.all(16.0),
+          itemCount: _giorniUi.length,
+          itemBuilder: (context, index) {
+            final giorno = _giorniUi[index];
+            final infoGiorno = _orariSettimanali[giorno]!;
+            final bool isAperto = infoGiorno['isAperto'] ?? false;
 
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        giorno,
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: coloreTesto),
-                      ),
-                      Switch(
-                        activeThumbColor: const Color(0xFFE2B13C),
-                        value: isAperto,
-                        onChanged: (valore) {
-                          setState(() {
-                            _orariSettimanali[giorno]!['isAperto'] = valore;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  if (isAperto) ...[
-                    const Divider(),
-                    const SizedBox(height: 4),
-
-                    // FASCIA MATTUTINA
-                    const Text(
-                        "Turno Mattina",
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)
-                    ),
-                    const SizedBox(height: 2),
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                child: Column(
+                  children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildOrarioTile(giorno, 'mattina', true, coloreTesto),
-                        Icon(Icons.arrow_forward, color: coloreTesto.withValues(alpha: 0.5), size: 18),
-                        _buildOrarioTile(giorno, 'mattina', false, coloreTesto),
+                        Text(
+                          giorno,
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: coloreTesto),
+                        ),
+                        Switch(
+                          activeThumbColor: const Color(0xFFE2B13C),
+                          value: isAperto,
+                          onChanged: (valore) {
+                            setState(() {
+                              _orariSettimanali[giorno]!['isAperto'] = valore;
+                            });
+                          },
+                        ),
                       ],
                     ),
+                    if (isAperto) ...[
+                      const Divider(),
+                      const SizedBox(height: 4),
 
-                    const SizedBox(height: 10),
-
-                    // FASCIA POMERIDIANA
-                    const Text(
-                        "Turno Pomeriggio",
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildOrarioTile(giorno, 'pomeriggio', true, coloreTesto),
-                        Icon(Icons.arrow_forward, color: coloreTesto.withValues(alpha: 0.5), size: 18),
-                        _buildOrarioTile(giorno, 'pomeriggio', false, coloreTesto),
-                      ],
-                    ),
-                  ] else ...[
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(
-                          'Chiuso',
-                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)
+                      // FASCIA MATTUTINA
+                      const Text(
+                          "Turno Mattina",
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)
                       ),
-                    )
-                  ]
-                ],
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildOrarioTile(giorno, 'mattina', true, coloreTesto),
+                          Icon(Icons.arrow_forward, color: coloreTesto.withValues(alpha: 0.5), size: 18),
+                          _buildOrarioTile(giorno, 'mattina', false, coloreTesto),
+                        ],
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      // FASCIA POMERIDIANA
+                      const Text(
+                          "Turno Pomeriggio",
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildOrarioTile(giorno, 'pomeriggio', true, coloreTesto),
+                          Icon(Icons.arrow_forward, color: coloreTesto.withValues(alpha: 0.5), size: 18),
+                          _buildOrarioTile(giorno, 'pomeriggio', false, coloreTesto),
+                        ],
+                      ),
+                    ] else ...[
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8.0),
+                        child: Text(
+                            'Chiuso',
+                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)
+                        ),
+                      )
+                    ]
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

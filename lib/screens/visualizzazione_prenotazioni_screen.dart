@@ -212,287 +212,290 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          // 1. SELETTORE DATA
-          Container(
-            color: coloreSfondoBarraData,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.chevron_left, color: isDarkMode ? Colors.white : agVerde, size: 28),
-                  onPressed: () {
-                    setState(() => _dataSelezionata = _dataSelezionata.subtract(const Duration(days: 1)));
-                  },
-                ),
-                Expanded(
-                  child: TextButton.icon(
-                    onPressed: () => _selezionaData(context),
-                    icon: Icon(Icons.calendar_today, color: agOro, size: 20),
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        DateFormat('E d MMM yyyy', 'it_IT').format(_dataSelezionata).toUpperCase(),
-                        style: TextStyle(color: isDarkMode ? Colors.white : agVerde, fontWeight: FontWeight.bold, fontSize: 15),
+      // MODIFICATO: Inserito un SafeArea per fare in modo che la timeline e le card non scivolino sotto i tasti Android
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 1. SELETTORE DATA
+            Container(
+              color: coloreSfondoBarraData,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.chevron_left, color: isDarkMode ? Colors.white : agVerde, size: 28),
+                    onPressed: () {
+                      setState(() => _dataSelezionata = _dataSelezionata.subtract(const Duration(days: 1)));
+                    },
+                  ),
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: () => _selezionaData(context),
+                      icon: Icon(Icons.calendar_today, color: agOro, size: 20),
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          DateFormat('E d MMM yyyy', 'it_IT').format(_dataSelezionata).toUpperCase(),
+                          style: TextStyle(color: isDarkMode ? Colors.white : agVerde, fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.chevron_right, color: isDarkMode ? Colors.white : agVerde, size: 28),
-                  onPressed: () {
-                    setState(() => _dataSelezionata = _dataSelezionata.add(const Duration(days: 1)));
-                  },
-                ),
-              ],
+                  IconButton(
+                    icon: Icon(Icons.chevron_right, color: isDarkMode ? Colors.white : agVerde, size: 28),
+                    onPressed: () {
+                      setState(() => _dataSelezionata = _dataSelezionata.add(const Duration(days: 1)));
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          // 2. FILTRO OPERATORI
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox.shrink();
-              final barbieri = snapshot.data!.docs;
-
-              return Container(
-                height: 60,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: barbieri.length + 1,
-                  itemBuilder: (context, index) {
-                    final bool isTutti = index == 0;
-                    final String label = isTutti ? "Tutti" : barbieri[index - 1]['name'];
-                    final String? idFiltro = isTutti ? null : barbieri[index - 1].id;
-                    final bool isSelected = _operatoreSelezionato == idFiltro;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: ChoiceChip(
-                        label: Text(label),
-                        selected: isSelected,
-                        selectedColor: agOro,
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.black : Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        backgroundColor: agVerde,
-                        onSelected: (selected) {
-                          setState(() => _operatoreSelezionato = idFiltro);
-                        },
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-
-          Divider(height: 1, color: isDarkMode ? Colors.grey : Colors.grey.shade400),
-
-          // 3. CALENDARIO CON TIMELINE AD ALTA PRECISIONE (30 MIN)
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _costruisciStreamPrenotazioni(),
+            // 2. FILTRO OPERATORI
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                if (!snapshot.hasData) return const SizedBox.shrink();
+                final barbieri = snapshot.data!.docs;
 
-                final prenotazioniDocs = snapshot.data?.docs ?? [];
+                return Container(
+                  height: 60,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: barbieri.length + 1,
+                    itemBuilder: (context, index) {
+                      final bool isTutti = index == 0;
+                      final String label = isTutti ? "Tutti" : barbieri[index - 1]['name'];
+                      final String? idFiltro = isTutti ? null : barbieri[index - 1].id;
+                      final bool isSelected = _operatoreSelezionato == idFiltro;
 
-                List<Map<String, dynamic>> elementiCalendario = [];
-                for (var doc in prenotazioniDocs) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final String oraInizio = data['slot'] ?? '08:00';
-                  final int inizioMinuti = _minutiDaStringa(oraInizio);
-                  final int durata = _estraiDurata(data);
-                  final int fineMinuti = inizioMinuti + durata;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: ChoiceChip(
+                          label: Text(label),
+                          selected: isSelected,
+                          selectedColor: agOro,
+                          labelStyle: TextStyle(
+                            color: isSelected ? Colors.black : Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          backgroundColor: agVerde,
+                          onSelected: (selected) {
+                            setState(() => _operatoreSelezionato = idFiltro);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
 
-                  int colonna = 0;
-                  while (true) {
-                    bool collisione = elementiCalendario.any((e) =>
-                    e['colonna'] == colonna &&
-                        ((inizioMinuti >= e['inizio'] && inizioMinuti < e['fine']) ||
-                            (fineMinuti > e['inizio'] && fineMinuti <= e['fine']) ||
-                            (inizioMinuti <= e['inizio'] && fineMinuti >= e['fine'])));
-                    if (!collisione) break;
-                    colonna++;
+            Divider(height: 1, color: isDarkMode ? Colors.grey : Colors.grey.shade400),
+
+            // 3. CALENDARIO CON TIMELINE AD ALTA PRECISIONE (30 MIN)
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _costruisciStreamPrenotazioni(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
                   }
 
-                  elementiCalendario.add({
-                    'data': data,
-                    'inizio': inizioMinuti,
-                    'fine': fineMinuti,
-                    'durata': durata,
-                    'colonna': colonna,
-                  });
-                }
+                  final prenotazioniDocs = snapshot.data?.docs ?? [];
 
-                return SingleChildScrollView(
-                  child: SizedBox(
-                    height: altezzaTotaleGriglia,
-                    child: Stack(
-                      children: [
-                        // Righello Orario ad alta precisione: Include frazioni di mezz'ora (:00 e :30)
-                        for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
-                          // Linea dell'ora esatta (es. 09:00)
+                  List<Map<String, dynamic>> elementiCalendario = [];
+                  for (var doc in prenotazioniDocs) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final String oraInizio = data['slot'] ?? '08:00';
+                    final int inizioMinuti = _minutiDaStringa(oraInizio);
+                    final int durata = _estraiDurata(data);
+                    final int fineMinuti = inizioMinuti + durata;
+
+                    int colonna = 0;
+                    while (true) {
+                      bool collisione = elementiCalendario.any((e) =>
+                      e['colonna'] == colonna &&
+                          ((inizioMinuti >= e['inizio'] && inizioMinuti < e['fine']) ||
+                              (fineMinuti > e['inizio'] && fineMinuti <= e['fine']) ||
+                              (inizioMinuti <= e['inizio'] && fineMinuti >= e['fine'])));
+                      if (!collisione) break;
+                      colonna++;
+                    }
+
+                    elementiCalendario.add({
+                      'data': data,
+                      'inizio': inizioMinuti,
+                      'fine': fineMinuti,
+                      'durata': durata,
+                      'colonna': colonna,
+                    });
+                  }
+
+                  return SingleChildScrollView(
+                    child: SizedBox(
+                      height: altezzaTotaleGriglia,
+                      child: Stack(
+                        children: [
+                          // Righello Orario ad alta precisione: Include frazioni di mezz'ora (:00 e :30)
+                          for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
+                            // Linea dell'ora esatta (es. 09:00)
+                            Positioned(
+                              top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                height: 30 * altezzaPerMinuto,
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    top: BorderSide(color: coloreLineeDivisione, width: 1.2),
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: larghezzaColonnaOra,
+                                      padding: const EdgeInsets.only(top: 4, left: 8),
+                                      child: Text(
+                                        "${i.toString().padLeft(2, '0')}:00",
+                                        style: TextStyle(color: coloreTestoSecondario, fontSize: 12, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    const Expanded(child: SizedBox.shrink()),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            // Linea della mezz'ora (es. 09:30)
+                            Positioned(
+                              top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                height: 30 * altezzaPerMinuto,
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    top: BorderSide(color: coloreLineeMezzora, width: 1, style: BorderStyle.solid),
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: larghezzaColonnaOra,
+                                      padding: const EdgeInsets.only(top: 2, left: 8),
+                                      child: Text(
+                                        "${i.toString().padLeft(2, '0')}:30",
+                                        style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                    const Expanded(child: SizedBox.shrink()),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                          // Linea finale di chiusura (es. 20:00)
                           Positioned(
-                            top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
+                            top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
                             left: 0,
                             right: 0,
                             child: Container(
-                              height: 30 * altezzaPerMinuto,
                               decoration: BoxDecoration(
                                 border: Border(
                                   top: BorderSide(color: coloreLineeDivisione, width: 1.2),
                                 ),
                               ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: larghezzaColonnaOra,
-                                    padding: const EdgeInsets.only(top: 4, left: 8),
-                                    child: Text(
-                                      "${i.toString().padLeft(2, '0')}:00",
-                                      style: TextStyle(color: coloreTestoSecondario, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+
+                          // Generazione dinamica dei blocchi appuntamento proporzionali al tempo
+                          for (var elem in elementiCalendario) ...[
+                            (() {
+                              final data = elem['data'];
+                              final int inizioMinuti = elem['inizio'];
+                              final int durata = elem['durata'];
+                              final int colonna = elem['colonna'];
+
+                              final double topPos = (inizioMinuti - inizioMinutiTotali) * altezzaPerMinuto;
+                              final double altezzaBlocco = durata * altezzaPerMinuto;
+
+                              final int maxCollisioniSuQuestoSlot = elementiCalendario
+                                  .where((e) => (inizioMinuti < e['fine'] && elem['fine'] > e['inizio']))
+                                  .map((e) => e['colonna'] as int)
+                                  .fold(0, (max, col) => col > max ? col : max) + 1;
+
+                              final double larghezzaDisponibile = MediaQuery.of(context).size.width - larghezzaColonnaOra - 20;
+                              final double larghezzaCard = larghezzaDisponibile / maxCollisioniSuQuestoSlot;
+                              final double leftPos = larghezzaColonnaOra + (colonna * larghezzaCard) + 4;
+
+                              final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
+                              final int prezzoTotale = data['totalPrice'] ?? 0;
+                              final String oraInizioStr = data['slot'] ?? '--:--';
+                              final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
+
+                              return Positioned(
+                                top: topPos + 2,
+                                left: leftPos,
+                                width: larghezzaCard - 4,
+                                height: altezzaBlocco - 4,
+                                child: GestureDetector(
+                                  onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: agVerde.withValues(alpha: 0.95),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: agOro, width: 1.2),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.15),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        )
+                                      ],
                                     ),
-                                  ),
-                                  const Expanded(child: SizedBox.shrink()),
-                                ],
-                              ),
-                            ),
-                          ),
-                          // Linea della mezz'ora (es. 09:30)
-                          Positioned(
-                            top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              height: 30 * altezzaPerMinuto,
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  top: BorderSide(color: coloreLineeMezzora, width: 1, style: BorderStyle.solid),
-                                ),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: larghezzaColonnaOra,
-                                    padding: const EdgeInsets.only(top: 2, left: 8),
-                                    child: Text(
-                                      "${i.toString().padLeft(2, '0')}:30",
-                                      style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w500),
-                                    ),
-                                  ),
-                                  const Expanded(child: SizedBox.shrink()),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                        // Linea finale di chiusura (es. 20:00)
-                        Positioned(
-                          top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
-                          left: 0,
-                          right: 0,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                top: BorderSide(color: coloreLineeDivisione, width: 1.2),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Generazione dinamica dei blocchi appuntamento proporzionali al tempo
-                        for (var elem in elementiCalendario) ...[
-                          (() {
-                            final data = elem['data'];
-                            final int inizioMinuti = elem['inizio'];
-                            final int durata = elem['durata'];
-                            final int colonna = elem['colonna'];
-
-                            final double topPos = (inizioMinuti - inizioMinutiTotali) * altezzaPerMinuto;
-                            final double altezzaBlocco = durata * altezzaPerMinuto;
-
-                            final int maxCollisioniSuQuestoSlot = elementiCalendario
-                                .where((e) => (inizioMinuti < e['fine'] && elem['fine'] > e['inizio']))
-                                .map((e) => e['colonna'] as int)
-                                .fold(0, (max, col) => col > max ? col : max) + 1;
-
-                            final double larghezzaDisponibile = MediaQuery.of(context).size.width - larghezzaColonnaOra - 20;
-                            final double larghezzaCard = larghezzaDisponibile / maxCollisioniSuQuestoSlot;
-                            final double leftPos = larghezzaColonnaOra + (colonna * larghezzaCard) + 4;
-
-                            final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
-                            final int prezzoTotale = data['totalPrice'] ?? 0;
-                            final String oraInizioStr = data['slot'] ?? '--:--';
-                            final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
-
-                            return Positioned(
-                              top: topPos + 2,
-                              left: leftPos,
-                              width: larghezzaCard - 4,
-                              height: altezzaBlocco - 4,
-                              child: GestureDetector(
-                                onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: agVerde.withValues(alpha: 0.95),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: agOro, width: 1.2),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.15),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      )
-                                    ],
-                                  ),
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              clienteNome,
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                              overflow: TextOverflow.ellipsis,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                clienteNome,
+                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '€$prezzoTotale',
-                                            style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 13),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '€$prezzoTotale',
+                                              style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 13),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          }()),
+                              );
+                            }()),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
