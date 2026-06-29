@@ -1,6 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart'; // Importato per cancellare la notifica abbinata
 
@@ -114,7 +114,8 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
               final String ora = data['slot'] ?? '--:--';
               final String barber = data['barberName'] ?? 'Operatore';
               final List servizi = data['services'] ?? [];
-              final int prezzo = data['totalPrice'] ?? 0;
+              // MODIFICATO: Lettura adattiva del prezzo convertito a double per evitare crash legati al tipo
+              final double prezzo = (data['totalPrice'] ?? 0.0).toDouble();
 
               String dataFormattata = dataApp;
               try {
@@ -169,7 +170,8 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '€$prezzo',
+                            // MODIFICATO: Formattazione del prezzo double con due cifre decimali e virgola
+                            '€ ${prezzo.toStringAsFixed(2).replaceAll('.', ',')}',
                             style: const TextStyle(
                               color: agOro,
                               fontWeight: FontWeight.bold,

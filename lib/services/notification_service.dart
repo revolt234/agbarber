@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; // Aggiunto per permettere l'uso dell'oggetto Color
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -16,8 +17,9 @@ class NotificationService {
     tz.initializeTimeZones();
 
     // Configurazione per Android
+    // MODIFICATO: Sostituito '@mipmap/ic_launcher' con la tua nuova immagine 'img' posizionata in drawable
     const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher'); // Usa l'icona predefinita dell'app
+    AndroidInitializationSettings('img');
 
     // Configurazione per iOS
     const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings(
@@ -62,6 +64,7 @@ class NotificationService {
         importance: Importance.max,
         priority: Priority.high,
         playSound: true,
+        color: Color(0xFF164638), // MODIFICATO: Colore verde del brand per il cerchietto nella tendina
       );
 
       const NotificationDetails platformDetails = NotificationDetails(
@@ -90,7 +93,6 @@ class NotificationService {
     }
   }
 
-  /// Cancella una notifica (utile se l'appuntamento viene eliminato o disdetto)
   /// Cancella una notifica (utile se l'appuntamento viene eliminato o disdetto)
   Future<void> cancellaNotifica(int idNotifica) async {
     // CORRETTO: Aggiunto 'id:' richiesto esplicitamente dalla v22+
