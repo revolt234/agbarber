@@ -18,8 +18,12 @@ class NotificationService {
 
     // Configurazione per Android
     // MODIFICATO: Sostituito '@mipmap/ic_launcher' con la tua nuova immagine 'img' posizionata in drawable
+    // Configurazione per Android
+// Punti all'icona ufficiale generata automaticamente a partire dagli assets
+    // Configurazione per Android
+// Punta direttamente al file img.png dentro la cartella drawable generica
     const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('img');
+    AndroidInitializationSettings('ic_stat_name');
 /*const AndroidInitializationSettings initializationSettingsAndroid =
     AndroidInitializationSettings('@mipmap/ic_launcher');*/
     // Configurazione per iOS
