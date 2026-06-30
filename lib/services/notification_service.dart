@@ -20,7 +20,8 @@ class NotificationService {
     // MODIFICATO: Sostituito '@mipmap/ic_launcher' con la tua nuova immagine 'img' posizionata in drawable
     const AndroidInitializationSettings initializationSettingsAndroid =
     AndroidInitializationSettings('img');
-
+/*const AndroidInitializationSettings initializationSettingsAndroid =
+    AndroidInitializationSettings('@mipmap/ic_launcher');*/
     // Configurazione per iOS
     const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings(
       requestAlertPermission: true,
