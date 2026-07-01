@@ -285,7 +285,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
 
     if (_statoLegendaCorrente == 0) {
       coloreBordoLegenda = const Color(0xFF52C47A);
-      testoLegendaDinamico = 'Salone molto libero';
+      testoLegendaDinamico = 'Salone libero';
     } else if (_statoLegendaCorrente == 1) {
       coloreBordoLegenda = const Color(0xFFE2B13C);
       testoLegendaDinamico = 'Salone mediamente affollato';
