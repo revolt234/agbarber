@@ -2,20 +2,23 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
 
 class PrenotazioneDataScreen extends StatefulWidget {
   final String servizioId;
   final String servizioNome;
   final int servizioDurata;
-  final double servizioPrezzo; // AGGIUNTO: Parametro per ricevere il prezzo reale dalla schermata precedente
+  final double servizioPrezzo;
+  final DateTime dataInizialeSelezionata;
 
   const PrenotazioneDataScreen({
     super.key,
     required this.servizioId,
     required this.servizioNome,
     required this.servizioDurata,
-    required this.servizioPrezzo, // AGGIUNTO: Richiesto nel costruttore
+    required this.servizioPrezzo,
+    required this.dataInizialeSelezionata,
   });
 
   @override
@@ -29,7 +32,7 @@ class IntervalloAppuntamento {
 }
 
 class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
-  DateTime _dataSelezionata = DateTime.now();
+  late DateTime _dataSelezionata;
   String? _barbiereSelezionatoId;
   String? _barbiereSelezionatoNome;
   String? _orarioSelezionato;
@@ -37,14 +40,17 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   bool _isLoadingSlot = false;
   bool _isLoadingConfig = true;
   bool _isSaving = false;
+  bool _isPreloadingGiorni = false;
 
   Map<String, dynamic> _orariNegozioBase = {};
   Map<String, dynamic> _eccezioniCalendario = {};
   List<String> _slotOrariCalcolati = [];
   List<IntervalloAppuntamento> _appuntamentiOccupati = [];
 
+  // Striscia dei giorni intelligenti filtrati e relativo controller per l'autocentramento
+  List<DateTime> _giorniFiltratiVisibili = [];
   final Map<String, int> _conteggioSlotPerGiorno = {};
-  bool _isPreloadingGiorni = false;
+  final ScrollController _scrollControllerGiorni = ScrollController();
 
   final List<String> _giorniSettimana = [
     'domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'
@@ -53,7 +59,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   @override
   void initState() {
     super.initState();
+    _dataSelezionata = widget.dataInizialeSelezionata;
     _inizializzaDati();
+  }
+
+  @override
+  void dispose() {
+    _scrollControllerGiorni.dispose();
+    super.dispose();
   }
 
   Future<void> _inizializzaDati() async {
@@ -73,30 +86,83 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         _eccezioniCalendario[doc.id] = doc.data();
       }
 
-      await _precaricaDisponibilitaGiorni();
+      await _precaricaDisponibilitaStrisciaGiorni();
 
       setState(() => _isLoadingConfig = false);
+
+      // Centra il giorno selezionato inizialmente dopo il rendering del primo frame grafico
+      WidgetsBinding.instance.addPostFrameCallback((_) => _centraGiornoSelezionato(animato: false));
     } catch (e) {
       debugPrint("Errore inizializzazione: $e");
       setState(() => _isLoadingConfig = false);
     }
   }
 
-  Future<void> _precaricaDisponibilitaGiorni() async {
+  void _centraGiornoSelezionato({bool animato = true}) {
+    if (!_scrollControllerGiorni.hasClients || _giorniFiltratiVisibili.isEmpty) return;
+
+    String targetStr = _formattaData(_dataSelezionata);
+    int index = _giorniFiltratiVisibili.indexWhere((g) => _formattaData(g) == targetStr);
+    if (index == -1) return;
+
+    // Ogni card ha un width fisso di 140 ed un margin horizontal di 6 (quindi occupa 140 + 6 + 6 = 152 pixel in totale)
+    const double larghezzaElemento = 152.0;
+    final double larghezzaSchermo = MediaQuery.of(context).size.width;
+
+    // Calcolo della coordinata per fare in modo che l'elemento si posizioni al centro esatto dello schermo
+    double offsetDestinazione = (index * larghezzaElemento) - (larghezzaSchermo / 2) + (larghezzaElemento / 2) + 12; // +12 tiene conto del padding iniziale
+
+    // Vincola l'offset entro i limiti di scorrimento minimi e massimi possibili
+    if (offsetDestinazione < 0) offsetDestinazione = 0;
+    if (offsetDestinazione > _scrollControllerGiorni.position.maxScrollExtent) {
+      offsetDestinazione = _scrollControllerGiorni.position.maxScrollExtent;
+    }
+
+    if (animato) {
+      _scrollControllerGiorni.animateTo(
+        offsetDestinazione,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      _scrollControllerGiorni.jumpTo(offsetDestinazione);
+    }
+  }
+
+  Future<void> _precaricaDisponibilitaStrisciaGiorni() async {
     setState(() => _isPreloadingGiorni = true);
+    _conteggioSlotPerGiorno.clear();
+    _giorniFiltratiVisibili.clear();
 
     try {
       final barbersSnap = await FirebaseFirestore.instance.collection('barbers').get();
       final barbieri = barbersSnap.docs;
 
+      List<DateTime> tuttiIGiorniPotenziali = [];
+      DateTime oggi = DateTime.now();
+      DateTime oggiMezzanotte = DateTime(oggi.year, oggi.month, oggi.day);
+
+      // MODIFICATO: Allarghiamo il raggio di generazione (es. 25 giorni prima e 35 giorni dopo)
+      // per essere sicuri di trovare abbastanza giorni validi (aperti e non pieni) anche nei mesi futuri.
+      DateTime dataInizioCalcolo = widget.dataInizialeSelezionata.subtract(const Duration(days: 25));
+
+      for (int i = 0; i < 60; i++) {
+        DateTime giornoRiferimento = dataInizioCalcolo.add(Duration(days: i));
+
+        if (giornoRiferimento.isBefore(oggiMezzanotte)) {
+          continue;
+        }
+        tuttiIGiorniPotenziali.add(giornoRiferimento);
+      }
+
+      Map<String, int> contatoriTemporanei = {};
       List<Future<void>> compitiDiCaricamento = [];
 
-      for (int i = 0; i < 14; i++) {
-        DateTime giorno = DateTime.now().add(Duration(days: i));
+      for (var giorno in tuttiIGiorniPotenziali) {
         String dataStr = _formattaData(giorno);
 
         if (_isChiuso(giorno)) {
-          _conteggioSlotPerGiorno[dataStr] = 0;
+          contatoriTemporanei[dataStr] = 0;
           continue;
         }
 
@@ -141,7 +207,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
             String nomeGiorno = _giorniSettimana[giorno.weekday % 7];
             var orariGiorno = _orariNegozioBase[nomeGiorno];
 
-            // MODIFICATO: Se c'è un'apertura straordinaria nelle eccezioni, sovrascrivi gli orari base usando quelli salvati nel pop-up
             final bool haAperturaStraordinaria = _eccezioniCalendario[dataStr]?['status'] == 'aperto';
             if (haAperturaStraordinaria) {
               orariGiorno = {
@@ -161,14 +226,43 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
             }
           }
 
-          _conteggioSlotPerGiorno[dataStr] = slotLiberiTotaliGiorno;
+          contatoriTemporanei[dataStr] = slotLiberiTotaliGiorno;
         }());
       }
 
       await Future.wait(compitiDiCaricamento);
+      _conteggioSlotPerGiorno.addAll(contatoriTemporanei);
+
+      // Lista "pulita" contenente SOLO i giorni effettivamente aperti e con posti disponibili
+      List<DateTime> giorniApertiEDisponibili = tuttiIGiorniPotenziali.where((g) {
+        String key = _formattaData(g);
+        bool chiuso = _isChiuso(g);
+        int posti = _conteggioSlotPerGiorno[key] ?? 0;
+        return !chiuso && posti > 0;
+      }).toList();
+
+      String dataTargetStr = _formattaData(_dataSelezionata);
+      int indexTarget = giorniApertiEDisponibili.indexWhere((g) => _formattaData(g) == dataTargetStr);
+
+      if (indexTarget != -1) {
+        // MODIFICATO: Prendiamo ESATTAMENTE fino a 7 elementi validi precedenti (a sinistra)
+        int startIdx = indexTarget - 7;
+        if (startIdx < 0) startIdx = 0;
+
+        // MODIFICATO: Prendiamo ESATTAMENTE fino a 7 elementi validi successivi (a destra)
+        int endIdx = indexTarget + 7;
+        if (endIdx >= giorniApertiEDisponibili.length) endIdx = giorniApertiEDisponibili.length - 1;
+
+        // Popoliamo la striscia finale prendendo l'intervallo esatto di elementi validi
+        for (int k = startIdx; k <= endIdx; k++) {
+          _giorniFiltratiVisibili.add(giorniApertiEDisponibili[k]);
+        }
+      } else {
+        _giorniFiltratiVisibili = giorniApertiEDisponibili.take(14).toList();
+      }
 
     } catch (e) {
-      debugPrint("Errore nel precaricamento parallelo dei contatori giorni: $e");
+      debugPrint("Errore nel filtraggio intelligente dei giorni: $e");
     } finally {
       setState(() => _isPreloadingGiorni = false);
     }
@@ -272,7 +366,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       String nomeGiorno = _giorniSettimana[_dataSelezionata.weekday % 7];
       var orariGiorno = _orariNegozioBase[nomeGiorno];
 
-      // MODIFICATO: Se c'è un'apertura straordinaria attiva, sovrascrivi l'orario standard del giorno con quello salvato nel pop-up
       final bool haAperturaStraordinaria = _eccezioniCalendario[dataStr]?['status'] == 'aperto';
       if (haAperturaStraordinaria) {
         orariGiorno = {
@@ -291,16 +384,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         }
       }
     } catch (e) {
-      debugPrint("Errore aggiornamento slot (probabilmente offline): $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Errore di connessione nel caricamento degli orari.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
+      debugPrint("Errore aggiornamento slot: $e");
     } finally {
       setState(() => _isLoadingSlot = false);
     }
@@ -334,7 +418,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       if (siSovrappone) continue;
 
       bool eIncastroValido = (m == start);
-
       if (!eIncastroValido) {
         for (var app in _appuntamentiOccupati) {
           if (m == app.fine) {
@@ -363,18 +446,16 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     }
   }
 
-  int _minutiDaStringa(String s) => int.parse(s.split(':')[0]) * 60 + int.parse(s.split(':')[1]);
-  String _formattaData(DateTime d) => "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-
   bool _isChiuso(DateTime d) {
     final stringaGiorno = _formattaData(d);
     if (_eccezioniCalendario.containsKey(stringaGiorno)) {
-      // Se c'è un'eccezione salvata, comanda lei: restituisce true se lo status è 'chiuso'
       return _eccezioniCalendario[stringaGiorno]?['status'] == 'chiuso';
     }
-    // Altrimenti, se non ci sono eccezioni, fa fede l'orario base del lunedì/domenica ecc.
     return _orariNegozioBase[_giorniSettimana[d.weekday % 7]]?['isAperto'] == false;
   }
+
+  int _minutiDaStringa(String s) => int.parse(s.split(':')[0]) * 60 + int.parse(s.split(':')[1]);
+  String _formattaData(DateTime d) => "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
   @override
   Widget build(BuildContext context) {
@@ -386,20 +467,21 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     }
 
     final String dataStr = _formattaData(_dataSelezionata);
-    final bool giornoCorrenteChiuso = _isChiuso(_dataSelezionata);
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Colori adattivi
     final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
     final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
     final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
     final Color coloreTestoCardSpenta = isDarkMode ? Colors.white : Colors.black87;
-    // ----------------------------
+
+    final Color coloreSfondoButtonGiorno = isDarkMode ? const Color(0xFF1C1C1E) : Colors.white;
+    final Color coloreTestoPrimarioGiorno = isDarkMode ? Colors.white : Colors.black;
+    final Color coloreTestoSecondarioGiorno = isDarkMode ? Colors.white70 : Colors.black54;
 
     return Scaffold(
       backgroundColor: coloreSfondoSchermata,
       appBar: AppBar(
-        title: const Text('Scegli Data e Barber', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('Scegli un operatore', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: const Color(0xFF164638),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -407,44 +489,33 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. SELEZIONE GIORNO
-            Padding(
-              padding: const EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
-              child: Text('Seleziona il giorno:', style: TextStyle(color: coloreTestoTitoli, fontSize: 14, fontWeight: FontWeight.bold)),
-            ),
+            // STRISCIA GIORNI ORIZZONTALE ADATTIVA E INTELLIGENTE
             SizedBox(
-              height: 95,
+              height: 105,
               child: ListView.builder(
+                controller: _scrollControllerGiorni, // Collegato per gestire il centraggio automatico
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: 14,
-                itemBuilder: (ctx, i) {
-                  DateTime d = DateTime.now().add(Duration(days: i));
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                itemCount: _giorniFiltratiVisibili.length,
+                itemBuilder: (context, i) {
+                  DateTime d = _giorniFiltratiVisibili[i];
                   String loopDataStr = _formattaData(d);
-                  bool isChiusoGiorno = _isChiuso(d);
                   bool sel = loopDataStr == dataStr;
 
                   int slotDisponibili = _conteggioSlotPerGiorno[loopDataStr] ?? 0;
-                  bool isSoldOut = !isChiusoGiorno && slotDisponibili == 0;
 
-                  Color coloreSfondoCard;
-                  if (isChiusoGiorno) {
-                    coloreSfondoCard = Colors.red.withAlpha(51);
-                  } else if (isSoldOut) {
-                    coloreSfondoCard = const Color(0xFF0A0A0A);
-                  } else if (slotDisponibili > 15) {
-                    coloreSfondoCard = const Color(0xFF1B4D2A);
-                  } else if (slotDisponibili > 10 && slotDisponibili <= 15) {
-                    coloreSfondoCard = const Color(0xFF8A7300);
-                  } else {
-                    coloreSfondoCard = const Color(0xFFB25E00);
+                  Color colorePallino = const Color(0xFF52C47A);
+                  if (slotDisponibili <= 10) {
+                    colorePallino = Colors.red;
+                  } else if (slotDisponibili <= 15) {
+                    colorePallino = const Color(0xFFE2B13C);
                   }
 
-                  final List<String> settimanaAbbr = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
-                  String nomeGiorno = settimanaAbbr[d.weekday % 7];
+                  String giornoMeseTesto = DateFormat('dd MMM', 'it_IT').format(d).toLowerCase();
+                  String giornoSettimanaTesto = DateFormat('EEEE', 'it_IT').format(d).toLowerCase().substring(0, 3);
 
                   return GestureDetector(
-                    onTap: isChiusoGiorno || isSoldOut || _isSaving
+                    onTap: _isSaving
                         ? null
                         : () {
                       setState(() {
@@ -452,48 +523,52 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                         _orarioSelezionato = null;
                       });
                       _aggiornaSlotOrari();
+                      _centraGiornoSelezionato(); // Centra l'elemento cliccato dall'utente
                     },
                     child: Container(
-                      width: 70,
-                      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+                      width: 140,
+                      margin: const EdgeInsets.symmetric(horizontal: 6),
                       decoration: BoxDecoration(
-                        color: sel ? const Color(0xFFE2B13C) : coloreSfondoCard,
-                        borderRadius: BorderRadius.circular(14),
+                        color: coloreSfondoButtonGiorno,
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: sel
-                              ? Colors.white
-                              : (isSoldOut ? Colors.red.shade900 : (isChiusoGiorno ? Colors.red.shade800 : Colors.transparent)),
-                          width: sel || isSoldOut || isChiusoGiorno ? 1.5 : 0,
+                          color: sel ? const Color(0xFFE2B13C) : Colors.transparent,
+                          width: sel ? 3.0 : 0,
                         ),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withAlpha(20), blurRadius: 4, offset: const Offset(0, 2))
+                        ],
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                              nomeGiorno,
-                              style: TextStyle(
-                                  color: sel ? Colors.black : (isChiusoGiorno || isSoldOut ? Colors.red.shade300 : (isDarkMode ? Colors.white70 : Colors.black54)),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500
-                              )
+                            giornoMeseTesto,
+                            style: TextStyle(color: coloreTestoPrimarioGiorno, fontSize: 22, fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                              '${d.day}',
-                              style: TextStyle(
-                                  color: sel ? Colors.black : (isChiusoGiorno || isSoldOut ? Colors.red.shade300 : (isDarkMode ? Colors.white : Colors.black87)),
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold
-                              )
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: colorePallino,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: const Color(0x3D000000),
+                                    width: 0.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                giornoSettimanaTesto,
+                                style: TextStyle(color: coloreTestoSecondarioGiorno, fontSize: 15, fontWeight: FontWeight.w500),
+                              ),
+                            ],
                           ),
-                          if (isSoldOut) ...[
-                            const SizedBox(height: 2),
-                            const Text(
-                              'SOLD OUT',
-                              style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.4),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
                         ],
                       ),
                     ),
@@ -502,25 +577,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
               ),
             ),
 
-            // 2. SELEZIONE OPERATORE
+            // 1. SELEZIONE OPERATORE
             Padding(
-              padding: const EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
+              padding: const EdgeInsets.only(left: 20.0, top: 12, bottom: 8),
               child: Text('Scegli chi ti guiderà:', style: TextStyle(color: coloreTestoTitoli, fontSize: 14, fontWeight: FontWeight.bold)),
             ),
             SizedBox(
               height: 110,
-              child: giornoCorrenteChiuso
-                  ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Text(
-                    'Il salone è chiuso in questa data. Scegli un giorno attivo sopra.',
-                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 15),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              )
-                  : StreamBuilder<QuerySnapshot>(
+              child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
                 builder: (ctx, snap) {
                   if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)));
@@ -552,7 +616,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           width: 100,
                           margin: const EdgeInsets.symmetric(horizontal: 6),
                           decoration: BoxDecoration(
-                            color: sel ? const Color(0xFFE2B13C).withValues(alpha: 0.15) : coloreSfondoCardSpenta,
+                            color: sel ? const Color(0xFFE2B13C).withAlpha(38) : coloreSfondoCardSpenta,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: sel ? const Color(0xFFE2B13C) : (isDarkMode ? Colors.transparent : Colors.grey.shade300),
@@ -585,15 +649,13 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
               ),
             ),
 
-            // 3. GRIGLIA ORARI DINAMICI
+            // 2. GRIGLIA ORARI DINAMICI
             Padding(
-              padding: const EdgeInsets.only(left: 20.0, top: 20, bottom: 8),
+              padding: const EdgeInsets.only(left: 20.0, top: 16, bottom: 8),
               child: Text('Orari disponibili:', style: TextStyle(color: coloreTestoTitoli, fontSize: 14, fontWeight: FontWeight.bold)),
             ),
             Expanded(
-              child: giornoCorrenteChiuso
-                  ? const SizedBox.shrink()
-                  : (_barbiereSelezionatoId == null
+              child: _barbiereSelezionatoId == null
                   ? Center(child: Text('Seleziona un operatore per vedere gli orari.', style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54)))
                   : (_isLoadingSlot
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)))
@@ -636,7 +698,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                     ),
                   );
                 },
-              )))),
+              ))),
             ),
           ],
         ),
@@ -650,7 +712,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
               minimumSize: const Size.fromHeight(54),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
-            onPressed: (_barbiereSelezionatoId == null || _orarioSelezionato == null || giornoCorrenteChiuso || _isSaving)
+            onPressed: (_barbiereSelezionatoId == null || _orarioSelezionato == null || _isSaving)
                 ? null
                 : () {
               showDialog(
@@ -670,7 +732,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                     TextButton(
                       onPressed: () async {
                         Navigator.pop(dialogContext);
-
                         setState(() => _isSaving = true);
 
                         try {
@@ -678,7 +739,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           if (user == null) throw 'Utente non autenticato';
 
                           String nomeRealeCliente = "Cliente";
-
                           final userDoc = await FirebaseFirestore.instance
                               .collection('users')
                               .doc(user.uid)
@@ -722,17 +782,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               'userName': nomeRealeCliente,
                               'userEmail': user.email ?? 'Cliente anonimo',
                               'services': [widget.servizioNome],
-                              // MODIFICA QUESTA RIGA: Rimuovi il .round() per salvare il prezzo esatto come double decimale
                               'totalPrice': widget.servizioPrezzo,
                               'createdAt': FieldValue.serverTimestamp(),
                             });
 
-                            return nuovoDocRef.id; // Corretto con la "u": ora punta a 'nuovoDocRef'
+                            return nuovoDocRef.id;
                           });
 
-                          if (risultatoIncastroId == null) {
-                            throw 'SLOT_OCCUPATO';
-                          }
+                          if (risultatoIncastroId == null) throw 'SLOT_OCCUPATO';
 
                           try {
                             await NotificationService().pianificaNotificaAppuntamento(
@@ -742,7 +799,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               servizi: widget.servizioNome,
                             );
                           } catch (e) {
-                            debugPrint("Errore durante la pianificazione locale del promemoria: $e");
+                            debugPrint("Errore notifiche: $e");
                           }
 
                           if (!context.mounted) return;
@@ -779,7 +836,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           );
                         }
                       },
-                      child: const Text('Conferma', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: const Text('Conferma Prenotazione', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),

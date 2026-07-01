@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'prenotazione_data_screen.dart';
+import 'package:prenotazionibarbiere/screens/prenotazione_calendario_screen.dart';
 import 'login_screen.dart'; // Importato per permettere il reindirizzamento alla LoginScreen
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -414,7 +414,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => PrenotazioneDataScreen(
+                            builder: (context) => PrenotazioneCalendarioScreen( // MODIFICATO: Ora punta al calendario mensile
                               servizioId: _servizioSelezionatoId!,
                               servizioNome: _datiServizioSelezionato?['name'] ?? 'Servizio',
                               servizioDurata: _datiServizioSelezionato?['duration'] ?? 30,
