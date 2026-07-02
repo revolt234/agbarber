@@ -481,7 +481,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     return Scaffold(
       backgroundColor: coloreSfondoSchermata,
       appBar: AppBar(
-        title: const Text('Scegli un operatore', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text('Scegli un operatore', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
         backgroundColor: const Color(0xFF164638),
         iconTheme: const IconThemeData(color: Colors.white),
       ),

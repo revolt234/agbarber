@@ -301,7 +301,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       backgroundColor: const Color(0xFF0A0A0A),
       appBar: AppBar(
         title: const Text('Quando?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color(0xFF164638), // MODIFICATO: Inserito sfondo verde in alto coerente col brand dell'app
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -310,6 +310,8 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
           : Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Una leggera spaziatura per staccare dal nuovo blocco colorato dell'appbar
+          const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Column(

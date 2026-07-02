@@ -148,8 +148,43 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
     }
   }
 
+  // AGGIUNTO: Pop-up di conferma prima dell'eliminazione per evitare tocchi accidentali
+  void _mostraConfermaEliminazione(String docId, String nomeServizio) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Conferma Eliminazione'),
+          content: Text('Sei sicuro di voler eliminare il servizio "$nomeServizio"? L\'azione non può essere annullata.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                Navigator.pop(context); // Chiude il pop-up di conferma
+                await _eliminaServizio(docId);
+              },
+              child: const Text('Elimina', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _eliminaServizio(String docId) async {
-    await FirebaseFirestore.instance.collection('services').doc(docId).delete();
+    try {
+      await FirebaseFirestore.instance.collection('services').doc(docId).delete();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore durante l\'eliminazione: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
@@ -209,7 +244,7 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _eliminaServizio(servizioDoc.id),
+                        onPressed: () => _mostraConfermaEliminazione(servizioDoc.id, nome), // MODIFICATO: Chiama il pop-up di conferma
                       ),
                     ],
                   ),
