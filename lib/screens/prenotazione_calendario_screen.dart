@@ -69,7 +69,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
 
   void _preparaMesi() {
     DateTime adesso = DateTime.now();
-    // Generiamo i 3 mesi successivi a partire da adesso gestendo correttamente l'avanzamento dell'anno
     for (int i = 0; i < 3; i++) {
       int annoVariato = adesso.year;
       int meseVariato = adesso.month + i;
@@ -126,7 +125,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
         DateTime giorno = DateTime(anno, mese, giornoId);
         String dataStr = _formattaData(giorno);
 
-        // Se il giorno è antecedente a oggi, lo saltiamo
         if (giorno.isBefore(DateTime.now().subtract(const Duration(days: 1)))) {
           continue;
         }
@@ -276,11 +274,19 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
 
   @override
   Widget build(BuildContext context) {
-    final int primoGiornoSettimana = DateTime(_meseCorrente.year, _meseCorrente.month, 1).weekday; // 1 = Lun, 7 = Dom
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    final Color coloreSfondoPagina = isDarkMode ? const Color(0xFF0A0A0A) : const Color(0xFFF4F6F5);
+    final Color coloreSfondoContenitoreGiorni = isDarkMode ? const Color(0xFF1C1C1E) : Colors.white;
+    final Color coloreTestoPrimario = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreTestoSecondario = isDarkMode ? Colors.white70 : Colors.black54;
+    final Color coloreTestoSettimane = isDarkMode ? Colors.white60 : Colors.black45;
+
+    final int primoGiornoSettimana = DateTime(_meseCorrente.year, _meseCorrente.month, 1).weekday;
     final int giorniNelMese = DateTime(_meseCorrente.year, _meseCorrente.month + 1, 0).day;
 
     Color coloreBordoLegenda = Colors.transparent;
-    Color coloreSfondoLegenda = Colors.white;
+    Color coloreSfondoLegenda = isDarkMode ? Colors.white : Colors.grey.shade300;
     String testoLegendaDinamico = '';
 
     if (_statoLegendaCorrente == 0) {
@@ -293,15 +299,15 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       coloreBordoLegenda = Colors.red;
       testoLegendaDinamico = 'Salone affollato';
     } else {
-      coloreSfondoLegenda = Colors.black45;
+      coloreSfondoLegenda = isDarkMode ? Colors.black45 : Colors.grey.shade400;
       testoLegendaDinamico = 'Nessun posto disponibile (Sold out)';
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: coloreSfondoPagina,
       appBar: AppBar(
         title: const Text('Quando?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
-        backgroundColor: const Color(0xFF164638), // MODIFICATO: Inserito sfondo verde in alto coerente col brand dell'app
+        backgroundColor: const Color(0xFF164638),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -310,16 +316,15 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
           : Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Una leggera spaziatura per staccare dal nuovo blocco colorato dell'appbar
           const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Seleziona un giorno per continuare',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                  style: TextStyle(color: coloreTestoSecondario, fontSize: 16),
                 ),
                 const SizedBox(height: 16),
 
@@ -347,6 +352,10 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                           decoration: BoxDecoration(
                             color: isSel ? const Color(0xFFE2B13C) : Colors.white,
                             borderRadius: BorderRadius.circular(25),
+                            // CORRETTO: Sostituito withOpacity deprecato con withValues
+                            boxShadow: isDarkMode ? null : [
+                              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))
+                            ],
                           ),
                           child: Center(
                             child: Text(
@@ -372,12 +381,16 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              decoration: const BoxDecoration(
-                color: Color(0xFF1C1C1E),
-                borderRadius: BorderRadius.only(
+              decoration: BoxDecoration(
+                color: coloreSfondoContenitoreGiorni,
+                borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(32),
                   topRight: Radius.circular(32),
                 ),
+                // CORRETTO: Sostituito withOpacity deprecato con withValues
+                boxShadow: isDarkMode ? null : [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4))
+                ],
               ),
               child: _isPreloadingGiorni
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)))
@@ -388,14 +401,14 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: const [
-                        Text('LUN', style: TextStyle(color: Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('MAR', style: TextStyle(color: Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('MER', style: TextStyle(color: Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('GIO', style: TextStyle(color: Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('VEN', style: TextStyle(color: Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('SAB', style: TextStyle(color: Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('DOM', style: TextStyle(color: Colors.white60, fontWeight: FontWeight.bold, fontSize: 13)),
+                      children: [
+                        Text('LUN', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('MAR', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('MER', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('GIO', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('VEN', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('SAB', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('DOM', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -424,18 +437,18 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                         bool isSoldOut = !isChiusoGiorno && slotDisponibili == 0 && !isPassato;
 
                         Color coloreBordo = Colors.transparent;
-                        Color coloreSfondoCerchio = Colors.white;
+                        Color coloreSfondoCerchio = isDarkMode ? Colors.white : Colors.grey.shade100;
                         Color coloreTestoGiorno = Colors.black;
 
                         if (isPassato) {
                           coloreSfondoCerchio = Colors.transparent;
-                          coloreTestoGiorno = Colors.white24;
+                          coloreTestoGiorno = isDarkMode ? Colors.white24 : Colors.black26;
                         } else if (isChiusoGiorno) {
                           coloreSfondoCerchio = const Color(0xFFE55B5B);
                           coloreTestoGiorno = Colors.white;
                         } else if (isSoldOut) {
-                          coloreSfondoCerchio = Colors.black45;
-                          coloreTestoGiorno = Colors.white30;
+                          coloreSfondoCerchio = isDarkMode ? Colors.black45 : Colors.grey.shade400;
+                          coloreTestoGiorno = isDarkMode ? Colors.white30 : Colors.white70;
                         } else {
                           if (slotDisponibili > 15) {
                             coloreBordo = const Color(0xFF52C47A);
@@ -471,6 +484,10 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                                 color: coloreBordo,
                                 width: coloreBordo != Colors.transparent ? 3.0 : 0,
                               ),
+                              // CORRETTO: Sostituito withOpacity deprecato con withValues
+                              boxShadow: (isPassato || isDarkMode) ? null : [
+                                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))
+                              ],
                             ),
                             child: Center(
                               child: Text(
@@ -488,7 +505,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                     ),
                     const SizedBox(height: 40),
 
-                    const Text('Legenda', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                    Text('Legenda', style: TextStyle(color: coloreTestoPrimario, fontSize: 22, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
 
                     AnimatedSwitcher(
@@ -509,7 +526,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                               )
                           ),
                           const SizedBox(width: 12),
-                          Text(testoLegendaDinamico, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                          Text(testoLegendaDinamico, style: TextStyle(color: coloreTestoSecondario, fontSize: 16)),
                         ],
                       ),
                     ),
@@ -518,7 +535,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                       children: [
                         Container(width: 20, height: 20, decoration: const BoxDecoration(color: Color(0xFFE55B5B), shape: BoxShape.circle)),
                         const SizedBox(width: 12),
-                        const Text('Salone chiuso / Passato', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                        Text('Salone chiuso / Passato', style: TextStyle(color: coloreTestoSecondario, fontSize: 16)),
                       ],
                     ),
                   ],
@@ -530,4 +547,10 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       ),
     );
   }
+}
+
+class IntervalloAppuntamento {
+  final int inizio;
+  final int fine;
+  IntervalloAppuntamento({required this.inizio, required this.fine});
 }

@@ -105,14 +105,11 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     int index = _giorniFiltratiVisibili.indexWhere((g) => _formattaData(g) == targetStr);
     if (index == -1) return;
 
-    // Ogni card ha un width fisso di 140 ed un margin horizontal di 6 (quindi occupa 140 + 6 + 6 = 152 pixel in totale)
     const double larghezzaElemento = 152.0;
     final double larghezzaSchermo = MediaQuery.of(context).size.width;
 
-    // Calcolo della coordinata per fare in modo che l'elemento si posizioni al centro esatto dello schermo
-    double offsetDestinazione = (index * larghezzaElemento) - (larghezzaSchermo / 2) + (larghezzaElemento / 2) + 12; // +12 tiene conto del padding iniziale
+    double offsetDestinazione = (index * larghezzaElemento) - (larghezzaSchermo / 2) + (larghezzaElemento / 2) + 12;
 
-    // Vincola l'offset entro i limiti di scorrimento minimi e massimi possibili
     if (offsetDestinazione < 0) offsetDestinazione = 0;
     if (offsetDestinazione > _scrollControllerGiorni.position.maxScrollExtent) {
       offsetDestinazione = _scrollControllerGiorni.position.maxScrollExtent;
@@ -142,8 +139,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       DateTime oggi = DateTime.now();
       DateTime oggiMezzanotte = DateTime(oggi.year, oggi.month, oggi.day);
 
-      // MODIFICATO: Allarghiamo il raggio di generazione (es. 25 giorni prima e 35 giorni dopo)
-      // per essere sicuri di trovare abbastanza giorni validi (aperti e non pieni) anche nei mesi futuri.
       DateTime dataInizioCalcolo = widget.dataInizialeSelezionata.subtract(const Duration(days: 25));
 
       for (int i = 0; i < 60; i++) {
@@ -233,7 +228,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       await Future.wait(compitiDiCaricamento);
       _conteggioSlotPerGiorno.addAll(contatoriTemporanei);
 
-      // Lista "pulita" contenente SOLO i giorni effettivamente aperti e con posti disponibili
       List<DateTime> giorniApertiEDisponibili = tuttiIGiorniPotenziali.where((g) {
         String key = _formattaData(g);
         bool chiuso = _isChiuso(g);
@@ -245,15 +239,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       int indexTarget = giorniApertiEDisponibili.indexWhere((g) => _formattaData(g) == dataTargetStr);
 
       if (indexTarget != -1) {
-        // MODIFICATO: Prendiamo ESATTAMENTE fino a 7 elementi validi precedenti (a sinistra)
         int startIdx = indexTarget - 7;
         if (startIdx < 0) startIdx = 0;
 
-        // MODIFICATO: Prendiamo ESATTAMENTE fino a 7 elementi validi successivi (a destra)
         int endIdx = indexTarget + 7;
         if (endIdx >= giorniApertiEDisponibili.length) endIdx = giorniApertiEDisponibili.length - 1;
 
-        // Popoliamo la striscia finale prendendo l'intervallo esatto di elementi validi
         for (int k = startIdx; k <= endIdx; k++) {
           _giorniFiltratiVisibili.add(giorniApertiEDisponibili[k]);
         }
@@ -459,16 +450,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoadingConfig || _isPreloadingGiorni) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF121212),
-        body: Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C))),
-      );
-    }
-
-    final String dataStr = _formattaData(_dataSelezionata);
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
+    // MODIFICATO: Spostata qui la dichiarazione dei colori per renderli disponibili anche nella schermata di caricamento iniziale
     final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
     final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
     final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
@@ -478,10 +462,20 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     final Color coloreTestoPrimarioGiorno = isDarkMode ? Colors.white : Colors.black;
     final Color coloreTestoSecondarioGiorno = isDarkMode ? Colors.white70 : Colors.black54;
 
+    // MODIFICATO: Adesso anche la schermata di caricamento di transizione è adattiva e rispetta il tema Light/Dark
+    if (_isLoadingConfig || _isPreloadingGiorni) {
+      return Scaffold(
+        backgroundColor: coloreSfondoSchermata,
+        body: const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C))),
+      );
+    }
+
+    final String dataStr = _formattaData(_dataSelezionata);
+
     return Scaffold(
       backgroundColor: coloreSfondoSchermata,
       appBar: AppBar(
-        title: const Text('Scegli un operatore', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
+        title: const Text('Scegli un operatore', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: const Color(0xFF164638),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -493,7 +487,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
             SizedBox(
               height: 105,
               child: ListView.builder(
-                controller: _scrollControllerGiorni, // Collegato per gestire il centraggio automatico
+                controller: _scrollControllerGiorni,
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 itemCount: _giorniFiltratiVisibili.length,
@@ -523,7 +517,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                         _orarioSelezionato = null;
                       });
                       _aggiornaSlotOrari();
-                      _centraGiornoSelezionato(); // Centra l'elemento cliccato dall'utente
+                      _centraGiornoSelezionato();
                     },
                     child: Container(
                       width: 140,
