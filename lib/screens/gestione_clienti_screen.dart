@@ -38,7 +38,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
             ),
           ),
           content: Text(
-            'Sei sicuro di voler eliminare l\'account di "$nomeCliente"? Questa azione rimuoverà l\'utente sia da Firestore sia dal server di autenticazione Firebase permanently.',
+            'Sei sicuro di voler eliminare l\'account di "$nomeCliente"? Questa azione rimuoverà l\'utente e tutte le sue eventuali prenotazioni.',
             style: TextStyle(
               color: isDarkMode ? Colors.white70 : Colors.black87,
             ),

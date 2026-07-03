@@ -24,22 +24,27 @@ exports.eliminaUtenteCompleto = onCall({ region: "us-central1", cors: true }, as
   }
 
   try {
-    // 2. Controlla se chi chiama è davvero un barbiere su Firestore
-    const callerDoc = await admin.firestore().collection("users").doc(auth.uid).get();
-    if (!callerDoc.exists || callerDoc.data().role !== "barbiere") {
-      throw new HttpsError(
-        "permission-denied",
-        "Non hai i permessi per eliminare i clienti."
-      );
+    // 2. MODIFICATO: Controllo flessibile dei permessi (Barbiere autorizzato OPPURE Autocancellazione del cliente)
+    const isSelfDeletion = auth.uid === uidDaEliminare;
+
+    if (!isSelfDeletion) {
+      // Se non si sta cancellando da solo, l'utente che chiama deve essere per forza un barbiere
+      const callerDoc = await admin.firestore().collection("users").doc(auth.uid).get();
+      if (!callerDoc.exists || callerDoc.data().role !== "barbiere") {
+        throw new HttpsError(
+          "permission-denied",
+          "Non hai i permessi per eliminare questo account."
+        );
+      }
     }
 
-    // 3. ELIMINAZIONE DA FIREBASE AUTHENTICATION (Messa subito in cima per sicurezza)
+    // 3. ELIMINAZIONE DA FIREBASE AUTHENTICATION
     await admin.auth().deleteUser(uidDaEliminare);
 
-    // 4. AGGIUNTO: Cerca ed elimina tutte le prenotazioni collegate a questo utente
+    // 4. Cerca ed elimina tutte le prenotazioni collegate a questo utente
     const appointmentsSnapshot = await admin.firestore()
         .collection("appointments")
-        .where("userId", "==", uidDaEliminare) // <-- Assicurati che nel database il campo sia proprio 'userId'
+        .where("userId", "==", uidDaEliminare)
         .get();
 
     const batch = admin.firestore().batch();

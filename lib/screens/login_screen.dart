@@ -16,10 +16,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _recuperoEmailController = TextEditingController();
+  // AGGIUNTO: Controller per il campo telefono opzionale
+  final _telefonoController = TextEditingController();
 
   final FocusNode _nomeCognomeFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
+  // AGGIUNTO: FocusNode per il campo telefono opzionale
+  final FocusNode _telefonoFocus = FocusNode();
 
   bool _isLogin = true;
   bool _isLoading = false;
@@ -30,9 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _recuperoEmailController.dispose();
+    _telefonoController.dispose(); // AGGIUNTO: Smaltimento controller telefono
     _nomeCognomeFocus.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
+    _telefonoFocus.dispose(); // AGGIUNTO: Smaltimento focus telefono
     super.dispose();
   }
 
@@ -199,6 +205,10 @@ class _LoginScreenState extends State<LoginScreen> {
         if (userCredential.user != null) {
           await userCredential.user!.updateDisplayName(_nomeCognomeController.text.trim());
 
+          // AGGIUNTO: Estrazione del valore del telefono (se vuoto, imposta la stringa standard)
+          final String telInserito = _telefonoController.text.trim();
+          final String telefonoFinale = telInserito.isNotEmpty ? telInserito : 'Nessun telefono';
+
           await FirebaseFirestore.instance
               .collection('users')
               .doc(userCredential.user!.uid)
@@ -206,6 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
             'name': _nomeCognomeController.text.trim(),
             'email': email,
             'role': 'cliente',
+            'phone': telefonoFinale, // AGGIUNTO: Salvataggio campo telefono su Firestore
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
@@ -305,6 +316,26 @@ class _LoginScreenState extends State<LoginScreen> {
                     textCapitalization: TextCapitalization.words,
                   ),
                   const SizedBox(height: 16),
+
+                  // AGGIUNTO: Campo di inserimento per il numero di telefono opzionale (visibile solo in fase di registrazione)
+                  TextField(
+                    controller: _telefonoController,
+                    focusNode: _telefonoFocus,
+                    maxLength: 20,
+                    style: TextStyle(color: coloreTestoInput),
+                    onTap: () => _resettaSelezioneTesto(_telefonoController),
+                    onTapOutside: (event) => _telefonoFocus.unfocus(),
+                    decoration: InputDecoration(
+                      labelText: 'Numero di Telefono (Opzionale)',
+                      labelStyle: const TextStyle(color: Colors.grey),
+                      counterText: "",
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
+                      prefixIcon: const Icon(Icons.phone, color: Color(0xFFE2B13C)),
+                    ),
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
                 ],
 
                 TextField(
@@ -377,6 +408,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     _nomeCognomeController.clear();
                     _emailController.clear();
                     _passwordController.clear();
+                    _telefonoController.clear(); // AGGIUNTO: Pulisce il campo telefono al cambio modalità
                   }),
                   child: Text(
                     _isLogin

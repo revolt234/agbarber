@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'login_screen.dart'; // Importato per permettere il reindirizzamento al login
 
 class ProfileScreen extends StatefulWidget {
@@ -41,6 +42,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // Funzione per eliminare l'account definitivamente
   Future<void> _eliminaAccount() async {
+    if (_user == null) return;
+
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     bool confermato = await showDialog(
@@ -52,7 +55,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          'Sei sicuro? Questa azione è irreversibile e cancellerà tutti i tuoi dati.',
+          'Sei sicuro? Questa azione è irreversibile e cancellerà permanentemente tutti i tuoi dati, incluse tutte le tue prenotazioni.',
           style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54),
         ),
         actions: [
@@ -73,11 +76,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await _user?.delete();
+      // MODIFICATO: Invece di cancellare solo l'Auth locale, chiamiamo la Cloud Function v2
+      // che si occupa di pulire sequenzialmente Auth, la collezione 'appointments' e il profilo utente.
+      final FirebaseFunctions functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+
+      final HttpsCallable callable = functions.httpsCallable(
+        'eliminaUtenteCompleto',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
+
+      await callable.call(<String, dynamic>{
+        'uid': _user.uid,
+      });
+
+      // Eseguiamo anche il logout locale per ripulire la sessione sul telefono
+      await FirebaseAuth.instance.signOut();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account eliminato con successo.')),
+          const SnackBar(
+            content: Text('Account e relative prenotazioni eliminati con successo.'),
+            backgroundColor: Colors.green,
+          ),
         );
 
         // CORREZIONE DEFINITIVA: Sradica tutte le vecchie schermate e rimanda all'AuthGate di partenza
@@ -97,6 +117,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SnackBar(content: Text('Errore: ${e.message}'), backgroundColor: Colors.red),
           );
         }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore durante l\'eliminazione: $e'), backgroundColor: Colors.red),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
