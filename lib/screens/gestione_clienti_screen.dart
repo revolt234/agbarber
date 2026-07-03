@@ -437,8 +437,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                     dati['email'] ?? 'Nessuna Email';
                                 final String telefono =
                                     dati['phone'] ??
-                                        dati['phoneNumber'] ??
-                                        'Nessun telefono';
+                                        'Nessun cellulare';
 
                                 final bool isBannato = emailBannate.contains(
                                   email.trim().toLowerCase(),
@@ -496,7 +495,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            'Tel: $telefono',
+                                            'Cell: $telefono',
                                             style: TextStyle(
                                               color:
                                               isDarkMode

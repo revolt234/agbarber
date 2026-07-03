@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // AGGIUNTO: Necessario per i filtri di testo (digitsOnly)
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // AGGIUNTO: Necessario per leggere e aggiornare il telefono
 import 'package:cloud_functions/cloud_functions.dart';
 import 'login_screen.dart'; // Importato per permettere il reindirizzamento al login
 
@@ -13,6 +15,162 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
   bool _isLoading = false;
+  String _telefonoCorrente = "Caricamento..."; // AGGIUNTO: Stato locale per il numero di telefono
+
+  @override
+  void initState() {
+    super.initState();
+    _recuperaTelefonoIniziale(); // AGGIUNTO: Recupera il telefono all'avvio della schermata
+  }
+
+  // AGGIUNTO: Funzione per leggere il numero di telefono corrente da Firestore
+  Future<void> _recuperaTelefonoIniziale() async {
+    if (_user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(_user.uid).get();
+
+      // CORREZIONE DI SICUREZZA: Verifica se il widget è ancora montato prima di aggiornare lo stato
+      if (!mounted) return;
+
+      if (doc.exists && doc.data() != null) {
+        final dati = doc.data() as Map<String, dynamic>;
+        setState(() {
+          _telefonoCorrente = dati['phone'] ?? 'Nessun cellulare';
+        });
+      } else {
+        setState(() => _telefonoCorrente = 'Nessun cellulare');
+      }
+    } catch (e) {
+      debugPrint("Errore recupero telefono: $e");
+      if (mounted) {
+        setState(() => _telefonoCorrente = 'Nessun cellulare');
+      }
+    }
+  }
+
+  // AGGIUNTO: Mostra il popup sicuro per la modifica o rimozione del numero telefonico italiano
+  void _mostraDialogoModificaTelefono() {
+    final bool haTelefono = _telefonoCorrente != 'Nessun cellulare';
+    final TextEditingController telController = TextEditingController(
+      text: haTelefono ? _telefonoCorrente : '',
+    );
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          title: Text(
+            'Modifica Cellulare',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Inserisci il tuo nuovo numero di cellulare (10 cifre) o rimuovilo usando il pulsante sotto.',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: telController,
+                maxLength: 10, // Blocca l'inserimento oltre la decima cifra
+                keyboardType: TextInputType.phone,
+                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly, // Impedisce caratteri strani, spazi o simboli
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Numero di cellulare',
+                  labelStyle: TextStyle(color: Colors.grey),
+                  counterText: "",
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF164638)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFFE2B13C)),
+                  ),
+                  prefixIcon: Icon(Icons.phone, color: Color(0xFFE2B13C)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            // AGGIUNTO: Pulsante Rimuovi condizionale (visibile solo se l'utente ha già un numero salvato)
+            if (haTelefono)
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _aggiornaTelefonoSuFirestore('Nessun cellulare');
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Rimuovi', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF164638)),
+              onPressed: () async {
+                final String nuovoTel = telController.text.trim();
+
+                // Validazione rigorosa per i numeri mobili italiani (esattamente 10 cifre, iniziano per 3)
+                if (nuovoTel.isEmpty || nuovoTel.length != 10 || !nuovoTel.startsWith('3')) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Inserisci un numero di cellulare italiano valido (10 cifre, es: 3xxxxxxxxx)."),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.pop(context);
+                await _aggiornaTelefonoSuFirestore(nuovoTel);
+              },
+              child: const Text('Salva', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // AGGIUNTO: Esegue la scrittura del numero validato o della rimozione su Cloud Firestore
+  Future<void> _aggiornaTelefonoSuFirestore(String nuovoNumero) async {
+    if (_user == null) return;
+    setState(() => _isLoading = true);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(_user.uid).update({
+        'phone': nuovoNumero,
+      });
+      if (mounted) {
+        setState(() => _telefonoCorrente = nuovoNumero);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(nuovoNumero == 'Nessun cellulare'
+                ? 'Numero rimosso con successo.'
+                : 'Numero aggiornato con successo.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore durante l\'aggiornamento: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   // Funzione per cambiare la password (invia un'email di reset automatica da Firebase)
   Future<void> _cambiaPassword() async {
@@ -40,7 +198,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // Funzione per eliminare l'account definitivamente
+  // Funzione per ottimizzare l'eliminazione dell'account richiamando la Cloud Function universale
   Future<void> _eliminaAccount() async {
     if (_user == null) return;
 
@@ -76,8 +234,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // MODIFICATO: Invece di cancellare solo l'Auth locale, chiamiamo la Cloud Function v2
-      // che si occupa di pulire sequenzialmente Auth, la collezione 'appointments' e il profilo utente.
       final FirebaseFunctions functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
       final HttpsCallable callable = functions.httpsCallable(
@@ -89,7 +245,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'uid': _user.uid,
       });
 
-      // Eseguiamo anche il logout locale per ripulire la sessione sul telefono
       await FirebaseAuth.instance.signOut();
 
       if (mounted) {
@@ -99,8 +254,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             backgroundColor: Colors.green,
           ),
         );
-
-        // CORREZIONE DEFINITIVA: Sradica tutte le vecchie schermate e rimanda all'AuthGate di partenza
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } on FirebaseAuthException catch (e) {
@@ -134,10 +287,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     const Color agVerde = Color(0xFF164638);
     const Color agOro = Color(0xFFE2B13C);
 
-    // MODIFICATO: Rilevazione del tema (Light/Dark) per garantire consistenza estetica
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Colori adattivi per l'interfaccia utente
     final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
     final Color coloreSfondoCard = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
     final Color coloreTestoPrimario = isDarkMode ? Colors.white : Colors.black87;
@@ -263,6 +414,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 24),
+
+          Text('Dati Profilo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: coloreTestoSecondario)),
+          const Divider(color: agVerde),
+
+          // Voce di menu per visualizzare e modificare in sicurezza il numero di telefono
+          ListTile(
+            leading: const Icon(Icons.phone, color: agOro),
+            title: Text('Numero di Cellulare', style: TextStyle(color: coloreTestoPrimario)),
+            subtitle: Text(_telefonoCorrente, style: TextStyle(color: coloreTestoSecondario)),
+            trailing: Icon(Icons.edit, color: coloreTestoSecondario),
+            onTap: _mostraDialogoModificaTelefono,
+          ),
+          const SizedBox(height: 16),
 
           Text('Opzioni Sicurezza', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: coloreTestoSecondario)),
           const Divider(color: agVerde),

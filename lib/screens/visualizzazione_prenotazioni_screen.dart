@@ -83,26 +83,48 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     }
   }
 
-  // Mostra il Popup dal basso con tutti i dettagli dell'appuntamento selezionato
-  void _mostraDettagliAppuntamento(Map<String, dynamic> data, String oraInizioStr, String oraFineStr, int durata) {
+  // MODIFICATO: Cambiato in asincrono per poter prelevare il telefono aggiornato direttamente dalla collezione users se manca nell'appuntamento
+  void _mostraDettagliAppuntamento(Map<String, dynamic> data, String oraInizioStr, String oraFineStr, int durata) async {
     final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
     final String operatoreNome = data['barberName'] ?? 'Qualsiasi';
     final List servizi = data['services'] ?? [];
-    // MODIFICATO: Lettura del prezzo convertito a double per evitare crash legati al tipo
     final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
+    final String? clienteId = data['userId'];
 
+    // Recupero iniziale dall'appuntamento
+    String? telefonoGreggio = data['phone'] ?? data['phoneNumber'];
+
+    // Se non è memorizzato nell'appuntamento ma abbiamo il clienteId, interroghiamo direttamente il profilo dell'utente
+    if ((telefonoGreggio == null || telefonoGreggio.trim().isEmpty || telefonoGreggio.trim() == 'Nessun cellulare') && clienteId != null) {
+      try {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(clienteId).get();
+        if (userDoc.exists && userDoc.data() != null) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+          telefonoGreggio = userData['phone'] ?? userData['phoneNumber'];
+        }
+      } catch (e) {
+        debugPrint("Errore nel recupero del cellulare dal profilo utente: $e");
+      }
+    }
+
+    final String? telefonoValido = (telefonoGreggio != null &&
+        telefonoGreggio.trim().isNotEmpty &&
+        telefonoGreggio.trim() != 'Nessun cellulare')
+        ? telefonoGreggio.trim()
+        : null;
+
+    if (!mounted) return;
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-      useSafeArea: true, // AGGIUNTO: Forza il foglio modale a rispettare le zone di sistema (barra dei tasti/gesture)
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
         final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
-        // MODIFICATO: Avvolto il contenuto in un SafeArea per spingere i testi e il bottone sopra i tasti Android
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
@@ -126,7 +148,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        // MODIFICATO: Formattazione del prezzo double con decimali e virgola
                         '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
                         style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 18),
                       ),
@@ -145,6 +166,20 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   ],
                 ),
                 const SizedBox(height: 12),
+
+                // AGGIUNTO: Visualizzazione del numero di telefono recuperato dal documento della prenotazione o in tempo reale dal profilo utente
+                Row(
+                  children: [
+                    Icon(Icons.phone, color: agOro, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Cellulare: ${telefonoValido ?? "Nessun cellulare disponibile"}',
+                      style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
                 Row(
                   children: [
                     Icon(Icons.person, color: agOro, size: 20),
@@ -192,10 +227,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
   @override
   Widget build(BuildContext context) {
-    // MODIFICATO: Rilevazione dinamica del tema di sistema attivo sul telefono
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Configurazione dei colori dinamici
     final Color coloreSfondoSchermata = isDarkMode ? agScuro : const Color(0xFFF4F6F5);
     final Color coloreSfondoBarraData = isDarkMode ? Colors.white.withValues(alpha: 0.05) : Colors.white;
     final Color coloreTestoSecondario = isDarkMode ? Colors.white70 : Colors.black54;
@@ -218,7 +251,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
-      // MODIFICATO: Inserito un SafeArea per fare in modo che la timeline e le card non scivolino sotto i tasti Android
       body: SafeArea(
         child: Column(
           children: [
@@ -346,9 +378,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                       height: altezzaTotaleGriglia,
                       child: Stack(
                         children: [
-                          // Righello Orario ad alta precisione: Include frazioni di mezz'ora (:00 e :30)
                           for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
-                            // Linea dell'ora esatta (es. 09:00)
                             Positioned(
                               top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
                               left: 0,
@@ -376,7 +406,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                 ),
                               ),
                             ),
-                            // Linea della mezz'ora (es. 09:30)
                             Positioned(
                               top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
                               left: 0,
@@ -405,7 +434,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               ),
                             ),
                           ],
-                          // Linea finale di chiusura (es. 20:00)
                           Positioned(
                             top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
                             left: 0,
@@ -419,7 +447,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                             ),
                           ),
 
-                          // Generazione dinamica dei blocchi appuntamento proporzionali al tempo
                           for (var elem in elementiCalendario) ...[
                             (() {
                               final data = elem['data'];
@@ -440,7 +467,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               final double leftPos = larghezzaColonnaOra + (colonna * larghezzaCard) + 4;
 
                               final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
-                              // MODIFICATO: Lettura adattiva del prezzo in double per la visualizzazione sulla griglia
                               final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
                               final String oraInizioStr = data['slot'] ?? '--:--';
                               final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
@@ -482,7 +508,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
-                                              // MODIFICATO: Formattazione del prezzo double con decimali e virgola anche nei blocchi griglia
                                               '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
                                               style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 13),
                                             ),

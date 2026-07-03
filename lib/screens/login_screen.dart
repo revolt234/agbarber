@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // AGGIUNTO: Necessario per i filtri di testo (digitsOnly)
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -164,6 +165,22 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    // MODIFICATO: Controllo rigoroso sulle 10 cifre del cellulare in fase di registrazione
+    if (!_isLogin) {
+      final String telInserito = _telefonoController.text.trim();
+      if (telInserito.isNotEmpty) {
+        if (telInserito.length != 10 || !telInserito.startsWith('3')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Inserisci un numero di cellulare italiano valido (esattamente 10 cifre, es: 3xxxxxxxxx)."),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
+    }
+
     setState(() => _isLoading = true);
     try {
       // MODIFICATO: Controllo preventivo sulla blacklist delle email inserite in banned_emails
@@ -207,7 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           // AGGIUNTO: Estrazione del valore del telefono (se vuoto, imposta la stringa standard)
           final String telInserito = _telefonoController.text.trim();
-          final String telefonoFinale = telInserito.isNotEmpty ? telInserito : 'Nessun telefono';
+          final String telefonoFinale = telInserito.isNotEmpty ? telInserito : 'Nessun cellulare';
 
           await FirebaseFirestore.instance
               .collection('users')
@@ -317,12 +334,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // AGGIUNTO: Campo di inserimento per il numero di telefono opzionale (visibile solo in fase di registrazione)
+                  // MODIFICATO: Campo telefono bloccato a un massimo di 10 cifre e filtrato per soli numeri
                   TextField(
                     controller: _telefonoController,
                     focusNode: _telefonoFocus,
-                    maxLength: 20,
+                    maxLength: 10, // Blocca l'inserimento alla decima cifra
                     style: TextStyle(color: coloreTestoInput),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly, // Impedisce caratteri speciali, lettere o spazi bianchi
+                    ],
                     onTap: () => _resettaSelezioneTesto(_telefonoController),
                     onTapOutside: (event) => _telefonoFocus.unfocus(),
                     decoration: InputDecoration(
