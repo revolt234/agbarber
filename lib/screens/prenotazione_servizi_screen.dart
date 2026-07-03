@@ -57,7 +57,52 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
           .collection('users')
           .doc(user.uid)
           .snapshots()
-          .listen((userDoc) {
+          .listen((userDoc) async {
+
+        // Controlliamo che l'utente sia ancora presente nell'istanza Auth locale
+        final currentUserCheck = FirebaseAuth.instance.currentUser;
+        if (currentUserCheck == null) {
+          _userSubscription?.cancel();
+          return;
+        }
+
+        // MODIFICATO: Evitiamo il falso positivo per gli account appena registrati.
+        // Se il documento non esiste ancora sul server, controlliamo da quanto tempo è stato creato l'account Auth.
+        if (!userDoc.exists && !userDoc.metadata.isFromCache) {
+          final DateTime? creationTime = currentUserCheck.metadata.creationTime;
+          if (creationTime != null) {
+            final differenza = DateTime.now().difference(creationTime);
+            // Se l'account è stato registrato da meno di 45 secondi, non effettuiamo il logout.
+            // Stiamo dando il tempo a LoginScreen di terminare la scrittura .set() su Firestore.
+            if (differenza.inSeconds < 45) {
+              if (mounted) {
+                setState(() {
+                  _nomeUtente = currentUserCheck.displayName ?? "Cliente";
+                  _isLoadingNome = false;
+                });
+              }
+              return;
+            }
+          }
+
+          // Se l'account è vecchio e il documento non esiste sul server, allora è stato rimosso davvero dal barbiere.
+          _userSubscription?.cancel();
+          await FirebaseAuth.instance.signOut();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Il tuo account è stato rimosso o non è più attivo."),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 5),
+              ),
+            );
+            Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+          }
+          return;
+        }
+
         if (userDoc.exists && userDoc.data() != null) {
           final data = userDoc.data() as Map<String, dynamic>;
           if (data.containsKey('name') && data['name']!.toString().trim().isNotEmpty) {
@@ -74,7 +119,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
         debugPrint("Errore nell'ascolto del nome utente: $e");
         if (mounted) {
           setState(() {
-            _nomeUtente = "Cliente";
+            _nomeUtente = FirebaseAuth.instance.currentUser?.displayName ?? "Cliente";
             _isLoadingNome = false;
           });
         }
@@ -82,7 +127,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     } else {
       if (mounted) {
         setState(() {
-          _nomeUtente = "Ospite"; // Impostato esplicitamente a Ospite per coerenza visiva
+          _nomeUtente = "Ospite";
           _isLoadingNome = false;
         });
       }
@@ -101,7 +146,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     }
   }
 
-  // Funzione di supporto per mostrare il popup di avviso per l'Ospite
   void _mostraDialogoRegistrazioneObbligatoria() {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
@@ -138,7 +182,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () {
-                Navigator.pop(context); // Chiude il dialogo corrente
+                Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -157,10 +201,8 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // MODIFICATO: Rilevazione del tema attivo sul telefono (Light/Dark)
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Configurazione dei colori dinamici della pagina
     final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
     final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
     final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
@@ -168,7 +210,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     final Color coloreIconaCardSpenta = isDarkMode ? const Color(0xFFE2B13C) : const Color(0xFF164638);
 
     return Scaffold(
-      backgroundColor: coloreSfondoSchermata, // MODIFICATO: Sfondo adattivo
+      backgroundColor: coloreSfondoSchermata,
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot>(
           stream: _servicesStream,
@@ -180,7 +222,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1. INTESTAZIONE
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
                   child: Column(
@@ -200,7 +241,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                       )
                           : Text(
                         'Ciao, $_nomeUtente!',
-                        style: TextStyle(color: coloreTestoTitoli, fontSize: 24, fontWeight: FontWeight.bold), // MODIFICATO: Testo adattivo
+                        style: TextStyle(color: coloreTestoTitoli, fontSize: 24, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
                       Row(
@@ -228,7 +269,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                               children: [
                                 Text(
                                   'AG The gentleman\nBarber di Abate Gerardo',
-                                  style: TextStyle(color: coloreTestoTitoli, fontSize: 16, fontWeight: FontWeight.bold, height: 1.2), // MODIFICATO: Testo adattivo
+                                  style: TextStyle(color: coloreTestoTitoli, fontSize: 16, fontWeight: FontWeight.bold, height: 1.2),
                                 ),
                                 const SizedBox(height: 4),
                                 const Text(
@@ -244,7 +285,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                   ),
                 ),
 
-                // 2. LISTA DEI SERVIZI
                 Expanded(
                   child: Builder(
                     builder: (context) {
@@ -260,7 +300,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                 Text(
                                   'Connessione internet assente\no instabile.',
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(color: coloreTestoTitoli, fontSize: 16), // MODIFICATO: Testo adattivo
+                                  style: TextStyle(color: coloreTestoTitoli, fontSize: 16),
                                 ),
                                 const SizedBox(height: 16),
                                 ElevatedButton.icon(
@@ -289,7 +329,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                       }
 
                       if (!haDatiValidi) {
-                        return Center(child: Text('Nessun servizio disponibile al momento.', style: TextStyle(color: coloreTestoTitoli))); // MODIFICATO: Testo adattivo
+                        return Center(child: Text('Nessun servizio disponibile al momento.', style: TextStyle(color: coloreTestoTitoli)));
                       }
 
                       final servizi = snapshot.data!.docs;
@@ -320,7 +360,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                               margin: const EdgeInsets.only(bottom: 14),
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                               decoration: BoxDecoration(
-                                // MODIFICATO: Sfondo card e bordi che variano dinamicamente in base a selezione e darkmode
                                 color: isSelezionato
                                     ? (isDarkMode ? const Color(0xFFFFF1CC) : const Color(0xFFFFF6E0))
                                     : coloreSfondoCardSpenta,
@@ -334,7 +373,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                 children: [
                                   Icon(
                                     nome.toLowerCase().contains('barba') ? Icons.chair : Icons.content_cut,
-                                    color: isSelezionato ? const Color(0xFF164638) : coloreIconaCardSpenta, // MODIFICATO: Icona adattiva
+                                    color: isSelezionato ? const Color(0xFF164638) : coloreIconaCardSpenta,
                                     size: 28,
                                   ),
                                   const SizedBox(width: 16),
@@ -345,7 +384,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                         Text(
                                           nome,
                                           style: TextStyle(
-                                              color: isSelezionato ? Colors.black : coloreTestoCardSpenta, // MODIFICATO: Testo adattivo
+                                              color: isSelezionato ? Colors.black : coloreTestoCardSpenta,
                                               fontSize: 16,
                                               fontWeight: FontWeight.bold
                                           ),
@@ -353,7 +392,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                         const SizedBox(height: 2),
                                         Text(
                                           '$durata min',
-                                          style: TextStyle(color: isSelezionato ? Colors.grey.shade700 : Colors.grey.shade500, fontSize: 12), // MODIFICATO: Sottotesto adattivo
+                                          style: TextStyle(color: isSelezionato ? Colors.grey.shade700 : Colors.grey.shade500, fontSize: 12),
                                         ),
                                       ],
                                     ),
@@ -361,7 +400,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                   Text(
                                     '${prezzo.toStringAsFixed(2).replaceAll('.', ',')} €',
                                     style: TextStyle(
-                                        color: isSelezionato ? Colors.black : coloreTestoCardSpenta, // MODIFICATO: Prezzo adattivo
+                                        color: isSelezionato ? Colors.black : coloreTestoCardSpenta,
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold
                                     ),
@@ -382,15 +421,14 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFE2B13C),
                       foregroundColor: const Color(0xFF121212),
-                      disabledBackgroundColor: isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.08), // MODIFICATO: Disabilitato adattivo
-                      disabledForegroundColor: isDarkMode ? Colors.white.withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.25), // MODIFICATO: Testo disabilitato adattivo
+                      disabledBackgroundColor: isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.08),
+                      disabledForegroundColor: isDarkMode ? Colors.white.withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.25),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       elevation: 2,
                     ),
                     onPressed: puoProseguire
                         ? () async {
-                      // INTERCETTAZIONE OSPITE: Controlla se l'utente non è autenticato prima di procedere
                       final utenteCorrente = FirebaseAuth.instance.currentUser;
                       if (utenteCorrente == null) {
                         _mostraDialogoRegistrazioneObbligatoria();
@@ -405,6 +443,37 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                         ),
                       );
 
+                      try {
+                        if (utenteCorrente.email != null) {
+                          final String emailNormalizzata = utenteCorrente.email!.trim().toLowerCase();
+                          final banDoc = await FirebaseFirestore.instance
+                              .collection('banned_emails')
+                              .doc(emailNormalizzata)
+                              .get(const GetOptions(source: Source.server));
+
+                          if (banDoc.exists) {
+                            if (context.mounted) Navigator.pop(context);
+
+                            await FirebaseAuth.instance.signOut();
+
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).clearSnackBars();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Accesso negato: questo account email è stato bloccato dall'amministratore."),
+                                  backgroundColor: Colors.orange,
+                                  duration: Duration(seconds: 5),
+                                ),
+                              );
+                              Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                            }
+                            return;
+                          }
+                        }
+                      } catch (e) {
+                        debugPrint("Errore durante la verifica della blacklist: $e");
+                      }
+
                       bool online = await _controllaConnessioneReale();
 
                       if (!context.mounted) return;
@@ -414,7 +483,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => PrenotazioneCalendarioScreen( // MODIFICATO: Ora punta al calendario mensile
+                            builder: (context) => PrenotazioneCalendarioScreen(
                               servizioId: _servizioSelezionatoId!,
                               servizioNome: _datiServizioSelezionato?['name'] ?? 'Servizio',
                               servizioDurata: _datiServizioSelezionato?['duration'] ?? 30,

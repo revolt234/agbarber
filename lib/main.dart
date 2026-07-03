@@ -5,7 +5,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'screens/visualizzazione_prenotazioni_screen.dart';
 import 'firebase_options.dart';
-import 'screens/login_screen.dart';
 import 'screens/prenotazione_servizi_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/storico_prenotazioni_screen.dart';
@@ -21,6 +20,7 @@ import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
+import 'screens/gestione_clienti_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -540,6 +540,32 @@ class BarbiereHomePage extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => const VisualizzazionePrenotazioniScreen()),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // AGGIUNTO: Nuovo ingresso per la schermata di gestione dei clienti iscritti
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF164638),
+                    child: Icon(Icons.assignment_ind, color: Colors.white),
+                  ),
+                  title: const Text(
+                    'Anagrafica & Gestione Clienti',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  subtitle: const Text('Visualizza l\'elenco alfabetico, cerca, elimina o blocca l\'accesso alle email'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const GestioneClientiScreen()),
                     );
                   },
                 ),

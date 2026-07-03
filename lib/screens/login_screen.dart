@@ -73,17 +73,17 @@ class _LoginScreenState extends State<LoginScreen> {
               maxLength: 45,
               style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
               onTap: () => _resettaSelezioneTesto(_recuperoEmailController),
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Email',
-                labelStyle: const TextStyle(color: Colors.grey),
+                labelStyle: TextStyle(color: Colors.grey),
                 counterText: "",
-                enabledBorder: const OutlineInputBorder(
+                enabledBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: Color(0xFF164638)),
                 ),
-                focusedBorder: const OutlineInputBorder(
+                focusedBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: Color(0xFFE2B13C)),
                 ),
-                prefixIcon: const Icon(Icons.email, color: Color(0xFFE2B13C)),
+                prefixIcon: Icon(Icons.email, color: Color(0xFFE2B13C)),
               ),
               keyboardType: TextInputType.emailAddress,
             ),
@@ -160,6 +160,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
+      // MODIFICATO: Controllo preventivo sulla blacklist delle email inserite in banned_emails
+      final String emailNormalizzata = email.toLowerCase();
+      final banDoc = await FirebaseFirestore.instance
+          .collection('banned_emails')
+          .doc(emailNormalizzata)
+          .get(const GetOptions(source: Source.server));
+
+      if (banDoc.exists) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Accesso negato: questo account email è stato bloccato dall'amministratore."),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        setState(() => _isLoading = false);
+        return; // Interrompe il processo impedendo il login o la registrazione
+      }
+
       if (_isLogin) {
         if (kIsWeb) {
           await FirebaseAuth.instance.setSettings(appVerificationDisabledForTesting: false);
@@ -190,8 +211,6 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
-      // MODIFICATO: Invece del semplice pop che rompe lo stack reattivo dell'AuthGate,
-      // usiamo pushNamedAndRemoveUntil per azzerare lo stack delle rotte rimandando alla rotta principale ("/") in totale sicurezza.
       if (mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
@@ -368,8 +387,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // CORRETTO: Protezione contro la schermata nera.
-                // Controlla se c'è una rotta precedente valida a cui tornare; in caso contrario, azzera lo stack e torna alla radice.
                 OutlinedButton(
                   onPressed: () {
                     if (Navigator.of(context).canPop()) {
