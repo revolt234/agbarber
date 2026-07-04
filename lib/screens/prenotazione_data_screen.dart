@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario per invocare la funzione lato server
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
 
@@ -452,7 +453,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // MODIFICATO: Spostata qui la dichiarazione dei colori per renderli disponibili anche nella schermata di caricamento iniziale
     final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
     final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
     final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
@@ -462,7 +462,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     final Color coloreTestoPrimarioGiorno = isDarkMode ? Colors.white : Colors.black;
     final Color coloreTestoSecondarioGiorno = isDarkMode ? Colors.white70 : Colors.black54;
 
-    // MODIFICATO: Adesso anche la schermata di caricamento di transizione è adattiva e rispetta il tema Light/Dark
     if (_isLoadingConfig || _isPreloadingGiorni) {
       return Scaffold(
         backgroundColor: coloreSfondoSchermata,
@@ -732,62 +731,30 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           final user = FirebaseAuth.instance.currentUser;
                           if (user == null) throw 'Utente non autenticato';
 
-                          String nomeRealeCliente = "Cliente";
-                          final userDoc = await FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(user.uid)
-                              .get(const GetOptions(source: Source.server));
+                          // MODIFICATO: Rimossa l'intera transazione client-side complessa
+                          // Ora viene invocata direttamente la Cloud Function per gestire l'inserimento atomico sul server
+                          final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                              .httpsCallable('creaPrenotazioneSicura');
 
-                          if (userDoc.exists && userDoc.data() != null) {
-                            nomeRealeCliente = userDoc.data()?['name'] ?? user.displayName ?? "Cliente";
-                          }
-
-                          int nuovoInizioMinuti = _minutiDaStringa(_orarioSelezionato!);
-                          int nuovoFineMinuti = nuovoInizioMinuti + widget.servizioDurata;
-
-                          String? risultatoIncastroId = await FirebaseFirestore.instance.runTransaction<String?>((transaction) async {
-                            final querySnapshot = await FirebaseFirestore.instance
-                                .collection('appointments')
-                                .where('date', isEqualTo: dataStr)
-                                .where('barberId', isEqualTo: _barbiereSelezionatoId)
-                                .get(const GetOptions(source: Source.server));
-
-                            for (var doc in querySnapshot.docs) {
-                              final datiApp = doc.data();
-                              if (datiApp.containsKey('slot') && datiApp['slot'] != null) {
-                                int appInizio = _minutiDaStringa(datiApp['slot']);
-                                int appDurata = datiApp['duration'] ?? datiApp['totalDuration'] ?? datiApp['services_duration'] ?? 30;
-                                int appFine = appInizio + appDurata;
-
-                                if (nuovoInizioMinuti < appFine && nuovoFineMinuti > appInizio) {
-                                  return null;
-                                }
-                              }
-                            }
-
-                            final nuovoDocRef = FirebaseFirestore.instance.collection('appointments').doc();
-                            transaction.set(nuovoDocRef, {
-                              'date': dataStr,
-                              'slot': _orarioSelezionato,
-                              'duration': widget.servizioDurata,
-                              'barberId': _barbiereSelezionatoId,
-                              'barberName': _barbiereSelezionatoNome,
-                              'userId': user.uid,
-                              'userName': nomeRealeCliente,
-                              'userEmail': user.email ?? 'Cliente anonimo',
-                              'services': [widget.servizioNome],
-                              'totalPrice': widget.servizioPrezzo,
-                              'createdAt': FieldValue.serverTimestamp(),
-                            });
-
-                            return nuovoDocRef.id;
+                          final HttpsCallableResult response = await callable.call(<String, dynamic>{
+                            'date': dataStr,
+                            'slot': _orarioSelezionato,
+                            'duration': widget.servizioDurata,
+                            'barberId': _barbiereSelezionatoId,
+                            'barberName': _barbiereSelezionatoNome,
+                            'serviceNome': widget.servizioNome,
+                            'servicePrezzo': widget.servizioPrezzo,
                           });
 
-                          if (risultatoIncastroId == null) throw 'SLOT_OCCUPATO';
+                          final Map<String, dynamic> datiRisposta = Map<String, dynamic>.from(response.data as Map);
+
+                          if (datiRisposta['success'] != true) throw 'SLOT_OCCUPATO';
+
+                          final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
 
                           try {
                             await NotificationService().pianificaNotificaAppuntamento(
-                              idNotifica: risultatoIncastroId.hashCode,
+                              idNotifica: idAppuntamentoGenerato.hashCode,
                               dataStr: dataStr,
                               slotStr: _orarioSelezionato!,
                               servizi: widget.servizioNome,
@@ -809,13 +776,18 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
                         } catch (e) {
                           if (!context.mounted) return;
-                          setState(() => _isSaving = false);
+                          setState(() {
+                            _isSaving = false;
+                            // AGGIUNGI QUESTA RIGA PER DISABILITARE IL PULSANTE FINCHÉ NON VIENE SCELTO UN NUOVO ORARIO
+                            _orarioSelezionato = null;
+                          });
                           ScaffoldMessenger.of(context).clearSnackBars();
 
                           String messaggioErrore = 'Errore di connessione. Impossibile salvare la prenotazione.';
                           Color coloreSfondo = Colors.red;
 
-                          if (e == 'SLOT_OCCUPATO') {
+                          // Intercetta sia l'errore esplicito lanciato dal nostro controllo che l'eccezione nativa della Cloud Function (already-exists)
+                          if (e == 'SLOT_OCCUPATO' || e.toString().contains('already-exists')) {
                             messaggioErrore = 'Spiacenti! Questo orario è stato appena prenotato da un altro cliente. Scegli un altro slot.';
                             coloreSfondo = Colors.orange.shade900;
                             _aggiornaSlotOrari();

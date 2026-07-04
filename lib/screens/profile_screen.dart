@@ -234,7 +234,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final FirebaseFunctions functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final FirebaseFunctions functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
 
       final HttpsCallable callable = functions.httpsCallable(
         'eliminaUtenteCompleto',

@@ -3,7 +3,7 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-exports.eliminaUtenteCompleto = onCall({ region: "us-central1", cors: true }, async (request) => {
+exports.eliminaUtenteCompleto = onCall({ region: "europe-west3", cors: true }, async (request) => {
   const auth = request.auth;
   const data = request.data;
 
@@ -60,6 +60,123 @@ exports.eliminaUtenteCompleto = onCall({ region: "us-central1", cors: true }, as
     return { success: true, message: "Utente e relative prenotazioni rimosse con successo." };
   } catch (error) {
     console.error("Errore durante l'eliminazione dell'utente:", error);
+    throw new HttpsError("internal", error.message);
+  }
+});
+exports.creaPrenotazioneSicura = onCall({ region: "europe-west3", cors: true }, async (request) => {
+  const auth = request.auth;
+  const data = request.data;
+
+  // 1. Verifica di sicurezza iniziale
+  if (!auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Devi essere autenticato per effettuare una prenotazione."
+    );
+  }
+
+  // Estrazione e validazione parametri obbligatori inviati dal client
+  const { date, slot, duration, barberId, barberName, serviceNome, servicePrezzo } = data;
+
+  if (!date || !slot || !duration || !barberId || !barberName || !serviceNome || !servicePrezzo) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Tutti i parametri della prenotazione sono obbligatori."
+    );
+  }
+
+  // Funzione di utilità interna per convertire "HH:mm" in minuti totali dall'inizio della giornata
+  const minutiDaStringa = (s) => {
+    const parti = s.split(':');
+    return parseInt(parti[0], 10) * 60 + parseInt(parti[1], 10);
+  };
+
+  try {
+    const db = admin.firestore();
+
+    // 2. Recupero del nome reale dell'utente dal suo record utente in Firestore
+    let nomeRealeCliente = "Cliente";
+    const userDoc = await db.collection("users").doc(auth.uid).get();
+    if (userDoc.exists && userDoc.data()) {
+      nomeRealeCliente = userDoc.data().name || auth.token.name || "Cliente";
+    }
+
+    const nuovoInizioMinuti = minutiDaStringa(slot);
+    const nuovoFineMinuti = nuovoInizioMinuti + parseInt(duration, 10);
+
+    // Costruzione della chiave univoca per bloccare lo slot al millesimo di secondo
+    const bloccoSlotId = `${date}_${barberId}_${slot.replace(':', '')}`;
+
+    // 3. Esecuzione della Transazione Atomica Centralizzata Lato Server Blindata
+    const risultatoTransazione = await db.runTransaction(async (transaction) => {
+
+      // SOLUZIONE PROFESSIONALE: Acquisiamo un lucchetto (Lock) sul documento del barbiere specifico.
+      // Qualsiasi altra prenotazione concomitante per questo barbiere dovrà attendere in coda seriale,
+      // azzerando i conflitti di lettura della query.
+      const barberRef = db.collection("barbers").doc(barberId);
+      await transaction.get(barberRef);
+
+      const docBloccoRef = db.collection("appointments").doc(bloccoSlotId);
+      const snapshotBlocco = await transaction.get(docBloccoRef);
+
+      // Se il documento con ID univoco esiste già, lo slot esatto è occupato
+      if (snapshotBlocco.exists) {
+        return { success: false, error: "SLOT_OCCUPATO" };
+      }
+
+      // MODIFICATO: Eseguiamo la query di controllo passandola dentro transaction.get()
+      // Questo dice a Firestore di tracciare l'intero set di dati e invalidare la transazione se cambia qualcosa
+      const queryIncastri = db.collection("appointments")
+        .where("date", "==", date)
+        .where("barberId", "==", barberId);
+
+      const querySnapshot = await transaction.get(queryIncastri);
+
+      for (const doc of querySnapshot.docs) {
+        const datiApp = doc.data();
+        if (datiApp.slot) {
+          const appInizio = minutiDaStringa(datiApp.slot);
+          const appDurata = datiApp.duration || datiApp.totalDuration || datiApp.services_duration || 30;
+          const appFine = appInizio + appDurata;
+
+          // Se i tempi si sovrappongono, respingi immediatamente
+          if (nuovoInizioMinuti < appFine && nuovoFineMinuti > appInizio) {
+            return { success: false, error: "SLOT_OCCUPATO" };
+          }
+        }
+      }
+
+      // 4. Se tutti i controlli passano, inseriamo l'appuntamento
+      transaction.set(docBloccoRef, {
+        date: date,
+        slot: slot,
+        duration: parseInt(duration, 10),
+        barberId: barberId,
+        barberName: barberName,
+        userId: auth.uid,
+        userName: nomeRealeCliente,
+        userEmail: auth.token.email || 'Cliente anonimo',
+        services: [serviceNome],
+        totalPrice: parseFloat(servicePrezzo),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return { success: true, appointmentId: bloccoSlotId };
+    });
+
+    if (!risultatoTransazione.success) {
+      throw new HttpsError("already-exists", "Lo slot orario selezionato si sovrappone o è già stato prenotato.");
+    }
+
+    return {
+      success: true,
+      message: "Prenotazione registrata con successo.",
+      appointmentId: risultatoTransazione.appointmentId
+    };
+
+  } catch (error) {
+    console.error("Errore durante la transazione di prenotazione:", error);
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", error.message);
   }
 });
