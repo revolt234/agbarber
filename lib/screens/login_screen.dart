@@ -346,7 +346,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onTap: () => _resettaSelezioneTesto(_telefonoController),
                     onTapOutside: (event) => _telefonoFocus.unfocus(),
                     decoration: InputDecoration(
-                      labelText: 'Numero di Telefono (Opzionale)',
+                      labelText: 'Cellulare (Opzionale)',
                       labelStyle: const TextStyle(color: Colors.grey),
                       counterText: "",
                       enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
