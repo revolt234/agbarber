@@ -488,11 +488,21 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       builder: (bottomSheetContext) {
         final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
 
+        // Calcolo dinamico dello spazio inferiore introdotto dalla barra di navigazione nativa (back/home)
+        final double paddingBarraSistema = MediaQuery.of(bottomSheetContext).padding.bottom;
+
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
             return SafeArea(
+              bottom: false, // Disabilitato qui per iniettarlo direttamente nel SingleChildScrollView ed evitare sovrapposizioni esterne
               child: SingleChildScrollView(
-                padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 24.0, bottom: 32.0),
+                // MODIFICATO: Il padding inferiore somma l'altezza del sistema a quella interna per fare uscire il pannello sopra la barra nativa
+                padding: EdgeInsets.only(
+                    left: 24.0,
+                    right: 24.0,
+                    top: 24.0,
+                    bottom: 32.0 + paddingBarraSistema
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -536,7 +546,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                           foregroundColor: const Color(0xFF121212),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        // MODIFICATO: Controllo di abilitazione delegato alla variabile locale _isSaving per rispondere in tempo reale
                         onPressed: _isSaving
                             ? null
                             : () async {
@@ -579,7 +588,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                             }
 
                             if (!bottomSheetContext.mounted) return;
-                            Navigator.pop(bottomSheetContext); // Chiude il pannello solo a transazione completata con successo
+                            Navigator.pop(bottomSheetContext);
 
                             if (!context.mounted) return;
                             ScaffoldMessenger.of(context).clearSnackBars();
@@ -599,7 +608,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               _isSaving = false;
                               _orarioSelezionato = null;
                             });
-                            Navigator.pop(bottomSheetContext); // Chiude il pannello in caso di errore per aggiornare gli slot grafici
+                            Navigator.pop(bottomSheetContext);
                             ScaffoldMessenger.of(context).clearSnackBars();
 
                             String messaggioErrore = 'Errore di connessione. Impossibile salvare la prenotazione.';

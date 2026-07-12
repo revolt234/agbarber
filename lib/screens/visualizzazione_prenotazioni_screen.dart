@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -15,10 +16,10 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   DateTime _dataSelezionata = DateTime.now();
   String? _operatoreSelezionato; // null significa "Tutti"
 
-  // Configurazione Griglia Oraria (Modificabile in base ai tuoi orari di apertura)
-  final int oraInizioGiornata = 8;  // 08:00
-  final int oraFineGiornata = 20;   // 20:00
-  final double altezzaPerMinuto = 1.6; // Incrementato leggermente per dare più spazio agli slot di 30 min
+  // Configurazione Griglia Oraria Dinamica (Inizializzata con valori di fallback)
+  int oraInizioGiornata = 8;  // Verrà sovrascritto dinamicamente
+  int oraFineGiornata = 20;   // Verrà sovrascritto dinamicamente
+  final double altezzaPerMinuto = 1.6;
   final double larghezzaColonnaOra = 65.0;
 
   // Colori del brand AG Barber
@@ -27,6 +28,10 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   final Color agScuro = const Color(0xFF121212);
 
   String get _dataString => DateFormat('yyyy-MM-dd').format(_dataSelezionata);
+
+  final List<String> _giorniSettimanaDb = [
+    'domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'
+  ];
 
   int _minutiDaStringa(String s) {
     final parti = s.split(':');
@@ -115,7 +120,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     if (!mounted) return;
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Definiamo una variabile di stato locale al bottom sheet per gestire l'indicatore di caricamento del sollecito push
     bool isInvioInCorso = false;
 
     showModalBottomSheet(
@@ -128,7 +132,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       builder: (context) {
         final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
 
-        // Utilizziamo StatefulBuilder per aggiornare dinamicamente solo il pulsante durante l'invio push
         return StatefulBuilder(
             builder: (BuildContext context, StateSetter setModalState) {
               return SafeArea(
@@ -247,7 +250,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                       ),
                       const SizedBox(height: 24),
 
-                      // AGGIUNTO: PULSANTE DI SOLLECITO TRAMITE CLOUD FUNCTION
                       SizedBox(
                         width: double.infinity,
                         height: 48,
@@ -262,7 +264,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
-                              color: agOro, // Assegna il colore del brand (agOro) invece dell'allineamento
+                              color: agOro,
                               strokeWidth: 2,
                             ),
                           )
@@ -284,7 +286,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               });
 
                               if (!context.mounted) return;
-                              Navigator.pop(context); // Chiude il pannello
+                              Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('Notifica inviata con successo a $clienteNome!'),
@@ -333,6 +335,67 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     );
   }
 
+  Stream<Map<String, dynamic>> _ascoltaConfigurazioneOrariEDati() {
+    final String docIdEccezione = _dataString;
+    final String giornoSettimana = _giorniSettimanaDb[_dataSelezionata.weekday % 7];
+
+    final snapEccezioni = FirebaseFirestore.instance.collection('calendar_exceptions').doc(docIdEccezione).snapshots();
+    final snapOrariBase = FirebaseFirestore.instance.collection('settings').doc('orari_negozio').snapshots();
+
+    return StreamZip([snapEccezioni, snapOrariBase]).map((List<DocumentSnapshot> snapshotList) {
+      final docEx = snapshotList[0];
+      final docBase = snapshotList[1];
+
+      bool isNegozioAperto = true;
+      String mAp = "09:00", mCh = "13:00", pAp = "14:30", pCh = "19:30";
+      String stringaNota = "";
+
+      if (docEx.exists && docEx.data() != null) {
+        final datiEx = docEx.data() as Map<String, dynamic>;
+        stringaNota = datiEx['nota'] ?? "";
+        if (datiEx['status'] == 'chiuso') {
+          isNegozioAperto = false;
+        } else if (datiEx['status'] == 'aperto') {
+          isNegozioAperto = true;
+          if (datiEx.containsKey('mattina') && datiEx['mattina'] != null) {
+            mAp = datiEx['mattina']['apertura'] ?? mAp;
+            mCh = datiEx['mattina']['chiusura'] ?? mCh;
+          }
+          if (datiEx.containsKey('pomeriggio') && datiEx['pomeriggio'] != null) {
+            pAp = datiEx['pomeriggio']['apertura'] ?? pAp;
+            pCh = datiEx['pomeriggio']['chiusura'] ?? pCh;
+          }
+        }
+      }
+      else if (docBase.exists && docBase.data() != null) {
+        final datiBase = docBase.data() as Map<String, dynamic>;
+        if (datiBase.containsKey(giornoSettimana)) {
+          final infoGiorno = datiBase[giornoSettimana] as Map<String, dynamic>;
+          isNegozioAperto = infoGiorno['isAperto'] ?? true;
+          if (isNegozioAperto) {
+            if (infoGiorno.containsKey('mattina') && infoGiorno['mattina'] != null) {
+              mAp = infoGiorno['mattina']['apertura'] ?? mAp;
+              mCh = infoGiorno['mattina']['chiusura'] ?? mCh;
+            }
+            if (infoGiorno.containsKey('pomeriggio') && infoGiorno['pomeriggio'] != null) {
+              pAp = infoGiorno['pomeriggio']['apertura'] ?? pAp;
+              pCh = infoGiorno['pomeriggio']['chiusura'] ?? pCh;
+            }
+          }
+        }
+      }
+
+      return {
+        'isAperto': isNegozioAperto,
+        'mattinaApertura': mAp,
+        'mattinaChiusura': mCh,
+        'pomeriggioApertura': pAp,
+        'pomeriggioChiusura': pCh,
+        'nota': stringaNota,
+      };
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -342,11 +405,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     final Color coloreTestoSecondario = isDarkMode ? Colors.white70 : Colors.black54;
     final Color coloreLineeDivisione = isDarkMode ? Colors.grey.withValues(alpha: 0.25) : Colors.grey.shade300;
     final Color coloreLineeMezzora = isDarkMode ? Colors.grey.withValues(alpha: 0.12) : Colors.grey.shade200;
-
-    final int inizioMinutiTotali = oraInizioGiornata * 60;
-    final int fineMinutiTotali = oraFineGiornata * 60;
-    final int minutiTotaliGiornata = fineMinutiTotali - inizioMinutiTotali;
-    final double altezzaTotaleGriglia = minutiTotaliGiornata * altezzaPerMinuto;
 
     return Scaffold(
       backgroundColor: coloreSfondoSchermata,
@@ -442,195 +500,253 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
             Divider(height: 1, color: isDarkMode ? Colors.grey : Colors.grey.shade400),
 
-            // 3. CALENDARIO CON TIMELINE AD ALTA PRECISIONE (30 MIN)
+            // 3. TIMELINE ORIENTATA DINAMICAMENTE
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: _costruisciStreamPrenotazioni(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+              child: StreamBuilder<Map<String, dynamic>>(
+                stream: _ascoltaConfigurazioneOrariEDati(),
+                builder: (context, configSnapshot) {
+                  if (configSnapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  final prenotazioniDocs = snapshot.data?.docs ?? [];
+                  final config = configSnapshot.data ?? {
+                    'isAperto': true,
+                    'mattinaApertura': '08:00',
+                    'pomeriggioChiusura': '20:00',
+                    'nota': ''
+                  };
 
-                  List<Map<String, dynamic>> elementiCalendario = [];
-                  for (var doc in prenotazioniDocs) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final String oraInizio = data['slot'] ?? '08:00';
-                    final int inizioMinuti = _minutiDaStringa(oraInizio);
-                    final int durata = _estraiDurata(data);
-                    final int fineMinuti = inizioMinuti + durata;
+                  final bool isAperto = config['isAperto'] ?? true;
+                  final String notaAttuale = config['nota'] ?? "";
 
-                    int colonna = 0;
-                    while (true) {
-                      bool collisione = elementiCalendario.any((e) =>
-                      e['colonna'] == colonna &&
-                          ((inizioMinuti >= e['inizio'] && inizioMinuti < e['fine']) ||
-                              (fineMinuti > e['inizio'] && fineMinuti <= e['fine']) ||
-                              (inizioMinuti <= e['inizio'] && fineMinuti >= e['fine'])));
-                      if (!collisione) break;
-                      colonna++;
-                    }
-
-                    elementiCalendario.add({
-                      'data': data,
-                      'inizio': inizioMinuti,
-                      'fine': fineMinuti,
-                      'durata': durata,
-                      'colonna': colonna,
-                    });
-                  }
-
-                  return SingleChildScrollView(
-                    child: SizedBox(
-                      height: altezzaTotaleGriglia,
-                      child: Stack(
+                  if (!isAperto) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
-                            Positioned(
-                              top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                height: 30 * altezzaPerMinuto,
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    top: BorderSide(color: coloreLineeDivisione, width: 1.2),
-                                  ),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      width: larghezzaColonnaOra,
-                                      padding: const EdgeInsets.only(top: 4, left: 8),
-                                      child: Text(
-                                        "${i.toString().padLeft(2, '0')}:00",
-                                        style: TextStyle(color: coloreTestoSecondario, fontSize: 12, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                    const Expanded(child: SizedBox.shrink()),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                height: 30 * altezzaPerMinuto,
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    top: BorderSide(color: coloreLineeMezzora, width: 1, style: BorderStyle.solid),
-                                  ),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      width: larghezzaColonnaOra,
-                                      padding: const EdgeInsets.only(top: 2, left: 8),
-                                      child: Text(
-                                        "${i.toString().padLeft(2, '0')}:30",
-                                        style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w500),
-                                      ),
-                                    ),
-                                    const Expanded(child: SizedBox.shrink()),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                          Positioned(
-                            top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  top: BorderSide(color: coloreLineeDivisione, width: 1.2),
-                                ),
-                              ),
-                            ),
+                          // MODIFICATO: Sostituita Icons.door_sliding_closed con Icons.no_meeting_room per compatibilità SDK
+                          Icon(Icons.no_meeting_room, size: 64, color: Colors.red.shade400),
+                          const SizedBox(height: 16),
+                          Text(
+                            'NEGOZIO CHIUSO',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : agVerde),
                           ),
-
-                          for (var elem in elementiCalendario) ...[
-                            (() {
-                              final data = elem['data'];
-                              final int inizioMinuti = elem['inizio'];
-                              final int durata = elem['durata'];
-                              final int colonna = elem['colonna'];
-
-                              final double topPos = (inizioMinuti - inizioMinutiTotali) * altezzaPerMinuto;
-                              final double altezzaBlocco = durata * altezzaPerMinuto;
-
-                              final int maxCollisioniSuQuestoSlot = elementiCalendario
-                                  .where((e) => (inizioMinuti < e['fine'] && elem['fine'] > e['inizio']))
-                                  .map((e) => e['colonna'] as int)
-                                  .fold(0, (max, col) => col > max ? col : max) + 1;
-
-                              final double larghezzaDisponibile = MediaQuery.of(context).size.width - larghezzaColonnaOra - 20;
-                              final double larghezzaCard = larghezzaDisponibile / maxCollisioniSuQuestoSlot;
-                              final double leftPos = larghezzaColonnaOra + (colonna * larghezzaCard) + 4;
-
-                              final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
-                              final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
-                              final String oraInizioStr = data['slot'] ?? '--:--';
-                              final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
-
-                              return Positioned(
-                                top: topPos + 2,
-                                left: leftPos,
-                                width: larghezzaCard - 4,
-                                height: altezzaBlocco - 4,
-                                child: GestureDetector(
-                                  onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: agVerde.withValues(alpha: 0.95),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: agOro, width: 1.2),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.15),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        )
-                                      ],
-                                    ),
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                clienteNome,
-                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
-                                              style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 13),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }()),
+                          if (notaAttuale.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                              child: Text(
+                                notaAttuale,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.grey),
+                              ),
+                            ),
                           ],
                         ],
                       ),
-                    ),
+                    );
+                  }
+
+                  final int minInizio = _minutiDaStringa(config['mattinaApertura'] ?? '08:00');
+                  final int minFine = _minutiDaStringa(config['pomeriggioChiusura'] ?? '20:00');
+
+                  oraInizioGiornata = minInizio ~/ 60;
+                  oraFineGiornata = (minFine / 60).ceil();
+
+                  final int inizioMinutiTotali = oraInizioGiornata * 60;
+                  final int fineMinutiTotali = oraFineGiornata * 60;
+                  final int minutiTotaliGiornata = fineMinutiTotali - inizioMinutiTotali;
+                  final double altezzaTotaleGriglia = minutiTotaliGiornata * altezzaPerMinuto;
+
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: _costruisciStreamPrenotazioni(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final prenotazioniDocs = snapshot.data?.docs ?? [];
+
+                      List<Map<String, dynamic>> elementiCalendario = [];
+                      for (var doc in prenotazioniDocs) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final String oraInizio = data['slot'] ?? '08:00';
+                        final int inizioMinuti = _minutiDaStringa(oraInizio);
+                        final int durata = _estraiDurata(data);
+                        final int fineMinuti = inizioMinuti + durata;
+
+                        int colonna = 0;
+                        while (true) {
+                          bool collisione = elementiCalendario.any((e) =>
+                          e['colonna'] == colonna &&
+                              ((inizioMinuti >= e['inizio'] && inizioMinuti < e['fine']) ||
+                                  (fineMinuti > e['inizio'] && fineMinuti <= e['fine']) ||
+                                  (inizioMinuti <= e['inizio'] && fineMinuti >= e['fine'])));
+                          if (!collisione) break;
+                          colonna++;
+                        }
+
+                        elementiCalendario.add({
+                          'data': data,
+                          'inizio': inizioMinuti,
+                          'fine': fineMinuti,
+                          'durata': durata,
+                          'colonna': colonna,
+                        });
+                      }
+
+                      return SingleChildScrollView(
+                        child: SizedBox(
+                          height: altezzaTotaleGriglia,
+                          child: Stack(
+                            children: [
+                              for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
+                                Positioned(
+                                  top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
+                                  left: 0,
+                                  right: 0,
+                                  child: Container(
+                                    height: 30 * altezzaPerMinuto,
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        top: BorderSide(color: coloreLineeDivisione, width: 1.2),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          width: larghezzaColonnaOra,
+                                          padding: const EdgeInsets.only(top: 4, left: 8),
+                                          child: Text(
+                                            "${i.toString().padLeft(2, '0')}:00",
+                                            style: TextStyle(color: coloreTestoSecondario, fontSize: 12, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        const Expanded(child: SizedBox.shrink()),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
+                                  left: 0,
+                                  right: 0,
+                                  child: Container(
+                                    height: 30 * altezzaPerMinuto,
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        top: BorderSide(color: coloreLineeMezzora, width: 1, style: BorderStyle.solid),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          width: larghezzaColonnaOra,
+                                          padding: const EdgeInsets.only(top: 2, left: 8),
+                                          child: Text(
+                                            "${i.toString().padLeft(2, '0')}:30",
+                                            style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w500),
+                                          ),
+                                        ),
+                                        const Expanded(child: SizedBox.shrink()),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              Positioned(
+                                top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
+                                left: 0,
+                                right: 0,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide(color: coloreLineeDivisione, width: 1.2),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              for (var elem in elementiCalendario) ...[
+                                (() {
+                                  final data = elem['data'];
+                                  final int inizioMinuti = elem['inizio'];
+                                  final int durata = elem['durata'];
+                                  final int colonna = elem['colonna'];
+
+                                  final double topPos = (inizioMinuti - inizioMinutiTotali) * altezzaPerMinuto;
+                                  final double altezzaBlocco = durata * altezzaPerMinuto;
+
+                                  final int maxCollisioniSuQuestoSlot = elementiCalendario
+                                      .where((e) => (inizioMinuti < e['fine'] && elem['fine'] > e['inizio']))
+                                      .map((e) => e['colonna'] as int)
+                                      .fold(0, (max, col) => col > max ? col : max) + 1;
+
+                                  final double larghezzaDisponibile = MediaQuery.of(context).size.width - larghezzaColonnaOra - 20;
+                                  final double larghezzaCard = larghezzaDisponibile / maxCollisioniSuQuestoSlot;
+                                  final double leftPos = larghezzaColonnaOra + (colonna * larghezzaCard) + 4;
+
+                                  final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
+                                  final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
+                                  final String oraInizioStr = data['slot'] ?? '--:--';
+                                  final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
+
+                                  return Positioned(
+                                    top: topPos + 2,
+                                    left: leftPos,
+                                    width: larghezzaCard - 4,
+                                    height: altezzaBlocco - 4,
+                                    child: GestureDetector(
+                                      onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: agVerde.withValues(alpha: 0.95),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: agOro, width: 1.2),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.15),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            )
+                                          ],
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    clienteNome,
+                                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
+                                                  style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 13),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }()),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -651,5 +767,47 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     }
 
     return query.orderBy('slot').snapshots();
+  }
+}
+
+class StreamZip<T> extends StreamView<List<T>> {
+  StreamZip(Iterable<Stream<T>> streams) : super(_zip(streams));
+
+  static Stream<List<T>> _zip<T>(Iterable<Stream<T>> streams) {
+    StreamController<List<T>>? mainController;
+
+    mainController = StreamController<List<T>>(onListen: () {
+      final listatiSotto = <StreamSubscription<T>>[];
+      final codeElementi = List.generate(streams.length, (_) => <T>[]);
+
+      void controllaEInvia() {
+        if (codeElementi.every((c) => c.isNotEmpty)) {
+          final smazzati = codeElementi.map((c) => c.removeAt(0)).toList();
+          mainController!.add(smazzati);
+        }
+      }
+
+      int idx = 0;
+      for (var stream in streams) {
+        final currentIdx = idx;
+        listatiSotto.add(stream.listen((dati) {
+          codeElementi[currentIdx].add(dati);
+          controllaEInvia();
+        }, onError: mainController!.addError, onDone: () {
+          if (codeElementi[currentIdx].isEmpty) {
+            mainController!.close();
+          }
+        }));
+        idx++;
+      }
+
+      mainController!.onCancel = () async {
+        for (var sub in listatiSotto) {
+          await sub.cancel();
+        }
+      };
+    });
+
+    return mainController.stream;
   }
 }
