@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // AGGIUNTO: Necessario per i filtri di testo (digitsOnly)
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Necessario per recuperare il token del dispositivo
 import 'package:flutter/foundation.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -17,14 +18,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _recuperoEmailController = TextEditingController();
-  // AGGIUNTO: Controller per il campo telefono opzionale
   final _telefonoController = TextEditingController();
 
   final FocusNode _nomeCognomeFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
-  // AGGIUNTO: FocusNode per il campo telefono opzionale
-  final FocusNode _telefonoFocus = FocusNode();
+  final _telefonoFocus = FocusNode();
 
   bool _isLogin = true;
   bool _isLoading = false;
@@ -35,15 +34,14 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _recuperoEmailController.dispose();
-    _telefonoController.dispose(); // AGGIUNTO: Smaltimento controller telefono
+    _telefonoController.dispose();
     _nomeCognomeFocus.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
-    _telefonoFocus.dispose(); // AGGIUNTO: Smaltimento focus telefono
+    _telefonoFocus.dispose();
     super.dispose();
   }
 
-  // CORREZIONE UTILITY: Posiziona il cursore alla fine del testo senza selezionarlo
   void _resettaSelezioneTesto(TextEditingController controller) {
     final text = controller.text;
     controller.value = TextEditingValue(
@@ -165,7 +163,6 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // MODIFICATO: Controllo rigoroso sulle 10 cifre del cellulare in fase di registrazione
     if (!_isLogin) {
       final String telInserito = _telefonoController.text.trim();
       if (telInserito.isNotEmpty) {
@@ -183,7 +180,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // MODIFICATO: Controllo preventivo sulla blacklist delle email inserite in banned_emails
       final String emailNormalizzata = email.toLowerCase();
       final banDoc = await FirebaseFirestore.instance
           .collection('banned_emails')
@@ -201,20 +197,37 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
         setState(() => _isLoading = false);
-        return; // Interrompe il processo impedendo il login o la registrazione
+        return;
       }
+
+      UserCredential? userCredential;
 
       if (_isLogin) {
         if (kIsWeb) {
           await FirebaseAuth.instance.setSettings(appVerificationDisabledForTesting: false);
         }
 
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
+        userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
+
+        // MODIFICATO: Aggiorna il token anche al momento del login se il dispositivo è cambiato
+        if (userCredential.user != null && !kIsWeb) {
+          try {
+            final String? token = await FirebaseMessaging.instance.getToken();
+            if (token != null) {
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(userCredential.user!.uid)
+                  .update({'fcmToken': token});
+            }
+          } catch (e) {
+            debugPrint("Impossibile aggiornare l'fcmToken al login: $e");
+          }
+        }
       } else {
-        UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
@@ -222,9 +235,20 @@ class _LoginScreenState extends State<LoginScreen> {
         if (userCredential.user != null) {
           await userCredential.user!.updateDisplayName(_nomeCognomeController.text.trim());
 
-          // AGGIUNTO: Estrazione del valore del telefono (se vuoto, imposta la stringa standard)
           final String telInserito = _telefonoController.text.trim();
           final String telefonoFinale = telInserito.isNotEmpty ? telInserito : 'Nessun cellulare';
+
+          // MODIFICATO: Recupero preventivo dell'fcmToken del dispositivo in fase di registrazione
+          String? token;
+          if (!kIsWeb) {
+            try {
+              // Richiede i permessi per le notifiche push
+              await FirebaseMessaging.instance.requestPermission();
+              token = await FirebaseMessaging.instance.getToken();
+            } catch (e) {
+              debugPrint("Errore nel recupero dell'fcmToken alla registrazione: $e");
+            }
+          }
 
           await FirebaseFirestore.instance
               .collection('users')
@@ -233,7 +257,8 @@ class _LoginScreenState extends State<LoginScreen> {
             'name': _nomeCognomeController.text.trim(),
             'email': email,
             'role': 'cliente',
-            'phone': telefonoFinale, // AGGIUNTO: Salvataggio campo telefono su Firestore
+            'phone': telefonoFinale,
+            'fcmToken': token ?? '', // AGGIUNTO: Salvataggio nativo del token per i solleciti push
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
@@ -334,14 +359,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // MODIFICATO: Campo telefono bloccato a un massimo di 10 cifre e filtrato per soli numeri
                   TextField(
                     controller: _telefonoController,
                     focusNode: _telefonoFocus,
-                    maxLength: 10, // Blocca l'inserimento alla decima cifra
+                    maxLength: 10,
                     style: TextStyle(color: coloreTestoInput),
                     inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly, // Impedisce caratteri speciali, lettere o spazi bianchi
+                      FilteringTextInputFormatter.digitsOnly,
                     ],
                     onTap: () => _resettaSelezioneTesto(_telefonoController),
                     onTapOutside: (event) => _telefonoFocus.unfocus(),
@@ -428,7 +452,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     _nomeCognomeController.clear();
                     _emailController.clear();
                     _passwordController.clear();
-                    _telefonoController.clear(); // AGGIUNTO: Pulisce il campo telefono al cambio modalità
+                    _telefonoController.clear();
                   }),
                   child: Text(
                     _isLogin

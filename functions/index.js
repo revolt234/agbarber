@@ -180,3 +180,97 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3", cors: true }, 
     throw new HttpsError("internal", error.message);
   }
 });
+// Esportazione completa e aggiornata nel file index.js delle tue Cloud Functions
+
+exports.inviaSollecitoCliente = onCall({ region: "europe-west3", cors: true }, async (request) => {
+  const auth = request.auth;
+  const data = request.data;
+
+  // 1. Verifica di sicurezza: il mittente deve essere autenticato
+  if (!auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Devi essere autenticato per eseguire questa operazione."
+    );
+  }
+
+  const { userIdCliente } = data;
+  if (!userIdCliente) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Il parametro 'userIdCliente' è obbligatorio."
+    );
+  }
+
+  try {
+    const db = admin.firestore();
+
+    // 2. Controllo dei permessi: solo un barbiere può inviare solleciti
+    const callerDoc = await db.collection("users").doc(auth.uid).get();
+    if (!callerDoc.exists || callerDoc.data().role !== "barbiere") {
+      throw new HttpsError(
+        "permission-denied",
+        "Non hai i permessi per inviare un sollecito a questo cliente."
+      );
+    }
+
+    // 3. Recupero del documento del cliente per estrarre il token di notifica (fcmToken)
+    const clientDoc = await db.collection("users").doc(userIdCliente).get();
+    if (!clientDoc.exists) {
+      throw new HttpsError("not-found", "Impossibile trovare il profilo del cliente.");
+    }
+
+    const clienteData = clientDoc.data();
+    const fcmToken = clienteData.fcmToken || clienteData.pushToken;
+
+    if (!fcmToken) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Il cliente non ha le notifiche push attive o un dispositivo registrato."
+      );
+    }
+
+    // 4. Costruzione e invio del payload della notifica push tramite Firebase Cloud Messaging
+    const messaggioPush = {
+      token: fcmToken,
+      notification: {
+        title: "Il barbiere ti aspetta! 💈",
+        body: "Ehi dove sei? Il barbiere ti sta aspettando al salone!",
+      },
+      android: {
+        priority: "high",
+        notification: {
+          sound: "default",
+          // CORRETTO: Sostituito clickAction (deprecato) con click_action in snake_case richiesto da Android
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+          icon: "ic_stat_name",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1,
+            // AGGIUNTO: Forza la categoria di click action anche per i dispositivi iOS
+            category: "FLUTTER_NOTIFICATION_CLICK",
+          },
+        },
+      },
+      // Il blocco data globale permette a Flutter di intercettare il tap sia a schermo spento che in background
+      data: {
+        click_action: "FLUTTER_NOTIFICATION_CLICK",
+        type: "sollecito",
+      }
+    };
+
+    // Invia il messaggio al dispositivo del cliente
+    await admin.messaging().send(messaggioPush);
+
+    return { success: true, message: "Sollecito inviato con successo al dispositivo del cliente." };
+
+  } catch (error) {
+    console.error("Errore durante l'invio del sollecito push:", error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError("internal", error.message);
+  }
+});

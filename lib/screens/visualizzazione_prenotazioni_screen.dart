@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario per invocare la Cloud Function di sollecito
 
 class VisualizzazionePrenotazioniScreen extends StatefulWidget {
   const VisualizzazionePrenotazioniScreen({super.key});
@@ -83,7 +85,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     }
   }
 
-  // MODIFICATO: Cambiato in asincrono per poter prelevare il telefono aggiornato direttamente dalla collezione users se manca nell'appuntamento
   void _mostraDettagliAppuntamento(Map<String, dynamic> data, String oraInizioStr, String oraFineStr, int durata) async {
     final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
     final String operatoreNome = data['barberName'] ?? 'Qualsiasi';
@@ -91,10 +92,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
     final String? clienteId = data['userId'];
 
-    // Recupero iniziale dall'appuntamento
     String? telefonoGreggio = data['phone'] ?? data['phoneNumber'];
 
-    // Se non è memorizzato nell'appuntamento ma abbiamo il clienteId, interroghiamo direttamente il profilo dell'utente
     if ((telefonoGreggio == null || telefonoGreggio.trim().isEmpty || telefonoGreggio.trim() == 'Nessun cellulare') && clienteId != null) {
       try {
         final userDoc = await FirebaseFirestore.instance.collection('users').doc(clienteId).get();
@@ -116,6 +115,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     if (!mounted) return;
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
+    // Definiamo una variabile di stato locale al bottom sheet per gestire l'indicatore di caricamento del sollecito push
+    bool isInvioInCorso = false;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
@@ -125,101 +127,207 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       ),
       builder: (context) {
         final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        clienteNome.toUpperCase(),
-                        style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 20),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: agVerde,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
-                        style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                    ),
-                  ],
-                ),
-                Divider(color: isDarkMode ? Colors.grey : Colors.grey.shade300, height: 24),
-                Row(
-                  children: [
-                    Icon(Icons.access_time, color: agOro, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Orario: $oraInizioStr - $oraFineStr ($durata min)',
-                      style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
 
-                // AGGIUNTO: Visualizzazione del numero di telefono recuperato dal documento della prenotazione o in tempo reale dal profilo utente
-                Row(
-                  children: [
-                    Icon(Icons.phone, color: agOro, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Cellulare: ${telefonoValido ?? "Nessun cellulare disponibile"}',
-                      style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                Row(
-                  children: [
-                    Icon(Icons.person, color: agOro, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Operatore: $operatoreNome',
-                      style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.content_cut, color: agOro, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Servizio: ${servizi.join(", ")}',
-                        style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14, fontStyle: FontStyle.italic),
+        // Utilizziamo StatefulBuilder per aggiornare dinamicamente solo il pulsante durante l'invio push
+        return StatefulBuilder(
+            builder: (BuildContext context, StateSetter setModalState) {
+              return SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              clienteNome.toUpperCase(),
+                              style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 20),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: agVerde,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
+                              style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 18),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: agVerde,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('CHIUDI', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Divider(color: isDarkMode ? Colors.grey : Colors.grey.shade300, height: 24),
+                      Row(
+                        children: [
+                          Icon(Icons.access_time, color: agOro, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Orario: $oraInizioStr - $oraFineStr ($durata min)',
+                            style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Icon(Icons.phone, color: agOro, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Cellulare: ',
+                            style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
+                          ),
+                          if (telefonoValido != null)
+                            Flexible(
+                              child: GestureDetector(
+                                onTap: () async {
+                                  final String numeroPulito = telefonoValido.replaceAll(RegExp(r'[^\d+]'), '');
+                                  final Uri telUri = Uri(scheme: 'tel', path: numeroPulito);
+                                  try {
+                                    await launchUrl(telUri, mode: LaunchMode.externalApplication);
+                                  } catch (e) {
+                                    debugPrint("Errore durante l'apertura del dialer nativo: $e");
+                                  }
+                                },
+                                behavior: HitTestBehavior.opaque,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      telefonoValido,
+                                      style: const TextStyle(
+                                        color: Colors.blue,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.open_in_new, color: Colors.blue, size: 14),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else
+                            Text(
+                              "Nessun cellulare disponibile",
+                              style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Icon(Icons.person, color: agOro, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Operatore: $operatoreNome',
+                            style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.content_cut, color: agOro, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Servizio: ${servizi.join(", ")}',
+                              style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14, fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // AGGIUNTO: PULSANTE DI SOLLECITO TRAMITE CLOUD FUNCTION
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: agOro, width: 1.5),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            foregroundColor: agOro,
+                          ),
+                          icon: isInvioInCorso
+                              ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: agOro, // Assegna il colore del brand (agOro) invece dell'allineamento
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : const Icon(Icons.notification_important, size: 20),
+                          label: Text(
+                            isInvioInCorso ? 'INVIO IN CORSO...' : 'SOLLECITA CLIENTE',
+                            style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                          ),
+                          onPressed: (isInvioInCorso || clienteId == null)
+                              ? null
+                              : () async {
+                            setModalState(() => isInvioInCorso = true);
+                            try {
+                              final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                  .httpsCallable('inviaSollecitoCliente');
+
+                              await callable.call(<String, dynamic>{
+                                'userIdCliente': clienteId,
+                              });
+
+                              if (!context.mounted) return;
+                              Navigator.pop(context); // Chiude il pannello
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Notifica inviata con successo a $clienteNome!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            } catch (e) {
+                              setModalState(() => isInvioInCorso = false);
+                              String erroreDettaglio = 'Impossibile inviare il sollecito push.';
+
+                              if (e.toString().contains('failed-precondition')) {
+                                erroreDettaglio = 'Il cliente non ha abilitato le notifiche push sul telefono.';
+                              }
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(erroreDettaglio),
+                                  backgroundColor: Colors.orange.shade800,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: agVerde,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('CHIUDI', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
+              );
+            }
         );
       },
     );

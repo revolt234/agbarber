@@ -3,6 +3,7 @@ import 'dart:io'; // Per verificare lo stato della rete reale
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Necessario per recuperare il token FCM aggiornato
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:prenotazionibarbiere/screens/prenotazione_calendario_screen.dart';
 import 'login_screen.dart'; // Importato per permettere il reindirizzamento alla LoginScreen
@@ -50,9 +51,34 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
         ?.requestNotificationsPermission();
   }
 
+  // AGGIUNTO: Funzione asincrona di allineamento del token in background all'avvio dell'app per sessioni persistenti
+  Future<void> _sincronizzaTokenFCM(String uid) async {
+    if (kIsWeb) return;
+    try {
+      // Verifica o richiede i permessi per le notifiche push remota
+      await FirebaseMessaging.instance.requestPermission();
+
+      // Preleva il token FCM rigenerato dall'aggiornamento dell'app
+      String? tokenAttuale = await FirebaseMessaging.instance.getToken();
+
+      if (tokenAttuale != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .update({'fcmToken': tokenAttuale});
+        debugPrint("Token FCM sincronizzato correttamente all'avvio per la sessione attiva.");
+      }
+    } catch (e) {
+      debugPrint("Errore silenzioso sincronizzazione token all'avvio: $e");
+    }
+  }
+
   void _ascoltaNomeUtenteInTempoReale() {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
+      // MODIFICATO: Sincronizziamo il token preventivamente non appena rileviamo l'utente loggato in persistenza
+      _sincronizzaTokenFCM(user.uid);
+
       _userSubscription = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -494,7 +520,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Impossibile proseguire: connessione internet assente o instabile.'),
+                            content: Text('Impossibile proseguire: connessione internet assente or instabile.'),
                             backgroundColor: Colors.red,
                             duration: Duration(seconds: 3),
                           ),
