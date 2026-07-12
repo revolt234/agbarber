@@ -449,6 +449,212 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   int _minutiDaStringa(String s) => int.parse(s.split(':')[0]) * 60 + int.parse(s.split(':')[1]);
   String _formattaData(DateTime d) => "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
+  Widget _costruisciChipPreavviso({
+    required BuildContext context,
+    required String label,
+    required int minuti,
+    required bool attivo,
+    required ValueChanged<int> alCambio
+  }) {
+    final bool isDarkModeLocal = Theme.of(context).brightness == Brightness.dark;
+
+    return ChoiceChip(
+      label: Text(label),
+      selected: attivo,
+      selectedColor: const Color(0xFFE2B13C),
+      backgroundColor: isDarkModeLocal ? const Color(0xFF2C2C2E) : Colors.grey.shade200,
+      labelStyle: TextStyle(
+        color: attivo ? Colors.black : (isDarkModeLocal ? Colors.white : Colors.black87),
+        fontWeight: FontWeight.bold,
+      ),
+      onSelected: (bool selected) {
+        if (selected) alCambio(minuti);
+      },
+    );
+  }
+
+  void _mostraPannelloConferma(BuildContext context, String oraSelezionata, String dataStr) {
+    int minutiPreavvisoSelezionati = 30;
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+      useSafeArea: true,
+      isDismissible: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (bottomSheetContext) {
+        final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 24.0, bottom: 32.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'RIASSUNTO PRENOTAZIONE',
+                      style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5),
+                    ),
+                    Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
+
+                    Text('Servizio: ${widget.servizioNome}', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 6),
+                    Text('Data: $dataStr all\'orario $oraSelezionata', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 6),
+                    Text('Operatore: $_barbiereSelezionatoNome', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
+
+                    Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
+
+                    Text(
+                      'Quando vuoi ricevere il promemoria?',
+                      style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _costruisciChipPreavviso(context: context, label: '30 Min', minuti: 30, attivo: minutiPreavvisoSelezionati == 30, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
+                        _costruisciChipPreavviso(context: context, label: '1 Ora', minuti: 60, attivo: minutiPreavvisoSelezionati == 60, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
+                        _costruisciChipPreavviso(context: context, label: '2 Ore', minuti: 120, attivo: minutiPreavvisoSelezionati == 120, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
+                      ],
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE2B13C),
+                          foregroundColor: const Color(0xFF121212),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        // MODIFICATO: Controllo di abilitazione delegato alla variabile locale _isSaving per rispondere in tempo reale
+                        onPressed: _isSaving
+                            ? null
+                            : () async {
+                          setModalState(() => _isSaving = true);
+                          setState(() => _isSaving = true);
+
+                          try {
+                            final user = FirebaseAuth.instance.currentUser;
+                            if (user == null) throw 'Utente non autenticato';
+
+                            final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                .httpsCallable('creaPrenotazioneSicura');
+
+                            final HttpsCallableResult response = await callable.call(<String, dynamic>{
+                              'date': dataStr,
+                              'slot': oraSelezionata,
+                              'duration': widget.servizioDurata,
+                              'barberId': _barbiereSelezionatoId,
+                              'barberName': _barbiereSelezionatoNome,
+                              'serviceNome': widget.servizioNome,
+                              'servicePrezzo': widget.servizioPrezzo,
+                            });
+
+                            final Map<String, dynamic> datiRisposta = Map<String, dynamic>.from(response.data as Map);
+
+                            if (datiRisposta['success'] != true) throw 'SLOT_OCCUPATO';
+
+                            final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
+
+                            try {
+                              await NotificationService().pianificaNotificaFlessibile(
+                                idNotifica: idAppuntamentoGenerato.hashCode,
+                                dataStr: dataStr,
+                                slotStr: oraSelezionata,
+                                servizi: widget.servizioNome,
+                                minutiPreavviso: minutiPreavvisoSelezionati,
+                              );
+                            } catch (e) {
+                              debugPrint("Errore notifiche flessibili: $e");
+                            }
+
+                            if (!bottomSheetContext.mounted) return;
+                            Navigator.pop(bottomSheetContext); // Chiude il pannello solo a transazione completata con successo
+
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Prenotazione effettuata con successo!'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+
+                            Navigator.of(context).popUntil((route) => route.isFirst);
+
+                          } catch (e) {
+                            setModalState(() => _isSaving = false);
+                            if (!context.mounted) return;
+                            setState(() {
+                              _isSaving = false;
+                              _orarioSelezionato = null;
+                            });
+                            Navigator.pop(bottomSheetContext); // Chiude il pannello in caso di errore per aggiornare gli slot grafici
+                            ScaffoldMessenger.of(context).clearSnackBars();
+
+                            String messaggioErrore = 'Errore di connessione. Impossibile salvare la prenotazione.';
+                            Color coloreSfondo = Colors.red;
+
+                            if (e == 'SLOT_OCCUPATO' || e.toString().contains('already-exists')) {
+                              messaggioErrore = 'Spiacenti! Questo orario è stato appena prenotato da un altro cliente. Scegli un altro slot.';
+                              coloreSfondo = Colors.orange.shade900;
+                              _aggiornaSlotOrari();
+                            }
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(messaggioErrore),
+                                backgroundColor: coloreSfondo,
+                                duration: const Duration(seconds: 5),
+                              ),
+                            );
+                          }
+                        },
+                        child: _isSaving
+                            ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(color: Color(0xFF121212), strokeWidth: 2),
+                        )
+                            : const Text('CONFERMA PRENOTAZIONE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.grey, width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          foregroundColor: Colors.grey,
+                        ),
+                        onPressed: () => Navigator.pop(bottomSheetContext),
+                        child: const Text('CAMBIA ORARIO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -668,7 +874,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                   bool sel = _orarioSelezionato == ora;
 
                   return GestureDetector(
-                    onTap: _isSaving ? null : () => setState(() => _orarioSelezionato = ora),
+                    onTap: _isSaving
+                        ? null
+                        : () {
+                      setState(() => _orarioSelezionato = ora);
+                      _mostraPannelloConferma(context, ora, dataStr);
+                    },
                     child: Container(
                       decoration: BoxDecoration(
                         color: sel ? const Color(0xFFE2B13C) : coloreSfondoCardSpenta,
@@ -694,128 +905,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
               ))),
             ),
           ],
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(left: 20.0, right: 20.0, bottom: 16.0),
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE2B13C),
-              minimumSize: const Size.fromHeight(54),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
-            onPressed: (_barbiereSelezionatoId == null || _orarioSelezionato == null || _isSaving)
-                ? null
-                : () {
-              showDialog(
-                context: context,
-                builder: (dialogContext) => AlertDialog(
-                  backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-                  title: Text('Conferma Prenotazione', style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87)),
-                  content: Text(
-                    'Servizio: ${widget.servizioNome}\nData: $dataStr\nOra: $_orarioSelezionato\nCon: $_barbiereSelezionatoNome',
-                    style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black87),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      child: const Text('Modifica'),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        Navigator.pop(dialogContext);
-                        setState(() => _isSaving = true);
-
-                        try {
-                          final user = FirebaseAuth.instance.currentUser;
-                          if (user == null) throw 'Utente non autenticato';
-
-                          // MODIFICATO: Rimossa l'intera transazione client-side complessa
-                          // Ora viene invocata direttamente la Cloud Function per gestire l'inserimento atomico sul server
-                          final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-                              .httpsCallable('creaPrenotazioneSicura');
-
-                          final HttpsCallableResult response = await callable.call(<String, dynamic>{
-                            'date': dataStr,
-                            'slot': _orarioSelezionato,
-                            'duration': widget.servizioDurata,
-                            'barberId': _barbiereSelezionatoId,
-                            'barberName': _barbiereSelezionatoNome,
-                            'serviceNome': widget.servizioNome,
-                            'servicePrezzo': widget.servizioPrezzo,
-                          });
-
-                          final Map<String, dynamic> datiRisposta = Map<String, dynamic>.from(response.data as Map);
-
-                          if (datiRisposta['success'] != true) throw 'SLOT_OCCUPATO';
-
-                          final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
-
-                          try {
-                            await NotificationService().pianificaNotificaAppuntamento(
-                              idNotifica: idAppuntamentoGenerato.hashCode,
-                              dataStr: dataStr,
-                              slotStr: _orarioSelezionato!,
-                              servizi: widget.servizioNome,
-                            );
-                          } catch (e) {
-                            debugPrint("Errore notifiche: $e");
-                          }
-
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).clearSnackBars();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Prenotazione effettuata con successo!'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-
-                          Navigator.of(context).popUntil((route) => route.isFirst);
-
-                        } catch (e) {
-                          if (!context.mounted) return;
-                          setState(() {
-                            _isSaving = false;
-                            // AGGIUNGI QUESTA RIGA PER DISABILITARE IL PULSANTE FINCHÉ NON VIENE SCELTO UN NUOVO ORARIO
-                            _orarioSelezionato = null;
-                          });
-                          ScaffoldMessenger.of(context).clearSnackBars();
-
-                          String messaggioErrore = 'Errore di connessione. Impossibile salvare la prenotazione.';
-                          Color coloreSfondo = Colors.red;
-
-                          // Intercetta sia l'errore esplicito lanciato dal nostro controllo che l'eccezione nativa della Cloud Function (already-exists)
-                          if (e == 'SLOT_OCCUPATO' || e.toString().contains('already-exists')) {
-                            messaggioErrore = 'Spiacenti! Questo orario è stato appena prenotato da un altro cliente. Scegli un altro slot.';
-                            coloreSfondo = Colors.orange.shade900;
-                            _aggiornaSlotOrari();
-                          }
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(messaggioErrore),
-                              backgroundColor: coloreSfondo,
-                              duration: const Duration(seconds: 5),
-                            ),
-                          );
-                        }
-                      },
-                      child: const Text('Conferma Prenotazione', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              );
-            },
-            child: _isSaving
-                ? const SizedBox(
-              height: 24,
-              width: 24,
-              child: CircularProgressIndicator(color: Color(0xFF121212), strokeWidth: 2.5),
-            )
-                : const Text('Conferma Prenotazione', style: TextStyle(color: Color(0xFF121212), fontSize: 18, fontWeight: FontWeight.bold)),
-          ),
         ),
       ),
     );

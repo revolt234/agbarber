@@ -98,6 +98,58 @@ class NotificationService {
     }
   }
 
+  /// Pianifica una notifica locale con preavviso flessibile (30 min, 1h, 2h) prima dell'appuntamento
+  Future<void> pianificaNotificaFlessibile({
+    required int idNotifica,
+    required String dataStr,
+    required String slotStr,
+    required String servizi,
+    required int minutiPreavviso,
+  }) async {
+    try {
+      final DateTime orarioAppuntamento = DateFormat("yyyy-MM-dd HH:mm").parse("$dataStr $slotStr");
+
+      // Sottrae il tempo scelto dinamicamente dal pannello (30, 60 o 120 minuti)
+      final DateTime orarioNotifica = orarioAppuntamento.subtract(Duration(minutes: minutiPreavviso));
+
+      if (orarioNotifica.isBefore(DateTime.now())) return;
+
+      final tz.TZDateTime tzOrarioNotifica = tz.TZDateTime.from(orarioNotifica, tz.local);
+
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'ag_barber_reminders',
+        'Promemoria Appuntamenti',
+        channelDescription: 'Notifiche inviate prima del taglio di capelli',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        color: Color(0xFF164638),
+      );
+
+      const NotificationDetails platformDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      );
+
+      await _notificationsPlugin.zonedSchedule(
+        id: idNotifica,
+        title: '💈 Promemoria AG Barber!',
+        body: 'Il tuo appuntamento per "$servizi" inizierà a breve!',
+        scheduledDate: tzOrarioNotifica,
+        notificationDetails: platformDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print("Errore nella pianificazione flessibile della notifica: $e");
+      }
+    }
+  }
+
   /// Cancella una notifica (utile se l'appuntamento viene eliminato o disdetto)
   Future<void> cancellaNotifica(int idNotifica) async {
     // CORRETTO: Aggiunto 'id:' richiesto esplicitamente dalla v22+
