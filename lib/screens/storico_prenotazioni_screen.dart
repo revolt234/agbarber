@@ -82,7 +82,7 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
 
             try {
               final DateTime orarioAppuntamento = DateFormat("yyyy-MM-dd HH:mm").parse("$dateStr $slotStr");
-              final DateTime limiteVisualizzazione = orarioAppuntamento.add(const Duration(hours: 1));
+              final DateTime limiteVisualizzazione = orarioAppuntamento.add(const Duration(hours:12));
 
               if (adesso.isBefore(limiteVisualizzazione)) {
                 prenotazioniValide.add(doc);
