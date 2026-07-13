@@ -82,11 +82,16 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
 
             try {
               final DateTime orarioAppuntamento = DateFormat("yyyy-MM-dd HH:mm").parse("$dateStr $slotStr");
-              final DateTime limiteVisualizzazione = orarioAppuntamento.add(const Duration(hours:12));
+
+              // Limite temporale per nascondere visivamente l'appuntamento (12 ore dopo)
+              final DateTime limiteVisualizzazione = orarioAppuntamento.add(const Duration(hours: 12));
+              // Limite temporale per cancellare definitivamente da Firestore (1 settimana dopo)
+              final DateTime limiteRimozioneFirestore = orarioAppuntamento.add(const Duration(days: 7));
 
               if (adesso.isBefore(limiteVisualizzazione)) {
                 prenotazioniValide.add(doc);
-              } else {
+              } else if (adesso.isAfter(limiteRimozioneFirestore)) {
+                // MODIFICATO: Viene rimosso fisicamente da Firestore solo se è passata più di 1 settimana
                 FirebaseFirestore.instance
                     .collection('appointments')
                     .doc(doc.id)
@@ -114,7 +119,6 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
               final String ora = data['slot'] ?? '--:--';
               final String barber = data['barberName'] ?? 'Operatore';
               final List servizi = data['services'] ?? [];
-              // MODIFICATO: Lettura adattiva del prezzo convertito a double per evitare crash legati al tipo
               final double prezzo = (data['totalPrice'] ?? 0.0).toDouble();
 
               String dataFormattata = dataApp;
@@ -170,7 +174,6 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            // MODIFICATO: Formattazione del prezzo double con due cifre decimali e virgola
                             '€ ${prezzo.toStringAsFixed(2).replaceAll('.', ',')}',
                             style: const TextStyle(
                               color: agOro,

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario per invocare la Cloud Function di sollecito
+import 'package:cloud_functions/cloud_functions.dart';
 
 class VisualizzazionePrenotazioniScreen extends StatefulWidget {
   const VisualizzazionePrenotazioniScreen({super.key});
@@ -16,9 +16,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   DateTime _dataSelezionata = DateTime.now();
   String? _operatoreSelezionato; // null significa "Tutti"
 
-  // Configurazione Griglia Oraria Dinamica (Inizializzata con valori di fallback)
-  int oraInizioGiornata = 8;  // Verrà sovrascritto dinamicamente
-  int oraFineGiornata = 20;   // Verrà sovrascritto dinamicamente
+  // Configurazione Griglia Oraria Dinamica
+  int oraInizioGiornata = 8;
+  int oraFineGiornata = 20;
   final double altezzaPerMinuto = 1.6;
   final double larghezzaColonnaOra = 65.0;
 
@@ -48,7 +48,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     if (data.containsKey('duration')) return data['duration'];
     if (data.containsKey('totalDuration')) return data['totalDuration'];
     if (data.containsKey('services_duration')) return data['services_duration'];
-    return 30; // default 30 min
+    return 30;
   }
 
   Future<void> _selezionaData(BuildContext context) async {
@@ -90,12 +90,24 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     }
   }
 
-  void _mostraDettagliAppuntamento(Map<String, dynamic> data, String oraInizioStr, String oraFineStr, int durata) async {
+  void _mostraDettagliAppuntamento(Map<String, dynamic> data, String oraInizioStr, String oraFineStr, int durata, String appointmentId) async {
     final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
     final String operatoreNome = data['barberName'] ?? 'Qualsiasi';
     final List servizi = data['services'] ?? [];
     final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
     final String? clienteId = data['userId'];
+    final String dataApp = data['date'] ?? '';
+
+    bool mostraSelettorePresenza = false;
+    try {
+      final DateTime orarioInizioApp = DateFormat("yyyy-MM-dd HH:mm").parse("$dataApp $oraInizioStr");
+      final DateTime limiteSoglia = orarioInizioApp.add(const Duration(hours: 1));
+      if (DateTime.now().isAfter(limiteSoglia)) {
+        mostraSelettorePresenza = true;
+      }
+    } catch (e) {
+      debugPrint("Errore parsing data appuntamento: $e");
+    }
 
     String? telefonoGreggio = data['phone'] ?? data['phoneNumber'];
 
@@ -124,208 +136,276 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (context) {
         final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
 
         return StatefulBuilder(
             builder: (BuildContext context, StateSetter setModalState) {
-              return SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              clienteNome.toUpperCase(),
-                              style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 20),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: agVerde,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
-                              style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 18),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Divider(color: isDarkMode ? Colors.grey : Colors.grey.shade300, height: 24),
-                      Row(
-                        children: [
-                          Icon(Icons.access_time, color: agOro, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Orario: $oraInizioStr - $oraFineStr ($durata min)',
-                            style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      Row(
-                        children: [
-                          Icon(Icons.phone, color: agOro, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Cellulare: ',
-                            style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
-                          ),
-                          if (telefonoValido != null)
-                            Flexible(
-                              child: GestureDetector(
-                                onTap: () async {
-                                  final String numeroPulito = telefonoValido.replaceAll(RegExp(r'[^\d+]'), '');
-                                  final Uri telUri = Uri(scheme: 'tel', path: numeroPulito);
-                                  try {
-                                    await launchUrl(telUri, mode: LaunchMode.externalApplication);
-                                  } catch (e) {
-                                    debugPrint("Errore durante l'apertura del dialer nativo: $e");
-                                  }
-                                },
-                                behavior: HitTestBehavior.opaque,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      telefonoValido,
-                                      style: const TextStyle(
-                                        color: Colors.blue,
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        decoration: TextDecoration.underline,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Icon(Icons.open_in_new, color: Colors.blue, size: 14),
-                                  ],
-                                ),
+              return Container(
+                padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+                decoration: BoxDecoration(
+                  color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                clienteNome.toUpperCase(),
+                                style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 20),
                               ),
-                            )
-                          else
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: agVerde,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
+                                style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 18),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Divider(color: isDarkMode ? Colors.grey : Colors.grey.shade300, height: 24),
+                        Row(
+                          children: [
+                            Icon(Icons.access_time, color: agOro, size: 20),
+                            const SizedBox(width: 8),
                             Text(
-                              "Nessun cellulare disponibile",
+                              'Orario: $oraInizioStr - $oraFineStr ($durata min)',
+                              style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          children: [
+                            Icon(Icons.phone, color: agOro, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Cellulare: ',
                               style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
+                            if (telefonoValido != null)
+                              Flexible(
+                                child: GestureDetector(
+                                  onTap: () async {
+                                    final String numeroPulito = telefonoValido.replaceAll(RegExp(r'[^\d+]'), '');
+                                    final Uri telUri = Uri(scheme: 'tel', path: numeroPulito);
+                                    try {
+                                      await launchUrl(telUri, mode: LaunchMode.externalApplication);
+                                    } catch (e) {
+                                      debugPrint("Errore durante l'apertura del dialer nativo: $e");
+                                    }
+                                  },
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        telefonoValido,
+                                        style: const TextStyle(
+                                          color: Colors.blue,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(Icons.open_in_new, color: Colors.blue, size: 14),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            else
+                              Text(
+                                "Nessun cellulare disponibile",
+                                style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
 
-                      Row(
-                        children: [
-                          Icon(Icons.person, color: agOro, size: 20),
-                          const SizedBox(width: 8),
+                        Row(
+                          children: [
+                            Icon(Icons.person, color: agOro, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Operatore: $operatoreNome',
+                              style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.content_cut, color: agOro, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Servizio: ${servizi.join(", ")}',
+                                style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14, fontStyle: FontStyle.italic),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        if (mostraSelettorePresenza) ...[
+                          Divider(color: isDarkMode ? Colors.grey : Colors.grey.shade300, height: 24),
                           Text(
-                            'Operatore: $operatoreNome',
-                            style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
+                            'IL CLIENTE SI È PRESENTATO?',
+                            style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.content_cut, color: agOro, size: 20),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Servizio: ${servizi.join(", ")}',
-                              style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14, fontStyle: FontStyle.italic),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: agOro, width: 1.5),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            foregroundColor: agOro,
-                          ),
-                          icon: isInvioInCorso
-                              ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: agOro,
-                              strokeWidth: 2,
-                            ),
-                          )
-                              : const Icon(Icons.notification_important, size: 20),
-                          label: Text(
-                            isInvioInCorso ? 'INVIO IN CORSO...' : 'SOLLECITA CLIENTE',
-                            style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                          ),
-                          onPressed: (isInvioInCorso || clienteId == null)
-                              ? null
-                              : () async {
-                            setModalState(() => isInvioInCorso = true);
-                            try {
-                              final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-                                  .httpsCallable('inviaSollecitoCliente');
-
-                              await callable.call(<String, dynamic>{
-                                'userIdCliente': clienteId,
-                              });
-
-                              if (!context.mounted) return;
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Notifica inviata con successo a $clienteNome!'),
-                                  backgroundColor: Colors.green,
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              ChoiceChip(
+                                label: const Text('SI'),
+                                selected: data['presentato'] == 'si',
+                                selectedColor: Colors.green,
+                                labelStyle: TextStyle(
+                                  color: data['presentato'] == 'si' ? Colors.white : (isDarkMode ? Colors.white : Colors.black),
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              );
-                            } catch (e) {
-                              setModalState(() => isInvioInCorso = false);
-                              String erroreDettaglio = 'Impossibile inviare il sollecito push.';
+                                onSelected: (bool selected) async {
+                                  if (selected && clienteId != null && data['presentato'] != 'si') {
+                                    if (data['presentato'] == 'no') {
+                                      await FirebaseFirestore.instance.collection('users').doc(clienteId).update({
+                                        'appuntamentisaltati': FieldValue.increment(-1)
+                                      });
+                                    }
+                                    await FirebaseFirestore.instance.collection('appointments').doc(appointmentId).update({
+                                      'presentato': 'si'
+                                    });
+                                    setModalState(() {
+                                      data['presentato'] = 'si';
+                                    });
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 12),
+                              ChoiceChip(
+                                label: const Text('NO'),
+                                selected: data['presentato'] == 'no',
+                                selectedColor: Colors.red,
+                                labelStyle: TextStyle(
+                                  color: data['presentato'] == 'no' ? Colors.white : (isDarkMode ? Colors.white : Colors.black),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                onSelected: (bool selected) async {
+                                  if (selected && clienteId != null && data['presentato'] != 'no') {
+                                    await FirebaseFirestore.instance.collection('users').doc(clienteId).update({
+                                      'appuntamentisaltati': FieldValue.increment(1)
+                                    });
+                                    await FirebaseFirestore.instance.collection('appointments').doc(appointmentId).update({
+                                      'presentato': 'no'
+                                    });
+                                    setModalState(() {
+                                      data['presentato'] = 'no';
+                                    });
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
 
-                              if (e.toString().contains('failed-precondition')) {
-                                erroreDettaglio = 'Il cliente non ha abilitato le notifiche push sul telefono.';
+                        const SizedBox(height: 24),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: agOro, width: 1.5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              foregroundColor: agOro,
+                            ),
+                            icon: isInvioInCorso
+                                ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: agOro,
+                                strokeWidth: 2,
+                              ),
+                            )
+                                : const Icon(Icons.notification_important, size: 20),
+                            label: Text(
+                              isInvioInCorso ? 'INVIO IN CORSO...' : 'SOLLECITA CLIENTE',
+                              style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                            ),
+                            onPressed: (isInvioInCorso || clienteId == null)
+                                ? null
+                                : () async {
+                              setModalState(() => isInvioInCorso = true);
+                              try {
+                                final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                    .httpsCallable('inviaSollecitoCliente');
+
+                                await callable.call(<String, dynamic>{
+                                  'userIdCliente': clienteId,
+                                });
+
+                                if (!context.mounted) return;
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Notifica inviata con successo a $clienteNome!'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              } catch (e) {
+                                setModalState(() => isInvioInCorso = false);
+                                String erroreDettaglio = 'Impossibile inviare il sollecito push.';
+
+                                if (e.toString().contains('failed-precondition')) {
+                                  erroreDettaglio = 'Il cliente non ha abilitato le notifiche push sul telefono.';
+                                }
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(erroreDettaglio),
+                                    backgroundColor: Colors.orange.shade800,
+                                  ),
+                                );
                               }
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(erroreDettaglio),
-                                  backgroundColor: Colors.orange.shade800,
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: agVerde,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            },
                           ),
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('CHIUDI', style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: agVerde,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('CHIUDI', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -394,6 +474,18 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         'nota': stringaNota,
       };
     });
+  }
+
+  Stream<QuerySnapshot> _costruisciStreamPrenotazioni() {
+    Query query = FirebaseFirestore.instance
+        .collection('appointments')
+        .where('date', isEqualTo: _dataString);
+
+    if (_operatoreSelezionato != null) {
+      query = query.where('barberId', isEqualTo: _operatoreSelezionato);
+    }
+
+    return query.orderBy('slot').snapshots();
   }
 
   @override
@@ -524,7 +616,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // MODIFICATO: Sostituita Icons.door_sliding_closed con Icons.no_meeting_room per compatibilità SDK
                           Icon(Icons.no_meeting_room, size: 64, color: Colors.red.shade400),
                           const SizedBox(height: 16),
                           Text(
@@ -587,6 +678,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                         }
 
                         elementiCalendario.add({
+                          'id': doc.id,
                           'data': data,
                           'inizio': inizioMinuti,
                           'fine': fineMinuti,
@@ -672,6 +764,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               for (var elem in elementiCalendario) ...[
                                 (() {
                                   final data = elem['data'];
+                                  final String appointmentId = elem['id'];
                                   final int inizioMinuti = elem['inizio'];
                                   final int durata = elem['durata'];
                                   final int colonna = elem['colonna'];
@@ -699,7 +792,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                     width: larghezzaCard - 4,
                                     height: altezzaBlocco - 4,
                                     child: GestureDetector(
-                                      onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata),
+                                      onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata, appointmentId),
                                       child: Container(
                                         decoration: BoxDecoration(
                                           color: agVerde.withValues(alpha: 0.95),
@@ -755,18 +848,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         ),
       ),
     );
-  }
-
-  Stream<QuerySnapshot> _costruisciStreamPrenotazioni() {
-    Query query = FirebaseFirestore.instance
-        .collection('appointments')
-        .where('date', isEqualTo: _dataString);
-
-    if (_operatoreSelezionato != null) {
-      query = query.where('barberId', isEqualTo: _operatoreSelezionato);
-    }
-
-    return query.orderBy('slot').snapshots();
   }
 }
 

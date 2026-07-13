@@ -128,7 +128,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   }
 
   Future<void> _precaricaDisponibilitaStrisciaGiorni() async {
-    setState(() => _isPreloadingGiorni = true);
+    setState(() => _isPreloadingGiorni = false);
     _conteggioSlotPerGiorno.clear();
     _giorniFiltratiVisibili.clear();
 
@@ -479,182 +479,177 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       useSafeArea: true,
-      isDismissible: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (bottomSheetContext) {
         final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
 
-        // Calcolo dinamico dello spazio inferiore introdotto dalla barra di navigazione nativa (back/home)
-        final double paddingBarraSistema = MediaQuery.of(bottomSheetContext).padding.bottom;
-
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            return SafeArea(
-              bottom: false, // Disabilitato qui per iniettarlo direttamente nel SingleChildScrollView ed evitare sovrapposizioni esterne
-              child: SingleChildScrollView(
-                // MODIFICATO: Il padding inferiore somma l'altezza del sistema a quella interna per fare uscire il pannello sopra la barra nativa
-                padding: EdgeInsets.only(
-                    left: 24.0,
-                    right: 24.0,
-                    top: 24.0,
-                    bottom: 32.0 + paddingBarraSistema
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'RIASSUNTO PRENOTAZIONE',
-                      style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5),
-                    ),
-                    Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
+            return Container(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              decoration: BoxDecoration(
+                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'RIASSUNTO PRENOTAZIONE',
+                        style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5),
+                      ),
+                      Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
 
-                    Text('Servizio: ${widget.servizioNome}', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
-                    const SizedBox(height: 6),
-                    Text('Data: $dataStr all\'orario $oraSelezionata', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
-                    const SizedBox(height: 6),
-                    Text('Operatore: $_barbiereSelezionatoNome', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
+                      Text('Servizio: ${widget.servizioNome}', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 6),
+                      Text('Data: $dataStr all\'orario $oraSelezionata', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 6),
+                      Text('Operatore: $_barbiereSelezionatoNome', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
 
-                    Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
+                      Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
 
-                    Text(
-                      'Quando vuoi ricevere il promemoria?',
-                      style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _costruisciChipPreavviso(context: context, label: '30 Min', minuti: 30, attivo: minutiPreavvisoSelezionati == 30, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
-                        _costruisciChipPreavviso(context: context, label: '1 Ora', minuti: 60, attivo: minutiPreavvisoSelezionati == 60, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
-                        _costruisciChipPreavviso(context: context, label: '2 Ore', minuti: 120, attivo: minutiPreavvisoSelezionati == 120, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
-                      ],
-                    ),
+                      Text(
+                        'Quando vuoi ricevere il promemoria?',
+                        style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _costruisciChipPreavviso(context: context, label: '30 Min', minuti: 30, attivo: minutiPreavvisoSelezionati == 30, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
+                          _costruisciChipPreavviso(context: context, label: '1 Ora', minuti: 60, attivo: minutiPreavvisoSelezionati == 60, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
+                          _costruisciChipPreavviso(context: context, label: '2 Ore', minuti: 120, attivo: minutiPreavvisoSelezionati == 120, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
+                        ],
+                      ),
 
-                    const SizedBox(height: 28),
+                      const SizedBox(height: 28),
 
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE2B13C),
-                          foregroundColor: const Color(0xFF121212),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: _isSaving
-                            ? null
-                            : () async {
-                          setModalState(() => _isSaving = true);
-                          setState(() => _isSaving = true);
-
-                          try {
-                            final user = FirebaseAuth.instance.currentUser;
-                            if (user == null) throw 'Utente non autenticato';
-
-                            final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-                                .httpsCallable('creaPrenotazioneSicura');
-
-                            final HttpsCallableResult response = await callable.call(<String, dynamic>{
-                              'date': dataStr,
-                              'slot': oraSelezionata,
-                              'duration': widget.servizioDurata,
-                              'barberId': _barbiereSelezionatoId,
-                              'barberName': _barbiereSelezionatoNome,
-                              'serviceNome': widget.servizioNome,
-                              'servicePrezzo': widget.servizioPrezzo,
-                            });
-
-                            final Map<String, dynamic> datiRisposta = Map<String, dynamic>.from(response.data as Map);
-
-                            if (datiRisposta['success'] != true) throw 'SLOT_OCCUPATO';
-
-                            final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFE2B13C),
+                            foregroundColor: const Color(0xFF121212),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: _isSaving
+                              ? null
+                              : () async {
+                            setModalState(() => _isSaving = true);
+                            setState(() => _isSaving = true);
 
                             try {
-                              await NotificationService().pianificaNotificaFlessibile(
-                                idNotifica: idAppuntamentoGenerato.hashCode,
-                                dataStr: dataStr,
-                                slotStr: oraSelezionata,
-                                servizi: widget.servizioNome,
-                                minutiPreavviso: minutiPreavvisoSelezionati,
+                              final user = FirebaseAuth.instance.currentUser;
+                              if (user == null) throw 'Utente non autenticato';
+
+                              final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                  .httpsCallable('creaPrenotazioneSicura');
+
+                              final HttpsCallableResult response = await callable.call(<String, dynamic>{
+                                'date': dataStr,
+                                'slot': oraSelezionata,
+                                'duration': widget.servizioDurata,
+                                'barberId': _barbiereSelezionatoId,
+                                'barberName': _barbiereSelezionatoNome,
+                                'serviceNome': widget.servizioNome,
+                                'servicePrezzo': widget.servizioPrezzo,
+                              });
+
+                              final Map<String, dynamic> datiRisposta = Map<String, dynamic>.from(response.data as Map);
+
+                              if (datiRisposta['success'] != true) throw 'SLOT_OCCUPATO';
+
+                              final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
+
+                              try {
+                                await NotificationService().pianificaNotificaFlessibile(
+                                  idNotifica: idAppuntamentoGenerato.hashCode,
+                                  dataStr: dataStr,
+                                  slotStr: oraSelezionata,
+                                  servizi: widget.servizioNome,
+                                  minutiPreavviso: minutiPreavvisoSelezionati,
+                                );
+                              } catch (e) {
+                                debugPrint("Errore notifiche flessibili: $e");
+                              }
+
+                              if (!bottomSheetContext.mounted) return;
+                              Navigator.pop(bottomSheetContext);
+
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).clearSnackBars();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Prenotazione effettuata con successo!'),
+                                  backgroundColor: Colors.green,
+                                ),
                               );
+
+                              Navigator.of(context).popUntil((route) => route.isFirst);
+
                             } catch (e) {
-                              debugPrint("Errore notifiche flessibili: $e");
+                              setModalState(() => _isSaving = false);
+                              if (!context.mounted) return;
+                              setState(() {
+                                _isSaving = false;
+                                _orarioSelezionato = null;
+                              });
+                              Navigator.pop(bottomSheetContext);
+                              ScaffoldMessenger.of(context).clearSnackBars();
+
+                              String messaggioErrore = 'Errore di connessione. Impossibile salvare la prenotazione.';
+                              Color coloreSfondo = Colors.red;
+
+                              if (e == 'SLOT_OCCUPATO' || e.toString().contains('already-exists')) {
+                                messaggioErrore = 'Spiacenti! Questo orario è stato appena prenotato da un altro cliente. Scegli un altro slot.';
+                                coloreSfondo = Colors.orange.shade900;
+                                _aggiornaSlotOrari();
+                              }
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(messaggioErrore),
+                                  backgroundColor: coloreSfondo,
+                                  duration: const Duration(seconds: 5),
+                                ),
+                              );
                             }
-
-                            if (!bottomSheetContext.mounted) return;
-                            Navigator.pop(bottomSheetContext);
-
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).clearSnackBars();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Prenotazione effettuata con successo!'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-
-                            Navigator.of(context).popUntil((route) => route.isFirst);
-
-                          } catch (e) {
-                            setModalState(() => _isSaving = false);
-                            if (!context.mounted) return;
-                            setState(() {
-                              _isSaving = false;
-                              _orarioSelezionato = null;
-                            });
-                            Navigator.pop(bottomSheetContext);
-                            ScaffoldMessenger.of(context).clearSnackBars();
-
-                            String messaggioErrore = 'Errore di connessione. Impossibile salvare la prenotazione.';
-                            Color coloreSfondo = Colors.red;
-
-                            if (e == 'SLOT_OCCUPATO' || e.toString().contains('already-exists')) {
-                              messaggioErrore = 'Spiacenti! Questo orario è stato appena prenotato da un altro cliente. Scegli un altro slot.';
-                              coloreSfondo = Colors.orange.shade900;
-                              _aggiornaSlotOrari();
-                            }
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(messaggioErrore),
-                                backgroundColor: coloreSfondo,
-                                duration: const Duration(seconds: 5),
-                              ),
-                            );
-                          }
-                        },
-                        child: _isSaving
-                            ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(color: Color(0xFF121212), strokeWidth: 2),
-                        )
-                            : const Text('CONFERMA PRENOTAZIONE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.grey, width: 1.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          foregroundColor: Colors.grey,
+                          },
+                          child: _isSaving
+                              ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(color: Color(0xFF121212), strokeWidth: 2),
+                          )
+                              : const Text('CONFERMA PRENOTAZIONE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                         ),
-                        onPressed: () => Navigator.pop(bottomSheetContext),
-                        child: const Text('CAMBIA ORARIO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       ),
-                    ),
-                  ],
+
+                      const SizedBox(height: 12),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.grey, width: 1.5),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            foregroundColor: Colors.grey,
+                          ),
+                          onPressed: () => Navigator.pop(bottomSheetContext),
+                          child: const Text('CAMBIA ORARIO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -917,5 +912,47 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
         ),
       ),
     );
+  }
+}
+
+class StreamZip<T> extends StreamView<List<T>> {
+  StreamZip(Iterable<Stream<T>> streams) : super(_zip(streams));
+
+  static Stream<List<T>> _zip<T>(Iterable<Stream<T>> streams) {
+    StreamController<List<T>>? mainController;
+
+    mainController = StreamController<List<T>>(onListen: () {
+      final listatiSotto = <StreamSubscription<T>>[];
+      final codeElementi = List.generate(streams.length, (_) => <T>[]);
+
+      void controllaEInvia() {
+        if (codeElementi.every((c) => c.isNotEmpty)) {
+          final smazzati = codeElementi.map((c) => c.removeAt(0)).toList();
+          mainController!.add(smazzati);
+        }
+      }
+
+      int idx = 0;
+      for (var stream in streams) {
+        final currentIdx = idx;
+        listatiSotto.add(stream.listen((dati) {
+          codeElementi[currentIdx].add(dati);
+          controllaEInvia();
+        }, onError: mainController!.addError, onDone: () {
+          if (codeElementi[currentIdx].isEmpty) {
+            mainController!.close();
+          }
+        }));
+        idx++;
+      }
+
+      mainController!.onCancel = () async {
+        for (var sub in listatiSotto) {
+          await sub.cancel();
+        }
+      };
+    });
+
+    return mainController.stream;
   }
 }
