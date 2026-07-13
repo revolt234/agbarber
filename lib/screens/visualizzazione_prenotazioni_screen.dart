@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // AGGIUNTO: Necessario per il recupero forzato del token utente corretto
 
 class VisualizzazionePrenotazioniScreen extends StatefulWidget {
   const VisualizzazionePrenotazioniScreen({super.key});
@@ -359,6 +360,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                 : () async {
                               setModalState(() => isInvioInCorso = true);
                               try {
+                                // MODIFICATO: Forza il refresh immediato del token utente per evitare la scadenza delle credenziali OAuth2 su iOS
+                                await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
                                 final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
                                     .httpsCallable('inviaSollecitoCliente');
 
