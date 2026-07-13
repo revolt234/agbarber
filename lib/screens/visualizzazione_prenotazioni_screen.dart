@@ -217,13 +217,16 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(
-                                        telefonoValido,
-                                        style: const TextStyle(
-                                          color: Colors.blue,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold,
-                                          decoration: TextDecoration.underline,
+                                      Flexible(
+                                        child: Text(
+                                          telefonoValido,
+                                          style: const TextStyle(
+                                            color: Colors.blue,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            decoration: TextDecoration.underline,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                       const SizedBox(width: 4),
@@ -373,16 +376,21 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                 );
                               } catch (e) {
                                 setModalState(() => isInvioInCorso = false);
-                                String erroreDettaglio = 'Impossibile inviare il sollecito push.';
 
-                                if (e.toString().contains('failed-precondition')) {
+                                // MODIFICATO: Estrae il messaggio di errore nativo proveniente dalle Cloud Functions per diagnostica
+                                String erroreDettaglio = e is FirebaseFunctionsException
+                                    ? e.message ?? e.toString()
+                                    : e.toString();
+
+                                if (erroreDettaglio.contains('failed-precondition')) {
                                   erroreDettaglio = 'Il cliente non ha abilitato le notifiche push sul telefono.';
                                 }
 
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text(erroreDettaglio),
+                                    content: Text('Errore: $erroreDettaglio'),
                                     backgroundColor: Colors.orange.shade800,
+                                    duration: const Duration(seconds: 5),
                                   ),
                                 );
                               }

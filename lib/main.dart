@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io'; // AGGIUNTO: Necessario per verificare la piattaforma (Platform.isIOS)
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -43,14 +44,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // --- CONTROLLO ORIENTAMENTO DINAMICO (SOLO TABLET IN LANDSCAPE) ---
-    // Spostato qui per garantire l'inizializzazione nativa della View su iOS
     final views = WidgetsBinding.instance.platformDispatcher.views;
     if (views.isNotEmpty) {
       final data = MediaQueryData.fromView(views.first);
       bool isTablet = data.size.shortestSide >= 600;
 
       if (isTablet) {
-        // Se tablet: sblocca tutte le rotazioni
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.portraitUp,
           DeviceOrientation.portraitDown,
@@ -58,18 +57,15 @@ class MyApp extends StatelessWidget {
           DeviceOrientation.landscapeRight,
         ]);
       } else {
-        // Se smartphone: blocca tassativamente in verticale
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.portraitUp,
           DeviceOrientation.portraitDown,
         ]);
       }
     } else {
-      // Fallback di sicurezza in caso di mancata inizializzazione della view al millesimo di secondo
       SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     }
 
-    // Definizione dei colori ufficiali del logo AG Barber
     const Color agVerde = Color(0xFF164638);
     const Color agOro = Color(0xFFE2B13C);
 
@@ -82,9 +78,8 @@ class MyApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [
-        Locale('it', 'IT'), // Configura l'italiano come lingua supportata
+        Locale('it', 'IT'),
       ],
-      // TEMA CHIARO
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: agVerde,
@@ -95,8 +90,6 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF4F6F5),
         useMaterial3: true,
       ),
-
-      // TEMA SCURO
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: agVerde,
@@ -108,7 +101,6 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF101715),
         useMaterial3: true,
       ),
-
       themeMode: ThemeMode.system,
       home: const AuthGate(),
     );
@@ -123,20 +115,51 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  // Riferimento per cancellare la sottoscrizione allo stream quando il widget viene distrutto
+  StreamSubscription<String>? _tokenRefreshSubscription;
+  String? _currentUid;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controllaAggiornamentoObbligatorio();
     });
+
+    // MODIFICATO: Inizializza l'ascolto globale del cambio token (onTokenRefresh) come consigliato dall'articolo
+    _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+      if (_currentUid != null) {
+        await _salvaTokenSuFirestore(_currentUid!, newToken);
+      }
+    });
   }
 
-  // AGGIUNTO: Funzione per richiedere autorizzazione APNs Apple ed inviare il token sicuro a Firestore
+  @override
+  void dispose() {
+    _tokenRefreshSubscription?.cancel();
+    super.dispose();
+  }
+
+  // Funzione isolata per scrivere i dati in modo pulito ed evitare duplicazioni di codice
+  Future<void> _salvaTokenSuFirestore(String uid, String token) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'fcmToken': token,
+        'pushToken': token,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      debugPrint("FCM Token sincronizzato con successo su Firestore.");
+    } catch (e) {
+      debugPrint("Errore durante il salvataggio del token su Firestore: $e");
+    }
+  }
+
+  // MODIFICATO: Implementata la logica di Bounded Retry (max 5 secondi) per evitare la Race Condition nativa su iOS
   Future<void> _configuraNotifichePushRemote(String uid) async {
+    _currentUid = uid; // Memorizza l'uid corrente per l'onTokenRefresh
     try {
       FirebaseMessaging messaging = FirebaseMessaging.instance;
 
-      // Richiesta permessi espliciti ad Apple (provisional impostato rigorosamente su false)
       NotificationSettings settings = await messaging.requestPermission(
         alert: true,
         announcement: false,
@@ -148,25 +171,27 @@ class _AuthGateState extends State<AuthGate> {
       );
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        // Se il client è un iPhone, attende la sincronizzazione nativa con i server APNs
         if (Platform.isIOS) {
-          String? apnsToken = await messaging.getAPNSToken();
-          if (apnsToken == null) {
-            await Future.delayed(const Duration(seconds: 3));
+          // Soluzione dell'articolo: 10 tentativi da 500ms ciascuno per attendere l'APNs nativo
+          String? apnsToken;
+          for (int i = 0; i < 10; i++) {
             apnsToken = await messaging.getAPNSToken();
+            if (apnsToken != null) break;
+            await Future.delayed(const Duration(milliseconds: 500));
+          }
+
+          if (apnsToken == null) {
+            debugPrint("APNs fallito o non ancora pronto dopo 5 secondi di tentativi.");
+            return; // Interrompe per evitare di richiedere un FCM token nullo
           }
           debugPrint("APNs Token validato con successo: $apnsToken");
         }
 
-        // Generazione del token Firebase Cloud Messaging definitivo
+        // Generazione del token definitivo sicuro
         String? fcmToken = await messaging.getToken();
 
         if (fcmToken != null && fcmToken.isNotEmpty) {
-          await FirebaseFirestore.instance.collection('users').doc(uid).update({
-            'fcmToken': fcmToken,
-            'pushToken': fcmToken,
-          });
-          debugPrint("FCM Token registrato correttamente nel database.");
+          await _salvaTokenSuFirestore(uid, fcmToken);
         }
       }
     } catch (e) {
@@ -261,14 +286,13 @@ class _AuthGateState extends State<AuthGate> {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // MODIFICATO: Se non ci sono credenziali d'accesso, l'app avvia la Home in modalità Ospite per Apple Review compliance
         if (!snapshot.hasData) {
+          _currentUid = null;
           return const ClienteHomePage(nomeUtente: "Ospite");
         }
 
         final User user = snapshot.data!;
 
-        // AGGIUNTO: Esegue la configurazione e il salvataggio asincrono del token push appena l'utente è autenticato
         _configuraNotifichePushRemote(user.uid);
 
         return StreamBuilder<DocumentSnapshot>(
@@ -299,9 +323,6 @@ class _AuthGateState extends State<AuthGate> {
   }
 }
 
-/// -----------------------------------------------------------------------
-/// INTERFACCIA CLIENTE (A 3 SEZIONI: HOME, PRENOTAZIONI, UTENTE)
-/// -----------------------------------------------------------------------
 class ClienteHomePage extends StatefulWidget {
   final String nomeUtente;
 
@@ -312,12 +333,12 @@ class ClienteHomePage extends StatefulWidget {
 }
 
 class _ClienteHomePageState extends State<ClienteHomePage> {
-  int _indiceSelezionato = 0; // Default posizionato sulla prima scheda: 'Home' (Listino)
+  int _indiceSelezionato = 0;
 
   late final List<Widget> _pagine = [
-    const PrenotazioneServiziScreen(), // Indice 0: Listino Servizi
-    const StoricoPrenotazioniScreen(), // Indice 1: Storico Appuntamenti
-    const ProfileScreen(),             // Indice 2: Profilo Utente
+    const PrenotazioneServiziScreen(),
+    const StoricoPrenotazioniScreen(),
+    const ProfileScreen(),
   ];
 
   @override
@@ -325,13 +346,12 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
     const Color agVerde = Color(0xFF164638);
     const Color agOro = Color(0xFFE2B13C);
 
-    // MODIFICATO: Rilevazione dinamica del tema di sistema per rendere adattiva l'area inferiore delle schede (tasti e sfondi)
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final Color coloreSfondoAdattivo = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
     final Color coloreNavAdattiva = isDarkMode ? const Color(0xFF121212) : Colors.white;
 
     return Scaffold(
-      backgroundColor: coloreSfondoAdattivo, // MODIFICATO: Sfondo della pagina ora dinamico
+      backgroundColor: coloreSfondoAdattivo,
       appBar: _indiceSelezionato == 0
           ? AppBar(
         leading: Padding(
@@ -348,7 +368,7 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
         backgroundColor: agVerde,
         centerTitle: true,
         actions: const [
-          SizedBox(width: 48), // Mantiene la simmetria visiva con il logo a sinistra
+          SizedBox(width: 48),
         ],
       )
           : null,
@@ -366,9 +386,9 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
           });
         },
         type: BottomNavigationBarType.fixed,
-        backgroundColor: coloreNavAdattiva, // MODIFICATO: Lo sfondo dell'area dei tasti si adatta dinamicamente
+        backgroundColor: coloreNavAdattiva,
         selectedItemColor: agOro,
-        unselectedItemColor: isDarkMode ? Colors.grey : Colors.grey.shade600, // MODIFICATO: Ottimizzato il colore dei tasti non selezionati
+        unselectedItemColor: isDarkMode ? Colors.grey : Colors.grey.shade600,
         selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
         unselectedLabelStyle: const TextStyle(fontSize: 12),
         items: const [
@@ -389,13 +409,9 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
     );
   }
 
-  // Getter di sicurezza interno per la lista delle pagine
   List<Widget>? get _ppages => null;
 }
 
-/// -----------------------------------------------------------------------
-/// INTERFACCIA BARBIERE (ADMIN)
-/// -----------------------------------------------------------------------
 class BarbiereHomePage extends StatelessWidget {
   const BarbiereHomePage({super.key});
 
@@ -450,7 +466,6 @@ class BarbiereHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Rilevazione dinamica del tema di sistema (Light/Dark) per rendere adattivo lo sfondo
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final Color coloreSfondoAdattivo = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
 
@@ -470,7 +485,6 @@ class BarbiereHomePage extends StatelessWidget {
           ),
         ],
       ),
-      // MODIFICATO: Avvolto il body in un SafeArea per respingere i tasti di navigazione dello smartphone dello staff
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -643,7 +657,6 @@ class BarbiereHomePage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // AGGIUNTO: Nuovo ingresso per la schermata di gestione dei clienti iscritti
               Card(
                 elevation: 4,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
