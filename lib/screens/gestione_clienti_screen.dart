@@ -22,6 +22,153 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
     super.dispose();
   }
 
+  void _mostraPannelloImpostazioniCliente({
+    required String uid,
+    required String nome,
+    required String email,
+    required int appuntamentiSaltati,
+    required bool isBannato,
+  }) {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color agOro = const Color(0xFFE2B13C);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (bottomSheetContext) {
+        final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              decoration: BoxDecoration(
+                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'OPZIONI GESTIONE UTENTE',
+                        style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5),
+                      ),
+                      Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
+
+                      Text('Cliente: ${nome.toUpperCase()}', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      Text('Email: $email', style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14)),
+
+                      Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
+
+                      // INFORMAZIONE APPUNTAMENTI SALTATI
+                      Row(
+                        children: [
+                          Icon(Icons.event_busy, color: appuntamentiSaltati > 0 ? Colors.red : agOro, size: 22),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Appuntamenti saltati: ',
+                            style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
+                          ),
+                          Text(
+                            '$appuntamentiSaltati',
+                            style: TextStyle(
+                              color: appuntamentiSaltati > 0 ? Colors.red : Colors.green,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 28),
+
+                      // PRIMO BOTTONE: DISABILITA / ABILITA UTENTE
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isBannato ? Colors.green : Colors.orange.shade900,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          icon: Icon(isBannato ? Icons.lock_open : Icons.block, size: 20),
+                          label: Text(
+                            isBannato ? 'SBLOCCA ACCESSO EMAIL' : 'BLOCCA ACCESSO EMAIL',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(bottomSheetContext);
+                            if (isBannato) {
+                              _mostraConfermaSblocco(email, nome);
+                            } else {
+                              _mostraConfermaBlocco(email, nome);
+                            }
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // SECONDO BOTTONE: RIMUOVI ACCOUNT
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          icon: const Icon(Icons.delete_forever, size: 20),
+                          label: const Text(
+                            'ELIMINA ACCOUNT DEFINITIVAMENTE',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(bottomSheetContext);
+                            _mostraConfermaEliminazione(uid, nome);
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+                      Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 1),
+                      const SizedBox(height: 16),
+
+                      // TERZO BOTTONE: CHIUDI PANNELLO
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade400, width: 1.5),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            foregroundColor: isDarkMode ? Colors.white70 : Colors.black87,
+                          ),
+                          onPressed: () => Navigator.pop(bottomSheetContext),
+                          child: const Text('CHIUDI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _mostraConfermaEliminazione(String uid, String nomeCliente) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
@@ -439,6 +586,10 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                     dati['phone'] ??
                                         'Nessun cellulare';
 
+                                // Lettura dinamica del contatore appuntamenti saltati
+                                final int appuntamentiSaltati =
+                                    dati['appuntamentisaltati'] ?? 0;
+
                                 final bool isBannato = emailBannate.contains(
                                   email.trim().toLowerCase(),
                                 );
@@ -507,47 +658,20 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                         ],
                                       ),
                                     ),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        isBannato
-                                            ? IconButton(
-                                          icon: const Icon(
-                                            Icons.lock_open,
-                                            color: Colors.green,
-                                          ),
-                                          tooltip: 'Sblocca email',
-                                          onPressed:
-                                              () => _mostraConfermaSblocco(
-                                            email,
-                                            nome,
-                                          ),
-                                        )
-                                            : IconButton(
-                                          icon: const Icon(
-                                            Icons.block,
-                                            color: Colors.orange,
-                                          ),
-                                          tooltip: 'Blocca email',
-                                          onPressed:
-                                              () => _mostraConfermaBlocco(
-                                            email,
-                                            nome,
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.delete_forever,
-                                            color: Colors.red,
-                                          ),
-                                          tooltip: 'Elimina account',
-                                          onPressed:
-                                              () => _mostraConfermaEliminazione(
-                                            uid,
-                                            nome,
-                                          ),
-                                        ),
-                                      ],
+                                    // MODIFICATO: Sostituiti i vecchi bottoni con l'icona impostazioni singola
+                                    trailing: IconButton(
+                                      icon: const Icon(
+                                        Icons.settings,
+                                        color: Color(0xFFE2B13C),
+                                      ),
+                                      tooltip: 'Impostazioni cliente',
+                                      onPressed: () => _mostraPannelloImpostazioniCliente(
+                                        uid: uid,
+                                        nome: nome,
+                                        email: email,
+                                        appuntamentiSaltati: appuntamentiSaltati,
+                                        isBannato: isBannato,
+                                      ),
                                     ),
                                   ),
                                 );

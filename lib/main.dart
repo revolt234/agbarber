@@ -351,6 +351,55 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
 class BarbiereHomePage extends StatelessWidget {
   const BarbiereHomePage({super.key});
 
+  void _mostraConfermaDisconnessione(BuildContext context) {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          title: Text(
+            'Disconnetti',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Sei sicuro di voler uscire dal pannello admin?',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Annulla',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade900),
+              onPressed: () async {
+                Navigator.pop(context);
+                await FirebaseAuth.instance.signOut();
+              },
+              child: const Text(
+                'Esci',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Rilevazione dinamica del tema di sistema (Light/Dark) per rendere adattivo lo sfondo
@@ -369,7 +418,7 @@ class BarbiereHomePage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Color(0xFF164638)),
-            onPressed: () => FirebaseAuth.instance.signOut(),
+            onPressed: () => _mostraConfermaDisconnessione(context),
           ),
         ],
       ),

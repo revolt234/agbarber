@@ -16,15 +16,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
   bool _isLoading = false;
   String _telefonoCorrente = "Caricamento..."; // AGGIUNTO: Stato locale per il numero di telefono
+  int _appuntamentiSaltati = 0; // AGGIUNTO: Stato locale per gli appuntamenti saltati
 
   @override
   void initState() {
     super.initState();
-    _recuperaTelefonoIniziale(); // AGGIUNTO: Recupera il telefono all'avvio della schermata
+    _recuperaDatiIniziali(); // MODIFICATO: Cambiato nome per riflettere il recupero completo
   }
 
-  // AGGIUNTO: Funzione per leggere il numero di telefono corrente da Firestore
-  Future<void> _recuperaTelefonoIniziale() async {
+  // MODIFICATO: Recupera il numero di telefono e gli appuntamenti saltati corrente da Firestore
+  Future<void> _recuperaDatiIniziali() async {
     if (_user == null) return;
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(_user.uid).get();
@@ -36,14 +37,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final dati = doc.data() as Map<String, dynamic>;
         setState(() {
           _telefonoCorrente = dati['phone'] ?? 'Nessun cellulare';
+          _appuntamentiSaltati = dati['appuntamentisaltati'] ?? 0;
         });
       } else {
-        setState(() => _telefonoCorrente = 'Nessun cellulare');
+        setState(() {
+          _telefonoCorrente = 'Nessun cellulare';
+          _appuntamentiSaltati = 0;
+        });
       }
     } catch (e) {
-      debugPrint("Errore recupero telefono: $e");
+      debugPrint("Errore recupero dati utente: $e");
       if (mounted) {
-        setState(() => _telefonoCorrente = 'Nessun cellulare');
+        setState(() {
+          _telefonoCorrente = 'Nessun cellulare';
+          _appuntamentiSaltati = 0;
+        });
       }
     }
   }
@@ -196,6 +204,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // AGGIUNTO: Mostra il dialogo di conferma per la disconnessione dall'applicazione
+  void _mostraConfermaDisconnessione() {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          title: Text(
+            'Disconnetti',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Sei sicuro di voler uscire dal tuo account?',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Annulla',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade900),
+              onPressed: () async {
+                Navigator.pop(context);
+                await FirebaseAuth.instance.signOut();
+                if (mounted) {
+                  Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                }
+              },
+              child: const Text(
+                'Esci',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // Funzione per ottimizzare l'eliminazione dell'account richiamando la Cloud Function universale
@@ -426,6 +487,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             trailing: Icon(Icons.edit, color: coloreTestoSecondario),
             onTap: _mostraDialogoModificaTelefono,
           ),
+
+          // AGGIUNTO: Voce informativa per visualizzare gli appuntamenti saltati
+          ListTile(
+            leading: const Icon(Icons.event_busy, color: Colors.red),
+            title: Text('Appuntamenti Saltati', style: TextStyle(color: coloreTestoPrimario)),
+            subtitle: Text(
+              '$_appuntamentiSaltati',
+              style: TextStyle(
+                color: _appuntamentiSaltati > 0 ? Colors.red : Colors.green,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
 
           Text('Opzioni Sicurezza', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: coloreTestoSecondario)),
@@ -444,18 +518,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: Text('Disconnetti', style: TextStyle(color: coloreTestoPrimario)),
             subtitle: Text('Esci dal tuo account corrente', style: TextStyle(color: coloreTestoSecondario)),
             trailing: Icon(Icons.chevron_right, color: coloreTestoSecondario),
-            onTap: () async {
-              await FirebaseAuth.instance.signOut();
-              if (mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-              }
-            },
+            onTap: _mostraConfermaDisconnessione, // MODIFICATO: Collegato al metodo di conferma
           ),
-
-          const SizedBox(height: 32),
-          const Text('Zona Pericolo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)),
-          const Divider(color: Colors.red),
-
           ListTile(
             leading: const Icon(Icons.delete_forever, color: Colors.red),
             title: const Text('Elimina Account', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
