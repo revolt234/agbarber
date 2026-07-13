@@ -311,7 +311,16 @@ class _AuthGateState extends State<AuthGate> {
               nomeEstratto = userData['name'] ?? user.displayName ?? "Cliente";
 
               if (ruolo == 'barbiere') {
-                return const BarbiereHomePage();
+                // MODIFICATO: Garantisce la corretta inizializzazione del token di sessione di FirebaseAuth per le Cloud Functions dell'admin
+                return FutureBuilder<String?>(
+                  future: user.getIdToken(true),
+                  builder: (context, tokenSnapshot) {
+                    if (tokenSnapshot.connectionState == ConnectionState.waiting) {
+                      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+                    }
+                    return const BarbiereHomePage();
+                  },
+                );
               }
             }
 
