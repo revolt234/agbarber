@@ -32,9 +32,6 @@
         <string>remote-notification</string>
     </array>
 
-    <key>NSUserNotificationUsageDescription</key>
-    <string>AG Barber richiede il permesso di inviarti promemoria 15 minuti prima dei tuoi appuntamenti.</string>
-
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
     <key>UILaunchStoryboardName</key>
