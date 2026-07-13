@@ -1,8 +1,10 @@
+import 'dart:io'; // AGGIUNTO: Necessario per verificare la piattaforma (Platform.isIOS)
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Richiesto per la gestione dell'orientamento
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Pacchetto ufficiale per i messaggi push
 import 'screens/visualizzazione_prenotazioni_screen.dart';
 import 'firebase_options.dart';
 import 'screens/prenotazione_servizi_screen.dart';
@@ -129,6 +131,49 @@ class _AuthGateState extends State<AuthGate> {
     });
   }
 
+  // AGGIUNTO: Funzione per richiedere autorizzazione APNs Apple ed inviare il token sicuro a Firestore
+  Future<void> _configuraNotifichePushRemote(String uid) async {
+    try {
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+      // Richiesta permessi espliciti ad Apple (provisional impostato rigorosamente su false)
+      NotificationSettings settings = await messaging.requestPermission(
+        alert: true,
+        announcement: false,
+        badge: true,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        // Se il client è un iPhone, attende la sincronizzazione nativa con i server APNs
+        if (Platform.isIOS) {
+          String? apnsToken = await messaging.getAPNSToken();
+          if (apnsToken == null) {
+            await Future.delayed(const Duration(seconds: 3));
+            apnsToken = await messaging.getAPNSToken();
+          }
+          debugPrint("APNs Token validato con successo: $apnsToken");
+        }
+
+        // Generazione del token Firebase Cloud Messaging definitivo
+        String? fcmToken = await messaging.getToken();
+
+        if (fcmToken != null && fcmToken.isNotEmpty) {
+          await FirebaseFirestore.instance.collection('users').doc(uid).update({
+            'fcmToken': fcmToken,
+            'pushToken': fcmToken,
+          });
+          debugPrint("FCM Token registrato correttamente nel database.");
+        }
+      }
+    } catch (e) {
+      debugPrint("Errore registrazione token push: $e");
+    }
+  }
+
   Future<void> _controllaAggiornamentoObbligatorio() async {
     try {
       final remoteConfig = FirebaseRemoteConfig.instance;
@@ -222,6 +267,9 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         final User user = snapshot.data!;
+
+        // AGGIUNTO: Esegue la configurazione e il salvataggio asincrono del token push appena l'utente è autenticato
+        _configuraNotifichePushRemote(user.uid);
 
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
