@@ -225,7 +225,7 @@ exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (reques
         payload: {
           aps: {
             sound: "default",
-            badge: 1,
+            // MODIFICATO: Rimosso "badge: 1" per evitare che rimanga il pallino rosso bloccato sull'icona del cliente
           },
         },
       },
