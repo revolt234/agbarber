@@ -264,7 +264,12 @@ class _AuthGateState extends State<AuthGate> {
             actions: [
               TextButton(
                 onPressed: () async {
-                  final url = Uri.parse("https://play.google.com/store/apps/details?id=com.LoSco.nonspreco");
+                  // Rileva la piattaforma per reindirizzare allo store corretto
+                  final String urlString = Platform.isIOS
+                      ? "https://apps.apple.com/it/app/ag-barber/id6784350580"
+                      : "https://play.google.com/store/apps/details?id=com.LoSco.agbarber.prenotazionibarbiere&hl=it";
+
+                  final url = Uri.parse(urlString);
                   if (await canLaunchUrl(url)) {
                     await launchUrl(url, mode: LaunchMode.externalApplication);
                   }
