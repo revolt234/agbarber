@@ -126,7 +126,7 @@ class _AuthGateState extends State<AuthGate> {
       _controllaAggiornamentoObbligatorio();
     });
 
-    // MODIFICATO: Inizializza l'ascolto globale del cambio token (onTokenRefresh) come consigliato dall'articolo
+    // Inizializza l'ascolto globale del cambio token (onTokenRefresh)
     _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
       if (_currentUid != null) {
         await _salvaTokenSuFirestore(_currentUid!, newToken);
@@ -154,7 +154,7 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 
-  // MODIFICATO: Implementata la logica di Bounded Retry (max 5 secondi) per evitare la Race Condition nativa su iOS
+  // Implementata la logica di Bounded Retry (max 5 secondi) per evitare la Race Condition nativa su iOS
   Future<void> _configuraNotifichePushRemote(String uid) async {
     _currentUid = uid; // Memorizza l'uid corrente per l'onTokenRefresh
     try {
@@ -316,16 +316,10 @@ class _AuthGateState extends State<AuthGate> {
               nomeEstratto = userData['name'] ?? user.displayName ?? "Cliente";
 
               if (ruolo == 'barbiere') {
-                // MODIFICATO: Garantisce la corretta inizializzazione del token di sessione di FirebaseAuth per le Cloud Functions dell'admin
-                return FutureBuilder<String?>(
-                  future: user.getIdToken(true),
-                  builder: (context, tokenSnapshot) {
-                    if (tokenSnapshot.connectionState == ConnectionState.waiting) {
-                      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-                    }
-                    return const BarbiereHomePage();
-                  },
-                );
+                // MODIFICATO: Per evitare il loop di refresh e il doppio caricamento grafico,
+                // aggiorniamo il token in background anziché attendere in modo sincrono con un FutureBuilder.
+                user.getIdToken();
+                return const BarbiereHomePage();
               }
             }
 
