@@ -31,6 +31,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.0 # Aggiungi questa linea
 
 flutter:
   uses-material-design: true
@@ -45,3 +46,13 @@ flutter_launcher_icons:
   # Parametri corretti per la versione 0.14.x (Forziamo il tuo colore verde per la Home):
   adaptive_icon_background: "#164638"
   adaptive_icon_foreground: "assets/logoGerry.png"
+
+flutter_native_splash:
+  color: "#F4F6F5"          # Colore di sfondo per il tema chiaro (agVerde o grigio chiaro)
+  color_dark: "#101715"     # Colore di sfondo nativo per il tema scuro (il tuo scaffoldBackgroundColor dark)
+
+  # Opzionale: se vuoi mostrare anche il logo al centro durante il caricamento nativo
+  image: assets/A di barber.png
+  image_dark: assets/A di barber.png
+
+  fullscreen: true
