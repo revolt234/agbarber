@@ -546,6 +546,13 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                             tuttiIDocs.where((doc) {
                               final dati =
                               doc.data() as Map<String, dynamic>;
+
+                              // Escludi gli utenti che hanno ruolo "barbiere"
+                              final String ruolo = (dati['role'] ?? '').toString();
+                              if (ruolo == 'barbiere') {
+                                return false;
+                              }
+
                               final String nomeCompleto =
                               (dati['name'] ?? '').toString()
                                   .toLowerCase();

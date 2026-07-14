@@ -162,7 +162,7 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
   }
 });
 
-// 3. INVIA SOLLECITO CLIENTE (Corretto CORS e FCM Payload)
+// 3. INVIA SOLLECITO CLIENTE
 exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
   const data = request.data;
@@ -239,7 +239,12 @@ exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (reques
     return { success: true, message: "Sollecito inviato con successo al dispositivo del cliente." };
 
   } catch (error) {
-    console.error("Errore durante l'invio del sollecito push:", error);
+    // Log di produzione compatto ma estremamente utile
+    console.error("Errore invio sollecito push:", error.message);
+    if (error.errorInfo) {
+      console.error("Dettagli errore FCM:", JSON.stringify(error.errorInfo));
+    }
+
     if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", error.message);
   }
