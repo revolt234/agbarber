@@ -24,6 +24,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
 import 'screens/gestione_clienti_screen.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // AGGIUNTO: Necessario per resettare il badge nativo su iOS
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -124,6 +125,7 @@ class _AuthGateState extends State<AuthGate> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controllaAggiornamentoObbligatorio();
+      _pulisciNotificheEBadge(); // MODIFICATO: Richiama la pulizia del badge all'avvio
     });
 
     // Inizializza l'ascolto globale del cambio token (onTokenRefresh)
@@ -138,6 +140,20 @@ class _AuthGateState extends State<AuthGate> {
   void dispose() {
     _tokenRefreshSubscription?.cancel();
     super.dispose();
+  }
+
+  // MODIFICATO: Pulisce le notifiche nel centro notifiche e resetta a zero il badge (pallino rosso) dell'icona su iOS
+  Future<void> _pulisciNotificheEBadge() async {
+    try {
+      if (Platform.isIOS) {
+        final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+        await flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+            ?.cancelAll(); // Corretto da cancelAllNotifications() a cancelAll()
+      }
+    } catch (e) {
+      debugPrint("Errore durante l'azzeramento delle notifiche e badge su iOS: $e");
+    }
   }
 
   // Funzione isolata per scrivere i dati in modo pulito ed evitare duplicazioni di codice
