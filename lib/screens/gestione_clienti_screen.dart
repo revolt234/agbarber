@@ -130,7 +130,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                           ),
                           icon: const Icon(Icons.delete_forever, size: 20),
                           label: const Text(
-                            'ELIMINA ACCOUNT DEFINITIVAMENTE',
+                            'ELIMINA CLIENTE',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                           onPressed: () {
