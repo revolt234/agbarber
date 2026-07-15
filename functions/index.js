@@ -249,3 +249,93 @@ exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (reques
     throw new HttpsError("internal", error.message);
   }
 });
+// 4. INVIA NOTIFICA PERSONALIZZATA CLIENTE (Corretto CORS e aggiornato alla v2)
+exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, async (request) => {
+  const auth = request.auth;
+  const data = request.data;
+
+  // 1. Verifichiamo che l'operatore (barbiere) sia autenticato
+  if (!auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "L'utente deve essere autenticato per inviare notifiche."
+    );
+  }
+
+  const userIdCliente = data.userIdCliente;
+  const messaggioPersonalizzato = data.messaggio;
+
+  if (!userIdCliente || !messaggioPersonalizzato) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Parametri 'userIdCliente' o 'messaggio' mancanti."
+    );
+  }
+
+  try {
+    const db = admin.firestore();
+
+    // Verifichiamo il ruolo di chi effettua la richiesta
+    const callerDoc = await db.collection("users").doc(auth.uid).get();
+    if (!callerDoc.exists || callerDoc.data().role !== "barbiere") {
+      throw new HttpsError(
+        "permission-denied",
+        "Non hai i permessi per inviare comunicazioni personalizzate."
+      );
+    }
+
+    // 2. Recuperiamo il documento del cliente da Firestore per estrarre il token FCM
+    const userDoc = await db.collection("users").doc(userIdCliente).get();
+
+    if (!userDoc.exists) {
+      throw new HttpsError(
+        "not-found",
+        "Cliente non trovato nel database."
+      );
+    }
+
+    const userData = userDoc.data();
+    const tokenFcm = userData.fcmToken || userData.pushToken;
+
+    if (!tokenFcm) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Il cliente non ha un token notifiche valido registrato."
+      );
+    }
+
+    // 3. Costruiamo il payload della notifica push
+    const payload = {
+      token: tokenFcm,
+      notification: {
+        title: "AG Barber",
+        body: messaggioPersonalizzato,
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 0, // Impostato a 0 per non causare il glitch del badge 1 su iOS
+          },
+        },
+      },
+      android: {
+        notification: {
+          sound: "default",
+        },
+      },
+    };
+
+    // 4. Inviamo la notifica tramite l'SDK di Firebase Admin
+    await admin.messaging().send(payload);
+
+    return { success: true, message: "Notifica inviata con successo!" };
+  } catch (error) {
+    console.error("Errore durante l'invio della notifica personalizzata:", error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError(
+      "internal",
+      error.message || "Errore interno durante l'invio della notifica."
+    );
+  }
+});

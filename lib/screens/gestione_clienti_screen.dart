@@ -19,6 +19,18 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
   bool _isProcessingAction = false;
   FiltroOrdinamento _filtroAttivo = FiltroOrdinamento.nome;
 
+  // AGGIUNTO: Variabili persistenti per memorizzare gli Stream in modo che non si ricreino ad ogni setState
+  late Stream<QuerySnapshot> _bannedEmailsStream;
+  late Stream<QuerySnapshot> _usersStream;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inizializziamo gli stream una volta sola all'avvio del widget
+    _bannedEmailsStream = FirebaseFirestore.instance.collection('banned_emails').snapshots();
+    _usersStream = FirebaseFirestore.instance.collection('users').snapshots();
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -196,6 +208,65 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                       const SizedBox(height: 6),
                       Text('Email: $email', style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14)),
 
+                      // CELLULARE SOTTO L'EMAIL (ESTRATTO IN TEMPO REALE)
+                      StreamBuilder<DocumentSnapshot>(
+                          stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+                          builder: (context, userSnap) {
+                            String? telefonoValido;
+                            if (userSnap.hasData && userSnap.data!.exists && userSnap.data!.data() != null) {
+                              final userData = userSnap.data!.data() as Map<String, dynamic>;
+                              final String rawPhone = userData['phone'] ?? userData['phoneNumber'] ?? '';
+                              if (rawPhone.trim().isNotEmpty && rawPhone.trim() != 'Nessun cellulare') {
+                                telefonoValido = rawPhone.trim();
+                              }
+                            }
+
+                            if (telefonoValido == null) return const SizedBox.shrink();
+
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 6.0),
+                              child: GestureDetector(
+                                onTap: () async {
+                                  final String numeroPulito = telefonoValido!.replaceAll(RegExp(r'[^\d+]'), '');
+                                  final Uri telUri = Uri(scheme: 'tel', path: numeroPulito);
+                                  try {
+                                    await launchUrl(telUri, mode: LaunchMode.externalApplication);
+                                  } catch (e) {
+                                    debugPrint("Errore durante l'apertura del dialer nativo: $e");
+                                  }
+                                },
+                                behavior: HitTestBehavior.opaque,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Cell: ',
+                                      style: TextStyle(
+                                        color: isDarkMode ? Colors.white70 : Colors.black54,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    Flexible(
+                                      child: Text(
+                                        telefonoValido,
+                                        style: const TextStyle(
+                                          color: Colors.blue,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.open_in_new, color: Colors.blue, size: 14),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                      ),
+
                       Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
 
                       // INFORMAZIONE APPUNTAMENTI SALTATI
@@ -261,7 +332,29 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                       ),
 
                       const SizedBox(height: 28),
+                      // NUOVO BOTTONE: INVIA NOTIFICA PERSONALIZZATA
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade900,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          icon: const Icon(Icons.send_rounded, size: 20),
+                          label: const Text(
+                            'INVIA NOTIFICA',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(bottomSheetContext);
+                            _mostraDialogInviaNotificaPersonalizzata(uid, nome);
+                          },
+                        ),
+                      ),
 
+                      const SizedBox(height: 12),
                       // PRIMO BOTTONE: DISABILITA / ABILITA UTENTE
                       SizedBox(
                         width: double.infinity,
@@ -336,6 +429,99 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  // Metodo di supporto per mostrare il dialogo di inserimento del messaggio e invocazione della Cloud Function
+  void _mostraDialogInviaNotificaPersonalizzata(String uid, String nomeCliente) {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final TextEditingController messaggioController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          title: Text(
+            'Notifica a $nomeCliente',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Scrivi il testo del messaggio da inviare:',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white70 : Colors.black87,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: messaggioController,
+                maxLength: 150,
+                maxLines: 3,
+                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+                decoration: InputDecoration(
+                  hintText: 'Scrivi qui...',
+                  hintStyle: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45),
+                  filled: true,
+                  fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Annulla',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF164638),
+              ),
+              onPressed: () async {
+                final String testo = messaggioController.text.trim();
+
+                if (testo.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Inserisci un messaggio prima di inviare.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.pop(context);
+
+                // Richiamo alla funzione ottimizzata senza causare il glitch grafico di ricostruzione degli Stream
+                await _inviaNotificaPersonalizzataTramiteCloudFunction(uid, nomeCliente, testo);
+              },
+              child: const Text(
+                'Invia',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -528,6 +714,51 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Errore Cloud Function: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessingAction = false);
+    }
+  }
+
+  Future<void> _inviaNotificaPersonalizzataTramiteCloudFunction(String uid, String nomeCliente, String messaggio) async {
+    setState(() => _isProcessingAction = true);
+    try {
+      final FirebaseFunctions functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
+
+      final HttpsCallable callable = functions.httpsCallable(
+        'inviaNotificaPersonalizzataCliente',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
+
+      await callable.call(<String, dynamic>{
+        'userIdCliente': uid,
+        'messaggio': messaggio,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Notifica inviata con successo a $nomeCliente!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        String erroreDettaglio = e is FirebaseFunctionsException
+            ? e.message ?? e.toString()
+            : e.toString();
+
+        if (erroreDettaglio.contains('failed-precondition')) {
+          erroreDettaglio = 'Il cliente non ha abilitato le notifiche push sul telefono.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Errore: $erroreDettaglio'),
             backgroundColor: Colors.red,
           ),
         );
@@ -736,10 +967,8 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                   ),
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
-                      stream:
-                      FirebaseFirestore.instance
-                          .collection('banned_emails')
-                          .snapshots(),
+                      // MODIFICATO: Collegato alla variabile dello stream persistente inizializzata in initState
+                      stream: _bannedEmailsStream,
                       builder: (context, bannedSnapshot) {
                         final Set<String> emailBannate = {};
                         if (bannedSnapshot.hasData) {
@@ -749,10 +978,8 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                         }
 
                         return StreamBuilder<QuerySnapshot>(
-                          stream:
-                          FirebaseFirestore.instance
-                              .collection('users')
-                              .snapshots(),
+                          // MODIFICATO: Collegato alla variabile dello stream persistente inizializzata in initState
+                          stream: _usersStream,
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
                                 ConnectionState.waiting) {
@@ -965,7 +1192,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                         ],
                                       ),
                                     ),
-                                    // MODIFICATO: Sostituiti i vecchi bottoni con l'icona impostazioni singola
                                     trailing: IconButton(
                                       icon: const Icon(
                                         Icons.settings,
