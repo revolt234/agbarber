@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:url_launcher/url_launcher.dart'; // AGGIUNTO: Necessario per avviare il dialer telefonico nativo
 
 class GestioneClientiScreen extends StatefulWidget {
   const GestioneClientiScreen({super.key});
@@ -9,17 +10,146 @@ class GestioneClientiScreen extends StatefulWidget {
   State<GestioneClientiScreen> createState() => _GestioneClientiScreenState();
 }
 
+enum FiltroOrdinamento { nome, appuntamentiSaltati, debito }
+
 class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = "";
   bool _isProcessingAction = false;
+  FiltroOrdinamento _filtroAttivo = FiltroOrdinamento.nome;
 
   @override
   void dispose() {
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  // Metodo di supporto per mostrare il dialogo di modifica del debito
+  void _mostraDialogModificaDebito(String uid, double debitoAttuale) {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final TextEditingController debitoController = TextEditingController(
+      text: debitoAttuale.toStringAsFixed(2).replaceAll('.', ','),
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          title: Text(
+            'Modifica Debito Cliente',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Inserisci il nuovo importo del debito:',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white70 : Colors.black87,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: debitoController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+                decoration: InputDecoration(
+                  prefixText: '€ ',
+                  prefixStyle: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold),
+                  filled: true,
+                  fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Annulla',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white70 : Colors.black54,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF164638),
+              ),
+              onPressed: () async {
+                final String input = debitoController.text.trim().replaceAll(',', '.');
+                final double? nuovoDebito = double.tryParse(input);
+
+                if (nuovoDebito == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Inserisci un valore numerico valido.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                if (nuovoDebito < 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Il debito non può essere un valore negativo.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.pop(context);
+
+                try {
+                  await FirebaseFirestore.instance.collection('users').doc(uid).update({
+                    'debito': nuovoDebito,
+                  });
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Debito aggiornato a € ${nuovoDebito.toStringAsFixed(2).replaceAll('.', ',')}'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Errore durante il salvataggio: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text(
+                'Salva',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _mostraPannelloImpostazioniCliente({
@@ -86,6 +216,48 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                             ),
                           ),
                         ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // INFORMAZIONE DEBITO TOTALE CON GESTIONE CLICK E MODIFICA DINAMICA
+                      StreamBuilder<DocumentSnapshot>(
+                          stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+                          builder: (context, userSnap) {
+                            double debito = 0.0;
+                            if (userSnap.hasData && userSnap.data!.exists && userSnap.data!.data() != null) {
+                              final userData = userSnap.data!.data() as Map<String, dynamic>;
+                              debito = (userData['debito'] ?? 0.0).toDouble();
+                            }
+
+                            return InkWell(
+                              onTap: () => _mostraDialogModificaDebito(uid, debito),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.monetization_on, color: debito > 0 ? Colors.red : Colors.green, size: 22),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'Debito Totale: ',
+                                      style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
+                                    ),
+                                    Text(
+                                      '€ ${debito.toStringAsFixed(2).replaceAll('.', ',')}',
+                                      style: TextStyle(
+                                        color: debito > 0 ? Colors.red : Colors.green,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Icon(Icons.edit, color: isDarkMode ? Colors.white54 : Colors.black45, size: 16),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
                       ),
 
                       const SizedBox(height: 28),
@@ -457,44 +629,109 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.all(16.0),
-                    child: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      maxLength: 45,
-                      style: TextStyle(color: coloreTestoTitoli),
-                      decoration: InputDecoration(
-                        hintText: 'Cerca cliente per nome...',
-                        counterText: "",
-                        hintStyle: TextStyle(
-                          color: isDarkMode ? Colors.white54 : Colors.black45,
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color:
-                          isDarkMode
-                              ? Colors.white70
-                              : Colors.grey.shade600,
-                        ),
-                        filled: true,
-                        fillColor: coloreInputSfondo,
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                            color:
-                            isDarkMode
-                                ? Colors.white12
-                                : Colors.grey.shade300,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            focusNode: _searchFocusNode,
+                            maxLength: 45,
+                            style: TextStyle(color: coloreTestoTitoli),
+                            decoration: InputDecoration(
+                              hintText: 'Cerca cliente per nome...',
+                              counterText: "",
+                              hintStyle: TextStyle(
+                                color: isDarkMode ? Colors.white54 : Colors.black45,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.search,
+                                color: isDarkMode ? Colors.white70 : Colors.grey.shade600,
+                              ),
+                              filled: true,
+                              fillColor: coloreInputSfondo,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide(
+                                  color: isDarkMode ? Colors.white12 : Colors.grey.shade300,
+                                ),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            onChanged: (value) {
+                              setState(() {
+                                _searchQuery = value.trim().toLowerCase();
+                              });
+                            },
                           ),
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                        const SizedBox(width: 10),
+                        // Pulsante di ordinamento e filtro affianco alla ricerca
+                        Container(
+                          decoration: BoxDecoration(
+                            color: coloreInputSfondo,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDarkMode ? Colors.white12 : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: PopupMenuButton<FiltroOrdinamento>(
+                            icon: const Icon(
+                              Icons.filter_list,
+                              color: Color(0xFFE2B13C),
+                              size: 26,
+                            ),
+                            tooltip: 'Ordina clienti',
+                            onSelected: (FiltroOrdinamento filtroSelected) {
+                              setState(() {
+                                _filtroAttivo = filtroSelected;
+                              });
+                            },
+                            itemBuilder: (BuildContext context) => <PopupMenuEntry<FiltroOrdinamento>>[
+                              PopupMenuItem<FiltroOrdinamento>(
+                                value: FiltroOrdinamento.nome,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.sort_by_alpha,
+                                      color: _filtroAttivo == FiltroOrdinamento.nome ? const Color(0xFFE2B13C) : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Text('Ordina per Nome'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem<FiltroOrdinamento>(
+                                value: FiltroOrdinamento.appuntamentiSaltati,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.event_busy,
+                                      color: _filtroAttivo == FiltroOrdinamento.appuntamentiSaltati ? const Color(0xFFE2B13C) : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Text('Per Appuntamenti Saltati'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem<FiltroOrdinamento>(
+                                value: FiltroOrdinamento.debito,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.monetization_on,
+                                      color: _filtroAttivo == FiltroOrdinamento.debito ? const Color(0xFFE2B13C) : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Text('Per Debito'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value.trim().toLowerCase();
-                        });
-                      },
+                      ],
                     ),
                   ),
                   Expanded(
@@ -515,7 +752,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                           stream:
                           FirebaseFirestore.instance
                               .collection('users')
-                              .orderBy('name', descending: false)
                               .snapshots(),
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
@@ -542,6 +778,8 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                             }
 
                             final tuttiIDocs = snapshot.data!.docs;
+
+                            // Filtro locale per ruolo e query di ricerca
                             final docsFiltrati =
                             tuttiIDocs.where((doc) {
                               final dati =
@@ -558,6 +796,33 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                   .toLowerCase();
                               return nomeCompleto.contains(_searchQuery);
                             }).toList();
+
+                            // Ordinamento locale dinamico con gestione priorità e fallback alfabetico secondario
+                            docsFiltrati.sort((a, b) {
+                              final datiA = a.data() as Map<String, dynamic>;
+                              final datiB = b.data() as Map<String, dynamic>;
+
+                              final String nomeA = (datiA['name'] ?? '').toString().toLowerCase();
+                              final String nomeB = (datiB['name'] ?? '').toString().toLowerCase();
+
+                              if (_filtroAttivo == FiltroOrdinamento.appuntamentiSaltati) {
+                                final int saltatiA = datiA['appuntamentisaltati'] ?? 0;
+                                final int saltatiB = datiB['appuntamentisaltati'] ?? 0;
+                                if (saltatiA != saltatiB) {
+                                  return saltatiB.compareTo(saltatiA); // Discendente
+                                }
+                                return nomeA.compareTo(nomeB); // Fallback alfabetico ascendente
+                              } else if (_filtroAttivo == FiltroOrdinamento.debito) {
+                                final double debitoA = (datiA['debito'] ?? 0.0).toDouble();
+                                final double debitoB = (datiB['debito'] ?? 0.0).toDouble();
+                                if (debitoA != debitoB) {
+                                  return debitoB.compareTo(debitoA); // Discendente
+                                }
+                                return nomeA.compareTo(nomeB); // Fallback alfabetico ascendente
+                              } else {
+                                return nomeA.compareTo(nomeB); // Ascendente alfabetico
+                              }
+                            });
 
                             if (docsFiltrati.isEmpty) {
                               return Center(
@@ -589,9 +854,14 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                     dati['name'] ?? 'Cliente Anonimo';
                                 final String email =
                                     dati['email'] ?? 'Nessuna Email';
-                                final String telefono =
+                                final String telefonoRaw =
                                     dati['phone'] ??
-                                        'Nessun cellulare';
+                                        '';
+
+                                final String? telefonoValido = (telefonoRaw.trim().isNotEmpty &&
+                                    telefonoRaw.trim() != 'Nessun cellulare')
+                                    ? telefonoRaw.trim()
+                                    : null;
 
                                 // Lettura dinamica del contatore appuntamenti saltati
                                 final int appuntamentiSaltati =
@@ -651,17 +921,47 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                               fontSize: 13,
                                             ),
                                           ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            'Cell: $telefono',
-                                            style: TextStyle(
-                                              color:
-                                              isDarkMode
-                                                  ? Colors.white54
-                                                  : Colors.black54,
-                                              fontSize: 12,
+                                          if (telefonoValido != null) ...[
+                                            const SizedBox(height: 2),
+                                            GestureDetector(
+                                              onTap: () async {
+                                                final String numeroPulito = telefonoValido.replaceAll(RegExp(r'[^\d+]'), '');
+                                                final Uri telUri = Uri(scheme: 'tel', path: numeroPulito);
+                                                try {
+                                                  await launchUrl(telUri, mode: LaunchMode.externalApplication);
+                                                } catch (e) {
+                                                  debugPrint("Errore durante l'apertura del dialer nativo: $e");
+                                                }
+                                              },
+                                              behavior: HitTestBehavior.opaque,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    'Cell: ',
+                                                    style: TextStyle(
+                                                      color: isDarkMode ? Colors.white54 : Colors.black54,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                  Flexible(
+                                                    child: Text(
+                                                      telefonoValido,
+                                                      style: const TextStyle(
+                                                        color: Colors.blue,
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.bold,
+                                                        decoration: TextDecoration.underline,
+                                                      ),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  const Icon(Icons.open_in_new, color: Colors.blue, size: 12),
+                                                ],
+                                              ),
                                             ),
-                                          ),
+                                          ],
                                         ],
                                       ),
                                     ),

@@ -145,6 +145,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
         return StatefulBuilder(
             builder: (BuildContext context, StateSetter setModalState) {
+              // Verifica se l'appuntamento ha un flag 'pagato' impostato a false
+              final bool isContrassegnatoNonPagato = data['pagato'] == false;
+
               return Container(
                 padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
                 decoration: BoxDecoration(
@@ -238,7 +241,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               )
                             else
                               Text(
-                                "Nessun cellulare disponibile",
+                                "Non disponibile",
                                 style: TextStyle(color: coloreTestoDettaglio, fontSize: 15),
                               ),
                           ],
@@ -327,6 +330,70 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                 },
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 16),
+                          // SEZIONE GESTIONE DEBITO / MANCATO PAGAMENTO
+                          Text(
+                            'STATO PAGAMENTO',
+                            style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          const SizedBox(height: 8),
+                          FilterChip(
+                            label: const Text('IL CLIENTE NON HA PAGATO'),
+                            selected: isContrassegnatoNonPagato,
+                            selectedColor: Colors.red.shade900,
+                            checkmarkColor: Colors.white,
+                            labelStyle: TextStyle(
+                              color: isContrassegnatoNonPagato ? Colors.white : (isDarkMode ? Colors.white : Colors.black87),
+                              fontWeight: FontWeight.bold,
+                            ),
+                            onSelected: (bool selected) async {
+                              if (clienteId == null) return;
+
+                              final DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(clienteId);
+                              final DocumentReference appRef = FirebaseFirestore.instance.collection('appointments').doc(appointmentId);
+
+                              try {
+                                if (selected) {
+                                  // Esegue una transazione atomica per incrementare in modo sicuro il debito dell'utente
+                                  await FirebaseFirestore.instance.runTransaction((transaction) async {
+                                    final userSnapshot = await transaction.get(userRef);
+                                    double debitoAttuale = 0.0;
+                                    if (userSnapshot.exists && userSnapshot.data() != null) {
+                                      final userData = userSnapshot.data() as Map<String, dynamic>;
+                                      debitoAttuale = (userData['debito'] ?? 0.0).toDouble();
+                                    }
+                                    transaction.update(userRef, {'debito': debitoAttuale + prezzoTotale});
+                                    transaction.update(appRef, {'pagato': false});
+                                  });
+
+                                  setModalState(() {
+                                    data['pagato'] = false;
+                                  });
+                                } else {
+                                  // Esegue una transazione atomica per stornare/rimborsare il debito se deselezionato
+                                  await FirebaseFirestore.instance.runTransaction((transaction) async {
+                                    final userSnapshot = await transaction.get(userRef);
+                                    double debitoAttuale = 0.0;
+                                    if (userSnapshot.exists && userSnapshot.data() != null) {
+                                      final userData = userSnapshot.data() as Map<String, dynamic>;
+                                      debitoAttuale = (userData['debito'] ?? 0.0).toDouble();
+                                    }
+                                    double nuovoDebito = debitoAttuale - prezzoTotale;
+                                    if (nuovoDebito < 0) nuovoDebito = 0.0;
+
+                                    transaction.update(userRef, {'debito': nuovoDebito});
+                                    transaction.update(appRef, {'pagato': true});
+                                  });
+
+                                  setModalState(() {
+                                    data['pagato'] = true;
+                                  });
+                                }
+                              } catch (e) {
+                                debugPrint("Errore aggiornamento debito/pagamento: $e");
+                              }
+                            },
                           ),
                         ],
 
