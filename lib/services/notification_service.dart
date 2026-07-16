@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Aggiunto per permettere l'uso dell'oggetto Color
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
@@ -10,22 +12,40 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
+  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+
+  // Definizione del canale nativo ad alta priorità per Android in primo piano (foreground)
+  static const AndroidNotificationChannel _foregroundAndroidChannel = AndroidNotificationChannel(
+    'agbarber_foreground_notif',
+    'Notifiche in tempo reale AG Barber',
+    description: 'Canale usato per far comparire le notifiche quando l\'app è aperta.',
+    importance: Importance.max,
+    playSound: true,
+  );
 
   /// Inizializza il sistema di notifiche e i fusi orari
   Future<void> init() async {
     tz.initializeTimeZones();
 
+    // 1. Richiesta dei permessi e opzioni nativi iOS/Android per il foreground
+    await _fcm.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    await _fcm.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
     // Configurazione per Android
-    // MODIFICATO: Sostituito '@mipmap/ic_launcher' con la tua nuova immagine 'img' posizionata in drawable
-    // Configurazione per Android
-// Punti all'icona ufficiale generata automaticamente a partire dagli assets
-    // Configurazione per Android
-// Punta direttamente al file img.png dentro la cartella drawable generica
+    // Punta direttamente al file ic_stat_name dentro la cartella drawable generica
     const AndroidInitializationSettings initializationSettingsAndroid =
     AndroidInitializationSettings('ic_stat_name');
-/*const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher');*/
+
     // Configurazione per iOS
     const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -39,6 +59,47 @@ class NotificationService {
     );
 
     await _notificationsPlugin.initialize(settings: initializationSettings);
+
+    // Creazione del canale fisico ad alta priorità su Android
+    if (Platform.isAndroid) {
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(_foregroundAndroidChannel);
+    }
+
+    // Avvio del listener per intercettare i push in tempo reale ad app aperta
+    _setupForegroundListener();
+  }
+
+  /// Listener globale per le notifiche ricevute mentre l'app è in uso
+  void _setupForegroundListener() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      RemoteNotification? notification = message.notification;
+      AndroidNotification? android = message.notification?.android;
+
+      if (kDebugMode) {
+        print("Notifica ricevuta in primo piano: ${notification?.title} - ${notification?.body}");
+      }
+
+      // Solo per Android generiamo il banner popup locale a schermo aperto
+      if (notification != null && Platform.isAndroid) {
+        _notificationsPlugin.show(
+          id: notification.hashCode,
+          title: notification.title,
+          body: notification.body,
+          notificationDetails: NotificationDetails(
+            android: AndroidNotificationDetails(
+              _foregroundAndroidChannel.id,
+              _foregroundAndroidChannel.name,
+              channelDescription: _foregroundAndroidChannel.description,
+              importance: Importance.max,
+              priority: Priority.high,
+              icon: android?.smallIcon ?? 'ic_stat_name',
+            ),
+          ),
+        );
+      }
+    });
   }
 
   /// Pianifica una notifica locale 15 minuti prima dell'appuntamento
@@ -65,7 +126,7 @@ class NotificationService {
       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
         'ag_barber_reminders', // ID del canale interno
         'Promemoria Appuntamenti', // Nome visibile nelle impostazioni del telefono
-        channelDescription: 'Notifiche inviate 15 minuti prima del taglio di capelli',
+        channelDescription: 'Notifiche in tutto il salone prima del taglio di capelli',
         importance: Importance.max,
         priority: Priority.high,
         playSound: true,

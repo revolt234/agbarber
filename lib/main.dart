@@ -32,8 +32,10 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // Accensione del sistema notifiche all'avvio
+
+  // Accensione del sistema notifiche all'avvio (Inizializzazione Unica e Centralizzata)
   await NotificationService().init();
+
   runApp(const MyApp());
 }
 
@@ -47,6 +49,7 @@ class MyApp extends StatelessWidget {
     if (views.isNotEmpty) {
       final data = MediaQueryData.fromView(views.first);
       bool isTablet = data.size.shortestSide >= 600;
+
       if (isTablet) {
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.portraitUp,
@@ -63,8 +66,10 @@ class MyApp extends StatelessWidget {
     } else {
       SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     }
+
     const Color agVerde = Color(0xFF164638);
     const Color agOro = Color(0xFFE2B13C);
+
     return MaterialApp(
       title: 'AG Barber',
       debugShowCheckedModeBanner: false,
@@ -122,13 +127,13 @@ class _AuthGateState extends State<AuthGate> {
       _controllaAggiornamentoObbligatorio();
       _pulisciNotificheEBadge(); // MODIFICATO: Richiama la pulizia del badge all'avvio
     });
+
     // Inizializza l'ascolto globale del cambio token (onTokenRefresh)
-    _tokenRefreshSubscription =
-        FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-          if (_currentUid != null) {
-            await _salvaTokenSuFirestore(_currentUid!, newToken);
-          }
-        });
+    _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+      if (_currentUid != null) {
+        await _salvaTokenSuFirestore(_currentUid!, newToken);
+      }
+    });
   }
 
   @override
@@ -141,16 +146,13 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _pulisciNotificheEBadge() async {
     try {
       if (Platform.isIOS) {
-        final flutterLocalNotificationsPlugin =
-        FlutterLocalNotificationsPlugin();
+        final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
         await flutterLocalNotificationsPlugin
-            .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
+            .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
             ?.cancelAll(); // Corretto da cancelAllNotifications() a cancelAll()
       }
     } catch (e) {
-      debugPrint(
-          "Errore durante l'azzeramento delle notifiche e badge su iOS: $e");
+      debugPrint("Errore durante l'azzeramento delle notifiche e badge su iOS: $e");
     }
   }
 
@@ -173,6 +175,7 @@ class _AuthGateState extends State<AuthGate> {
     _currentUid = uid; // Memorizza l'uid corrente per l'onTokenRefresh
     try {
       FirebaseMessaging messaging = FirebaseMessaging.instance;
+
       NotificationSettings settings = await messaging.requestPermission(
         alert: true,
         announcement: false,
@@ -182,6 +185,7 @@ class _AuthGateState extends State<AuthGate> {
         provisional: false,
         sound: true,
       );
+
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
         if (Platform.isIOS) {
           // Soluzione dell'articolo: 10 tentativi da 500ms ciascuno per attendere l'APNs nativo
@@ -191,15 +195,17 @@ class _AuthGateState extends State<AuthGate> {
             if (apnsToken != null) break;
             await Future.delayed(const Duration(milliseconds: 500));
           }
+
           if (apnsToken == null) {
-            debugPrint(
-                "APNs fallito o non ancora pronto dopo 5 secondi di tentativi.");
+            debugPrint("APNs fallito o non ancora pronto dopo 5 secondi di tentativi.");
             return; // Interrompe per evitare di richiedere un FCM token nullo
           }
           debugPrint("APNs Token validato con successo: $apnsToken");
         }
+
         // Generazione del token definitivo sicuro
         String? fcmToken = await messaging.getToken();
+
         if (fcmToken != null && fcmToken.isNotEmpty) {
           await _salvaTokenSuFirestore(uid, fcmToken);
         }
@@ -212,17 +218,20 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _controllaAggiornamentoObbligatorio() async {
     try {
       final remoteConfig = FirebaseRemoteConfig.instance;
+
       await remoteConfig.setConfigSettings(RemoteConfigSettings(
         fetchTimeout: const Duration(minutes: 1),
-        minimumFetchInterval:
-        kDebugMode ? const Duration(minutes: 5) : const Duration(hours: 4),
+        minimumFetchInterval: kDebugMode ? const Duration(minutes: 5) : const Duration(hours: 4),
       ));
+
       await remoteConfig.fetchAndActivate();
-      String versioneMinima =
-      remoteConfig.getString('version_minima_richiesta');
+
+      String versioneMinima = remoteConfig.getString('version_minima_richiesta');
       if (versioneMinima.isEmpty) return;
+
       PackageInfo packageInfo = await PackageInfo.fromPlatform();
       String versioneAttuale = packageInfo.version;
+
       if (_deveAggiornare(versioneAttuale, versioneMinima)) {
         _mostraDialogBloccante();
       }
@@ -237,6 +246,7 @@ class _AuthGateState extends State<AuthGate> {
     try {
       List<int> vInst = installata.split('.').map(int.parse).toList();
       List<int> vMin = minima.split('.').map(int.parse).toList();
+
       for (int i = 0; i < vMin.length; i++) {
         if (i >= vInst.length) return true;
         if (vInst[i] < vMin[i]) return true;
@@ -257,19 +267,15 @@ class _AuthGateState extends State<AuthGate> {
         return PopScope(
           canPop: false,
           child: AlertDialog(
-            backgroundColor:
-            isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
             title: Text(
               "Aggiornamento Obbligatorio 🚀",
-              style: TextStyle(
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                  fontWeight: FontWeight.bold),
+              style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
             ),
             content: Text(
               "Una nuova versione di AG Barber è disponibile nello store ufficiale. "
                   "Per garantire la massima stabilità nella prenotazione degli slot orari, aggiorna l'applicazione prima di procedere.",
-              style:
-              TextStyle(color: isDarkMode ? Colors.grey : Colors.black54),
+              style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54),
             ),
             actions: [
               TextButton(
@@ -278,6 +284,7 @@ class _AuthGateState extends State<AuthGate> {
                   final String urlString = Platform.isIOS
                       ? "https://apps.apple.com/it/app/ag-barber/id6784350580"
                       : "https://play.google.com/store/apps/details?id=com.LoSco.agbarber.prenotazionibarbiere&hl=it";
+
                   final url = Uri.parse(urlString);
                   if (await canLaunchUrl(url)) {
                     await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -285,8 +292,7 @@ class _AuthGateState extends State<AuthGate> {
                 },
                 child: const Text(
                   "AGGIORNA ORA",
-                  style: TextStyle(
-                      color: Color(0xFFE2B13C), fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Color(0xFFE2B13C), fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -305,24 +311,26 @@ class _AuthGateState extends State<AuthGate> {
           _currentUid = null;
           return const ClienteHomePage(nomeUtente: "Ospite");
         }
+
         final User user = snapshot.data!;
+
         _configuraNotifichePushRemote(user.uid);
+
         return StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .snapshots(),
+          stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
           builder: (context, userSnapshot) {
             if (userSnapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()));
+              return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
+
             String nomeEstratto = "Cliente";
+
             if (userSnapshot.hasData && userSnapshot.data!.exists) {
-              final userData =
-              userSnapshot.data!.data() as Map<String, dynamic>;
+              final userData = userSnapshot.data!.data() as Map<String, dynamic>;
               final String ruolo = userData['role'] ?? 'cliente';
+
               nomeEstratto = userData['name'] ?? user.displayName ?? "Cliente";
+
               if (ruolo == 'barbiere') {
                 // MODIFICATO: Per evitare il loop di refresh e il doppio caricamento grafico,
                 // aggiorniamo il token in background anziché attendere in modo sincrono con un FutureBuilder.
@@ -330,6 +338,7 @@ class _AuthGateState extends State<AuthGate> {
                 return const BarbiereHomePage();
               }
             }
+
             return ClienteHomePage(nomeUtente: nomeEstratto);
           },
         );
@@ -340,6 +349,7 @@ class _AuthGateState extends State<AuthGate> {
 
 class ClienteHomePage extends StatefulWidget {
   final String nomeUtente;
+
   const ClienteHomePage({super.key, required this.nomeUtente});
 
   @override
@@ -348,6 +358,7 @@ class ClienteHomePage extends StatefulWidget {
 
 class _ClienteHomePageState extends State<ClienteHomePage> {
   int _indiceSelezionato = 0;
+
   late final List<Widget> _pagine = [
     const PrenotazioneServiziScreen(),
     const StoricoPrenotazioniScreen(),
@@ -358,11 +369,11 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
   Widget build(BuildContext context) {
     const Color agVerde = Color(0xFF164638);
     const Color agOro = Color(0xFFE2B13C);
+
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final Color coloreSfondoAdattivo =
-    isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
-    final Color coloreNavAdattiva =
-    isDarkMode ? const Color(0xFF121212) : Colors.white;
+    final Color coloreSfondoAdattivo = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
+    final Color coloreNavAdattiva = isDarkMode ? const Color(0xFF121212) : Colors.white;
+
     return Scaffold(
       backgroundColor: coloreSfondoAdattivo,
       appBar: _indiceSelezionato == 0
@@ -374,11 +385,10 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
             fit: BoxFit.contain,
           ),
         ),
-        title: const Text('AG BARBER',
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-                color: Colors.white)),
+        title: const Text(
+            'AG BARBER',
+            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5, color: Colors.white)
+        ),
         backgroundColor: agVerde,
         centerTitle: true,
         actions: const [
@@ -386,10 +396,12 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
         ],
       )
           : null,
+
       body: IndexedStack(
         index: _indiceSelezionato,
         children: _ppages ?? _pagine,
       ),
+
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _indiceSelezionato,
         onTap: (index) {
@@ -401,8 +413,7 @@ class _ClienteHomePageState extends State<ClienteHomePage> {
         backgroundColor: coloreNavAdattiva,
         selectedItemColor: agOro,
         unselectedItemColor: isDarkMode ? Colors.grey : Colors.grey.shade600,
-        selectedLabelStyle:
-        const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
         unselectedLabelStyle: const TextStyle(fontSize: 12),
         items: const [
           BottomNavigationBarItem(
@@ -430,6 +441,7 @@ class BarbiereHomePage extends StatelessWidget {
 
   void _mostraConfermaDisconnessione(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -457,8 +469,7 @@ class BarbiereHomePage extends StatelessWidget {
               ),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange.shade900),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade900),
               onPressed: () async {
                 Navigator.pop(context);
                 await FirebaseAuth.instance.signOut();
@@ -480,16 +491,15 @@ class BarbiereHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final Color coloreSfondoAdattivo =
-    isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
+    final Color coloreSfondoAdattivo = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
+
     return Scaffold(
       backgroundColor: coloreSfondoAdattivo,
       appBar: AppBar(
-        title: const Text('DASHBOARD BARBIERE',
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
-                color: Color(0xFF164638))),
+        title: const Text(
+            'DASHBOARD BARBIERE',
+            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Color(0xFF164638))
+        ),
         backgroundColor: const Color(0xFFE2B13C),
         centerTitle: true,
         actions: [
@@ -512,8 +522,7 @@ class BarbiereHomePage extends StatelessWidget {
                     SizedBox(height: 16),
                     Text(
                       'Benvenuto Barber Admin!',
-                      style:
-                      TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: 8),
                     Text('Pannello di controllo e gestione del negozio.'),
@@ -521,13 +530,12 @@ class BarbiereHomePage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 40),
+
               Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFF164638),
                     child: Icon(Icons.design_services, color: Colors.white),
@@ -536,27 +544,23 @@ class BarbiereHomePage extends StatelessWidget {
                     'Gestione Listino Servizi',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-                  subtitle: const Text(
-                      'Aggiungi, modifica o elimina i servizi offerti e i relativi prezzi'),
-                  trailing: const Icon(Icons.chevron_right,
-                      color: Color(0xFFE2B13C), size: 30),
+                  subtitle: const Text('Aggiungi, modifica o elimina i servizi offerti e i relativi prezzi'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (context) => const GestioneServiziScreen()),
+                      MaterialPageRoute(builder: (context) => const GestioneServiziScreen()),
                     );
                   },
                 ),
               ),
               const SizedBox(height: 16),
+
               Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFF164638),
                     child: Icon(Icons.people, color: Colors.white),
@@ -565,28 +569,23 @@ class BarbiereHomePage extends StatelessWidget {
                     'Gestione Staff / Operatori',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-                  subtitle: const Text(
-                      'Aggiungi o rimuovi i dipendenti del salone (es. Gerardo, Jessica)'),
-                  trailing: const Icon(Icons.chevron_right,
-                      color: Color(0xFFE2B13C), size: 30),
+                  subtitle: const Text('Aggiungi o rimuovi i dipendenti del salone (es. Gerardo, Jessica)'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (context) =>
-                          const GestioneOperatoriScreen()),
+                      MaterialPageRoute(builder: (context) => const GestioneOperatoriScreen()),
                     );
                   },
                 ),
               ),
               const SizedBox(height: 16),
+
               Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFF164638),
                     child: Icon(Icons.calendar_month, color: Colors.white),
@@ -595,27 +594,23 @@ class BarbiereHomePage extends StatelessWidget {
                     'Orari di Apertura',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-                  subtitle: const Text(
-                      'Imposta i giorni di chiusura e le fasce orarie lavorative'),
-                  trailing: const Icon(Icons.chevron_right,
-                      color: Color(0xFFE2B13C), size: 30),
+                  subtitle: const Text('Imposta i giorni di chiusura e le fasce orarie lavorative'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (context) => const GestioneOrariScreen()),
+                      MaterialPageRoute(builder: (context) => const GestioneOrariScreen()),
                     );
                   },
                 ),
               ),
               const SizedBox(height: 16),
+
               Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFF164638),
                     child: Icon(Icons.edit_calendar, color: Colors.white),
@@ -624,28 +619,23 @@ class BarbiereHomePage extends StatelessWidget {
                     'Chiusure/Aperture Speciali & Ferie',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-                  subtitle: const Text(
-                      'Blocca giornate specifiche sul calendario (es. Ferie d\'Agosto, festività)'),
-                  trailing: const Icon(Icons.chevron_right,
-                      color: Color(0xFFE2B13C), size: 30),
+                  subtitle: const Text('Blocca giornate specifiche sul calendario (es. Ferie d\'Agosto, festività)'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (context) =>
-                          const GestioneCalendarioScreen()),
+                      MaterialPageRoute(builder: (context) => const GestioneCalendarioScreen()),
                     );
                   },
                 ),
               ),
               const SizedBox(height: 16),
+
               Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFF164638),
                     child: Icon(Icons.person_search, color: Colors.white),
@@ -654,28 +644,23 @@ class BarbiereHomePage extends StatelessWidget {
                     'Orari e Turni Staff',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-                  subtitle: const Text(
-                      'Gestisci assenze o mezze giornate lavorative di ogni dipendente'),
-                  trailing: const Icon(Icons.chevron_right,
-                      color: Color(0xFFE2B13C), size: 30),
+                  subtitle: const Text('Gestisci assenze o mezze giornate lavorative di ogni dipendente'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (context) =>
-                          const GestioneTurniOperatoriScreen()),
+                      MaterialPageRoute(builder: (context) => const GestioneTurniOperatoriScreen()),
                     );
                   },
                 ),
               ),
               const SizedBox(height: 16),
+
               Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFF164638),
                     child: Icon(Icons.calendar_today, color: Colors.white),
@@ -684,28 +669,23 @@ class BarbiereHomePage extends StatelessWidget {
                     'Agendamento & Prenotazioni',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-                  subtitle: const Text(
-                      'Visualizza, filtra e controlla gli appuntamenti ricevuti in tempo reale'),
-                  trailing: const Icon(Icons.chevron_right,
-                      color: Color(0xFFE2B13C), size: 30),
+                  subtitle: const Text('Visualizza, filtra e controlla gli appuntamenti ricevuti in tempo reale'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (context) =>
-                          const VisualizzazionePrenotazioniScreen()),
+                      MaterialPageRoute(builder: (context) => const VisualizzazionePrenotazioniScreen()),
                     );
                   },
                 ),
               ),
               const SizedBox(height: 16),
+
               Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xFF164638),
                     child: Icon(Icons.assignment_ind, color: Colors.white),
@@ -714,15 +694,12 @@ class BarbiereHomePage extends StatelessWidget {
                     'Anagrafica & Gestione Clienti',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-                  subtitle: const Text(
-                      'Visualizza l\'elenco alfabetico, cerca, elimina o blocca l\'accesso alle email'),
-                  trailing: const Icon(Icons.chevron_right,
-                      color: Color(0xFFE2B13C), size: 30),
+                  subtitle: const Text('Visualizza l\'elenco alfabetico, cerca, elimina o blocca l\'accesso alle email'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                          builder: (context) => const GestioneClientiScreen()),
+                      MaterialPageRoute(builder: (context) => const GestioneClientiScreen()),
                     );
                   },
                 ),

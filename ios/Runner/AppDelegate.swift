@@ -8,9 +8,6 @@ import UIKit
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
 
-    // Registra i plugin generati da Flutter (incluso flutter_local_notifications)
-    GeneratedPluginRegistrant.register(with: self)
-
     // CORRETTO: Registra il delegato in modo sicuro impostando self
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self
