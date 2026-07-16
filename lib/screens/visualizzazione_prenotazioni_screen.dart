@@ -310,7 +310,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               ChoiceChip(
                                 label: const Text('NO'),
                                 selected: data['presentato'] == 'no',
-                                selectedColor: Colors.red,
+                                selectedColor: Colors.red.shade900,
                                 labelStyle: TextStyle(
                                   color: data['presentato'] == 'no' ? Colors.white : (isDarkMode ? Colors.white : Colors.black),
                                   fontWeight: FontWeight.bold,

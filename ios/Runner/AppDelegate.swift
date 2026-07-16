@@ -1,6 +1,5 @@
 import Flutter
 import UIKit
-import flutter_local_notifications // AGGIUNTO: Importa il plugin per le notifiche locali
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -9,35 +8,35 @@ import flutter_local_notifications // AGGIUNTO: Importa il plugin per le notific
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
 
-    // AGGIUNTO: Registra il delegato per gestire correttamente la comparsa dei banner su iOS 10+
+    // Registra i plugin generati da Flutter (incluso flutter_local_notifications)
+    GeneratedPluginRegistrant.register(with: self)
+
+    // CORRETTO: Registra il delegato in modo sicuro impostando self
     if #available(iOS 10.0, *) {
-      UNUserNotificationCenter.current().delegate = self as? UNUserNotificationCenterDelegate
+      UNUserNotificationCenter.current().delegate = self
     }
 
-    // AGGIUNTO: Azzera il contatore del badge all'avvio dell'applicazione
-    if #available(iOS 16.0, *) {
-      UNUserNotificationCenter.current().setBadgeCount(0) { error in
-        if let error = error {
-          print("Errore azzeramento badge avvio: \(error.localizedDescription)")
-        }
-      }
-    } else {
-      application.applicationIconBadgeNumber = 0
-    }
+    // Azzera il contatore del badge all'avvio dell'applicazione
+    self.azzeraBadge()
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  // AGGIUNTO: Intercetta l'istante in cui l'app torna in primo piano/attiva per azzerare definitivamente il badge
+  // Intercetta l'istante in cui l'app torna attiva per azzerare definitivamente il badge
   override func applicationDidBecomeActive(_ application: UIApplication) {
+    self.azzeraBadge()
+  }
+
+  // Funzione di supporto isolata per evitare duplicazione di codice
+  private func azzeraBadge() {
     if #available(iOS 16.0, *) {
       UNUserNotificationCenter.current().setBadgeCount(0) { error in
         if let error = error {
-          print("Errore azzeramento badge active: \(error.localizedDescription)")
+          print("Errore azzeramento badge: \(error.localizedDescription)")
         }
       }
     } else {
-      application.applicationIconBadgeNumber = 0
+      UIApplication.shared.applicationIconBadgeNumber = 0
     }
   }
 
