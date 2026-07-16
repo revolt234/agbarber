@@ -24,7 +24,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
 import 'screens/gestione_clienti_screen.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // AGGIUNTO: Necessario per resettare il badge nativo su iOS e mostrare popup in foreground
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // AGGIUNTO: Necessario per resettare il badge nativo su iOS
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +33,7 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Accensione del sistema notifiche all'avvio
+  // Accensione del sistema notifiche all'avvio (Inizializzazione Unica e Centralizzata)
   await NotificationService().init();
 
   runApp(const MyApp());
@@ -118,7 +118,6 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   // Riferimento per cancellare la sottoscrizione allo stream quando il widget viene distrutto
   StreamSubscription<String>? _tokenRefreshSubscription;
-  StreamSubscription<RemoteMessage>? _foregroundMessageSubscription; // AGGIUNTO: Memorizza la sottoscrizione dei messaggi in primo piano
   String? _currentUid;
 
   @override
@@ -135,85 +134,12 @@ class _AuthGateState extends State<AuthGate> {
         await _salvaTokenSuFirestore(_currentUid!, newToken);
       }
     });
-
-    // AGGIUNTO: Configurazione e ascolto delle notifiche in primo piano (foreground)
-    _configuraNotificheForeground();
   }
 
   @override
   void dispose() {
     _tokenRefreshSubscription?.cancel();
-    _foregroundMessageSubscription?.cancel(); // AGGIUNTO: Pulisce la sottoscrizione
     super.dispose();
-  }
-
-  // AGGIUNTO: Metodo per abilitare i popup visivi delle notifiche push quando l'utente sta usando l'app
-  Future<void> _configuraNotificheForeground() async {
-    final FlutterLocalNotificationsPlugin localNotificationsPlugin = FlutterLocalNotificationsPlugin();
-
-    // 1. Configurazione canali e inizializzazione per Android e iOS
-    const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    const DarwinInitializationSettings initializationSettingsIOS =
-    DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    // CORRETTO: i parametri del costruttore richiedono ora i nomi espliciti
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
-
-    await localNotificationsPlugin.initialize(settings: initializationSettings);
-
-    // Canale ad alta priorità per i dispositivi Android (necessario per forzare il popup)
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      'agbarber_foreground_notif',
-      'Notifiche in tempo reale AG Barber',
-      description: 'Canale usato per far comparire le notifiche quando l\'app è aperta.',
-      importance: Importance.max,
-      playSound: true,
-    );
-
-    await localNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
-
-    // 2. Impostazione visiva nativa specifica per iOS in primo piano
-    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-      alert: true, // Consente la comparsa del banner visivo standard in alto su iOS
-      badge: true,
-      sound: true,
-    );
-
-    // 3. Ascoltatore messaggi push in tempo reale
-    _foregroundMessageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      RemoteNotification? notification = message.notification;
-      AndroidNotification? android = message.notification?.android;
-
-      // Se ricevi un messaggio valido su Android a schermo aperto, genera un banner popup locale
-      if (notification != null && Platform.isAndroid) {
-        localNotificationsPlugin.show(
-          id: notification.hashCode, // CORRETTO: Parametro nominato 'id'
-          title: notification.title, // CORRETTO: Parametro nominato 'title'
-          body: notification.body,   // CORRETTO: Parametro nominato 'body'
-          notificationDetails: NotificationDetails( // CORRETTO: Parametro nominato 'notificationDetails'
-            android: AndroidNotificationDetails(
-              channel.id,
-              channel.name,
-              channelDescription: channel.description,
-              importance: Importance.max,
-              priority: Priority.high,
-              icon: android?.smallIcon ?? '@mipmap/ic_launcher',
-            ),
-          ),
-        );
-      }
-    });
   }
 
   // MODIFICATO: Pulisce le notifiche nel centro notifiche e resetta a zero il badge (pallino rosso) dell'icona su iOS
