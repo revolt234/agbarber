@@ -698,7 +698,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                           Icon(Icons.no_meeting_room, size: 64, color: Colors.red.shade400),
                           const SizedBox(height: 16),
                           Text(
-                            'NEGOZIO CHIUSO',
+                            'SALONE CHIUSO',
                             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : agVerde),
                           ),
                           if (notaAttuale.isNotEmpty) ...[
