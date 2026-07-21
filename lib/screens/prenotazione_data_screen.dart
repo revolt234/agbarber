@@ -569,14 +569,21 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
                               final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
 
-                              // --- MODIFICATO: Notifica al barbiere tramite Cloud Function ---
+                              // --- CORRETTO: Recupero nome dal profilo Firestore ed invio dati puliti ---
                               try {
+                                String nomeClienteReale = user.displayName ?? '';
+                                if (nomeClienteReale.isEmpty) {
+                                  final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                                  if (userDoc.exists && userDoc.data() != null) {
+                                    nomeClienteReale = userDoc.data()!['name'] ?? userDoc.data()!['nome'] ?? '';
+                                  }
+                                }
+                                if (nomeClienteReale.isEmpty) {
+                                  nomeClienteReale = user.email ?? 'Un cliente';
+                                }
+
                                 final HttpsCallable callableNotificaBarbiere = FirebaseFunctions.instanceFor(region: 'europe-west3')
                                     .httpsCallable('inviaNotificaNuovaPrenotazioneAlBarbiere');
-
-                                final String nomeClienteReale = (user.displayName != null && user.displayName!.isNotEmpty)
-                                    ? user.displayName!
-                                    : (user.email ?? 'Un cliente');
 
                                 await callableNotificaBarbiere.call(<String, dynamic>{
                                   'date': dataStr,
