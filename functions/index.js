@@ -352,9 +352,9 @@ exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west
     );
   }
 
-  const { date, slot, barberId, barberName, serviceNome, clienteNome } = data;
+  const { date, slot, barberName, serviceNome, clienteNome } = data;
 
-  if (!date || !slot || !barberId || !serviceNome) {
+  if (!date || !slot || !serviceNome) {
     throw new HttpsError(
       "invalid-argument",
       "Parametri obbligatori mancanti per l'invio della notifica."
@@ -364,53 +364,62 @@ exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west
   try {
     const db = admin.firestore();
 
-    // 2. Recuperiamo il profilo dell'operatore/barbiere selezionato da Firestore
-    const barberDoc = await db.collection("users").doc(barberId).get();
+    // 2. Cerchiamo tutti gli utenti nella collezione 'users' che hanno il ruolo 'barbiere'
+    const barbieriSnap = await db.collection("users").where("role", "==", "barbiere").get();
 
-    if (!barberDoc.exists) {
-      console.warn(`Impossibile trovare il profilo del barbiere con ID: ${barberId}`);
-      return { success: false, message: "Profilo barbiere non trovato." };
+    if (barbieriSnap.empty) {
+      console.warn("Nessun utente con ruolo 'barbiere' trovato nel database.");
+      return { success: false, message: "Nessun barbiere trovato." };
     }
 
-    const barberData = barberDoc.data();
-    const tokenFcmBarbiere = barberData.fcmToken || barberData.pushToken;
+    const tokens = [];
+    barbieriSnap.docs.forEach((doc) => {
+      const d = doc.data();
+      const token = d.fcmToken || d.pushToken;
+      if (token && !tokens.includes(token)) {
+        tokens.push(token);
+      }
+    });
 
-    if (!tokenFcmBarbiere) {
-      console.warn(`Il barbiere ${barberName || barberId} non ha un token notifiche registrato.`);
+    if (tokens.length === 0) {
+      console.warn("Nessun barbiere ha un token notifiche (fcmToken/pushToken) valido.");
       return { success: false, message: "Il barbiere non ha le notifiche push attive." };
     }
 
-    // 3. Costruiamo il payload della notifica push per il barbiere
-    const messaggioPush = {
-      token: tokenFcmBarbiere,
-      notification: {
-        title: "Nuova Prenotazione! 💈",
-        body: `${clienteNome || "Un cliente"} ha prenotato "${serviceNome}" per il ${date} alle ${slot}.`,
-      },
-      android: {
-        priority: "high",
+    // 3. Inviamo la notifica push a tutti i dispositivi barbiere trovati
+    const invii = tokens.map((token) => {
+      const messaggioPush = {
+        token: token,
         notification: {
-          sound: "default",
-          icon: "ic_stat_name",
+          title: "Nuova Prenotazione! 💈",
+          body: `${clienteNome || "Un cliente"} ha prenotato "${serviceNome}" per il ${date} alle ${slot} con ${barberName || "lo staff"}.`,
         },
-      },
-      apns: {
-        payload: {
-          aps: {
+        android: {
+          priority: "high",
+          notification: {
             sound: "default",
-            badge: 0,
+            icon: "ic_stat_name",
           },
         },
-      },
-      data: {
-        type: "nuova_prenotazione",
-      }
-    };
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 0,
+            },
+          },
+        },
+        data: {
+          type: "nuova_prenotazione",
+        },
+      };
 
-    // 4. Inviamo la notifica push tramite Firebase Admin Messaging
-    await admin.messaging().send(messaggioPush);
+      return admin.messaging().send(messaggioPush);
+    });
 
-    return { success: true, message: "Notifica inviata con successo al barbiere." };
+    await Promise.all(invii);
+
+    return { success: true, message: `Notifica inviata con successo a ${tokens.length} barbieri.` };
 
   } catch (error) {
     console.error("Errore durante l'invio della notifica al barbiere:", error);
@@ -421,6 +430,7 @@ exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west
     );
   }
 });
+
 // 6. INVIA NOTIFICA ANNULLAMENTO PRENOTAZIONE AL BARBIERE
 exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
@@ -434,9 +444,9 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
     );
   }
 
-  const { barberId, barberName, date, slot, serviceNome, clienteNome } = data;
+  const { date, slot, serviceNome, clienteNome } = data;
 
-  if (!barberId || !date || !slot) {
+  if (!date || !slot) {
     throw new HttpsError(
       "invalid-argument",
       "Parametri obbligatori mancanti per l'invio della notifica di annullamento."
@@ -446,53 +456,62 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
   try {
     const db = admin.firestore();
 
-    // 2. Recuperiamo il profilo dell'operatore/barbiere da Firestore per estrarre il token FCM
-    const barberDoc = await db.collection("users").doc(barberId).get();
+    // 2. Cerchiamo tutti gli utenti nella collezione 'users' che hanno il ruolo 'barbiere'
+    const barbieriSnap = await db.collection("users").where("role", "==", "barbiere").get();
 
-    if (!barberDoc.exists) {
-      console.warn(`Impossibile trovare il profilo del barbiere con ID: ${barberId}`);
-      return { success: false, message: "Profilo barbiere non trovato." };
+    if (barbieriSnap.empty) {
+      console.warn("Nessun utente con ruolo 'barbiere' trovato nel database.");
+      return { success: false, message: "Nessun barbiere trovato." };
     }
 
-    const barberData = barberDoc.data();
-    const tokenFcmBarbiere = barberData.fcmToken || barberData.pushToken;
+    const tokens = [];
+    barbieriSnap.docs.forEach((doc) => {
+      const d = doc.data();
+      const token = d.fcmToken || d.pushToken;
+      if (token && !tokens.includes(token)) {
+        tokens.push(token);
+      }
+    });
 
-    if (!tokenFcmBarbiere) {
-      console.warn(`Il barbiere ${barberName || barberId} non ha un token notifiche registrato.`);
+    if (tokens.length === 0) {
+      console.warn("Nessun barbiere ha un token notifiche (fcmToken/pushToken) valido.");
       return { success: false, message: "Il barbiere non ha le notifiche push attive." };
     }
 
-    // 3. Costruiamo il payload della notifica push di disdetta
-    const messaggioPush = {
-      token: tokenFcmBarbiere,
-      notification: {
-        title: "Prenotazione Annullata ❌",
-        body: `${clienteNome || "Un cliente"} ha disdetto l'appuntamento per "${serviceNome || "Servizio"}" del ${date} alle ${slot}. Lo slot è di nuovo libero.`,
-      },
-      android: {
-        priority: "high",
+    // 3. Inviamo la notifica push di disdetta a tutti i dispositivi barbiere trovati
+    const invii = tokens.map((token) => {
+      const messaggioPush = {
+        token: token,
         notification: {
-          sound: "default",
-          icon: "ic_stat_name",
+          title: "Prenotazione Annullata ❌",
+          body: `${clienteNome || "Un cliente"} ha disdetto l'appuntamento per "${serviceNome || "Servizio"}" del ${date} alle ${slot}. Lo slot è di nuovo libero.`,
         },
-      },
-      apns: {
-        payload: {
-          aps: {
+        android: {
+          priority: "high",
+          notification: {
             sound: "default",
-            badge: 0,
+            icon: "ic_stat_name",
           },
         },
-      },
-      data: {
-        type: "annullamento_prenotazione",
-      }
-    };
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 0,
+            },
+          },
+        },
+        data: {
+          type: "annullamento_prenotazione",
+        },
+      };
 
-    // 4. Inviamo la notifica push al barbiere
-    await admin.messaging().send(messaggioPush);
+      return admin.messaging().send(messaggioPush);
+    });
 
-    return { success: true, message: "Notifica di annullamento inviata con successo al barbiere." };
+    await Promise.all(invii);
+
+    return { success: true, message: `Notifica di annullamento inviata con successo a ${tokens.length} barbieri.` };
 
   } catch (error) {
     console.error("Errore durante l'invio della notifica di annullamento:", error);

@@ -119,7 +119,6 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
               final String dataApp = data['date'] ?? '----';
               final String ora = data['slot'] ?? '--:--';
               final String barber = data['barberName'] ?? 'Operatore';
-              final String barberId = data['barberId'] ?? '';
               final List servizi = data['services'] ?? [];
               final double prezzo = (data['totalPrice'] ?? 0.0).toDouble();
 
@@ -237,13 +236,15 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                               final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
                                   .httpsCallable('inviaNotificaAnnullamentoAlBarbiere');
 
+                              final String nomeClienteReale = (user.displayName != null && user.displayName!.isNotEmpty)
+                                  ? user.displayName!
+                                  : (user.email ?? 'Un cliente');
+
                               await callable.call(<String, dynamic>{
-                                'barberId': barberId,
-                                'barberName': barber,
                                 'date': dataApp,
                                 'slot': ora,
                                 'serviceNome': servizi.join(", "),
-                                'clienteNome': user.displayName ?? 'Un cliente',
+                                'clienteNome': nomeClienteReale,
                               });
                             } catch (e) {
                               debugPrint("Errore invio notifica annullamento al barbiere: $e");
