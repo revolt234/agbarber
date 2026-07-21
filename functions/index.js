@@ -339,3 +339,167 @@ exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, 
     );
   }
 });
+// 5. INVIA NOTIFICA NUOVA PRENOTAZIONE AL BARBIERE
+exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west3" }, async (request) => {
+  const auth = request.auth;
+  const data = request.data;
+
+  // 1. Verifichiamo che l'utente che ha prenotato sia autenticato
+  if (!auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Devi essere autenticato per eseguire questa operazione."
+    );
+  }
+
+  const { date, slot, barberId, barberName, serviceNome, clienteNome } = data;
+
+  if (!date || !slot || !barberId || !serviceNome) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Parametri obbligatori mancanti per l'invio della notifica."
+    );
+  }
+
+  try {
+    const db = admin.firestore();
+
+    // 2. Recuperiamo il profilo dell'operatore/barbiere selezionato da Firestore
+    const barberDoc = await db.collection("users").doc(barberId).get();
+
+    if (!barberDoc.exists) {
+      console.warn(`Impossibile trovare il profilo del barbiere con ID: ${barberId}`);
+      return { success: false, message: "Profilo barbiere non trovato." };
+    }
+
+    const barberData = barberDoc.data();
+    const tokenFcmBarbiere = barberData.fcmToken || barberData.pushToken;
+
+    if (!tokenFcmBarbiere) {
+      console.warn(`Il barbiere ${barberName || barberId} non ha un token notifiche registrato.`);
+      return { success: false, message: "Il barbiere non ha le notifiche push attive." };
+    }
+
+    // 3. Costruiamo il payload della notifica push per il barbiere
+    const messaggioPush = {
+      token: tokenFcmBarbiere,
+      notification: {
+        title: "Nuova Prenotazione! 💈",
+        body: `${clienteNome || "Un cliente"} ha prenotato "${serviceNome}" per il ${date} alle ${slot}.`,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          sound: "default",
+          icon: "ic_stat_name",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 0,
+          },
+        },
+      },
+      data: {
+        type: "nuova_prenotazione",
+      }
+    };
+
+    // 4. Inviamo la notifica push tramite Firebase Admin Messaging
+    await admin.messaging().send(messaggioPush);
+
+    return { success: true, message: "Notifica inviata con successo al barbiere." };
+
+  } catch (error) {
+    console.error("Errore durante l'invio della notifica al barbiere:", error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError(
+      "internal",
+      error.message || "Errore interno durante l'invio della notifica al barbiere."
+    );
+  }
+});
+// 6. INVIA NOTIFICA ANNULLAMENTO PRENOTAZIONE AL BARBIERE
+exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" }, async (request) => {
+  const auth = request.auth;
+  const data = request.data;
+
+  // 1. Verifichiamo che l'utente sia autenticato
+  if (!auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Devi essere autenticato per eseguire questa operazione."
+    );
+  }
+
+  const { barberId, barberName, date, slot, serviceNome, clienteNome } = data;
+
+  if (!barberId || !date || !slot) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Parametri obbligatori mancanti per l'invio della notifica di annullamento."
+    );
+  }
+
+  try {
+    const db = admin.firestore();
+
+    // 2. Recuperiamo il profilo dell'operatore/barbiere da Firestore per estrarre il token FCM
+    const barberDoc = await db.collection("users").doc(barberId).get();
+
+    if (!barberDoc.exists) {
+      console.warn(`Impossibile trovare il profilo del barbiere con ID: ${barberId}`);
+      return { success: false, message: "Profilo barbiere non trovato." };
+    }
+
+    const barberData = barberDoc.data();
+    const tokenFcmBarbiere = barberData.fcmToken || barberData.pushToken;
+
+    if (!tokenFcmBarbiere) {
+      console.warn(`Il barbiere ${barberName || barberId} non ha un token notifiche registrato.`);
+      return { success: false, message: "Il barbiere non ha le notifiche push attive." };
+    }
+
+    // 3. Costruiamo il payload della notifica push di disdetta
+    const messaggioPush = {
+      token: tokenFcmBarbiere,
+      notification: {
+        title: "Prenotazione Annullata ❌",
+        body: `${clienteNome || "Un cliente"} ha disdetto l'appuntamento per "${serviceNome || "Servizio"}" del ${date} alle ${slot}. Lo slot è di nuovo libero.`,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          sound: "default",
+          icon: "ic_stat_name",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 0,
+          },
+        },
+      },
+      data: {
+        type: "annullamento_prenotazione",
+      }
+    };
+
+    // 4. Inviamo la notifica push al barbiere
+    await admin.messaging().send(messaggioPush);
+
+    return { success: true, message: "Notifica di annullamento inviata con successo al barbiere." };
+
+  } catch (error) {
+    console.error("Errore durante l'invio della notifica di annullamento:", error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError(
+      "internal",
+      error.message || "Errore interno durante l'invio della notifica al barbiere."
+    );
+  }
+});

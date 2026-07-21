@@ -569,6 +569,24 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
                               final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
 
+                              // --- AGGIUNTO: Chiamata alla Cloud Function per notificare il barbiere ---
+                              try {
+                                final HttpsCallable callableNotificaBarbiere = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                    .httpsCallable('inviaNotificaNuovaPrenotazioneAlBarbiere');
+
+                                await callableNotificaBarbiere.call(<String, dynamic>{
+                                  'appointmentId': idAppuntamentoGenerato,
+                                  'date': dataStr,
+                                  'slot': oraSelezionata,
+                                  'barberId': _barbiereSelezionatoId,
+                                  'barberName': _barbiereSelezionatoNome,
+                                  'serviceNome': widget.servizioNome,
+                                  'clienteNome': user.displayName ?? 'Un cliente',
+                                });
+                              } catch (e) {
+                                debugPrint("Errore durante l'invio della notifica al barbiere: $e");
+                              }
+
                               try {
                                 await NotificationService().pianificaNotificaFlessibile(
                                   idNotifica: idAppuntamentoGenerato.hashCode,

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario per richiamare la Cloud Function
 import '../services/notification_service.dart'; // Importato per cancellare la notifica abbinata
 
 class StoricoPrenotazioniScreen extends StatelessWidget {
@@ -118,8 +119,18 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
               final String dataApp = data['date'] ?? '----';
               final String ora = data['slot'] ?? '--:--';
               final String barber = data['barberName'] ?? 'Operatore';
+              final String barberId = data['barberId'] ?? '';
               final List servizi = data['services'] ?? [];
               final double prezzo = (data['totalPrice'] ?? 0.0).toDouble();
+
+              // Verifichiamo se l'appuntamento è cronologicamente già passato
+              bool isGiaPassato = false;
+              try {
+                final DateTime orarioAppuntamento = DateFormat("yyyy-MM-dd HH:mm").parse("$dataApp $ora");
+                if (orarioAppuntamento.isBefore(DateTime.now())) {
+                  isGiaPassato = true;
+                }
+              } catch (_) {}
 
               String dataFormattata = dataApp;
               try {
@@ -185,9 +196,15 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                       ),
                     ),
                     trailing: IconButton(
-                      icon: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 28),
-                      tooltip: 'Annulla Appuntamento',
-                      onPressed: () async {
+                      icon: Icon(
+                        Icons.delete_forever,
+                        color: isGiaPassato ? Colors.grey : Colors.redAccent,
+                        size: 28,
+                      ),
+                      tooltip: isGiaPassato ? 'Appuntamento già passato' : 'Annulla Appuntamento',
+                      onPressed: isGiaPassato
+                          ? null
+                          : () async {
                         final bool? conferma = await showDialog<bool>(
                           context: context,
                           builder: (context) => AlertDialog(
@@ -215,13 +232,30 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
 
                         if (conferma == true) {
                           try {
-                            // 1. Elimina il documento da Firestore
+                            // 1. Invia notifica di annullamento al barbiere tramite Cloud Function
+                            try {
+                              final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                  .httpsCallable('inviaNotificaAnnullamentoAlBarbiere');
+
+                              await callable.call(<String, dynamic>{
+                                'barberId': barberId,
+                                'barberName': barber,
+                                'date': dataApp,
+                                'slot': ora,
+                                'serviceNome': servizi.join(", "),
+                                'clienteNome': user.displayName ?? 'Un cliente',
+                              });
+                            } catch (e) {
+                              debugPrint("Errore invio notifica annullamento al barbiere: $e");
+                            }
+
+                            // 2. Elimina il documento da Firestore
                             await FirebaseFirestore.instance
                                 .collection('appointments')
                                 .doc(idDocumento)
                                 .delete();
 
-                            // 2. Disdice la sveglia locale dei 15 minuti prima
+                            // 3. Disdice la sveglia locale dei 15 minuti prima
                             await NotificationService().cancellaNotifica(idDocumento.hashCode);
 
                             if (context.mounted) {
