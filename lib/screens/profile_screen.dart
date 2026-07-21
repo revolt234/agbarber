@@ -3,6 +3,7 @@ import 'package:flutter/services.dart'; // AGGIUNTO: Necessario per i filtri di 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // AGGIUNTO: Necessario per leggere e aggiornare il telefono
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Necessario per gestire la cancellazione del token FCM
 import 'login_screen.dart'; // Importato per permettere il reindirizzamento al login
 
 class ProfileScreen extends StatefulWidget {
@@ -210,7 +211,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // AGGIUNTO: Mostra il dialogo di conferma per la disconnessione dall'applicazione
+  // AGGIUNTO: Mostra il dialogo di conferma per la disconnessione dall'applicazione e cancella i token FCM
   void _mostraConfermaDisconnessione() {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
@@ -244,6 +245,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade900),
               onPressed: () async {
                 Navigator.pop(context);
+
+                // AGGIUNTO: Rimuove il token di questo dispositivo prima del logout
+                try {
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    final token = await FirebaseMessaging.instance.getToken();
+                    if (token != null && token.isNotEmpty) {
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(user.uid)
+                          .update({
+                        'fcmTokens': FieldValue.arrayRemove([token]),
+                        'fcmToken': FieldValue.delete(),
+                      });
+                    }
+                  }
+                  await FirebaseMessaging.instance.deleteToken();
+                } catch (e) {
+                  debugPrint("Errore nella rimozione del token FCM al logout cliente: $e");
+                }
+
                 await FirebaseAuth.instance.signOut();
                 if (mounted) {
                   Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
@@ -263,7 +285,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // Funzione per ottimizzare l'eliminazione dell'account richiamando la Cloud Function universale
+  // Funzione per ottimizzare l'eliminazione dell'account richiamando la Cloud Function universale e cancellando il token
   Future<void> _eliminaAccount() async {
     if (_user == null) return;
 
@@ -309,6 +331,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await callable.call(<String, dynamic>{
         'uid': _user.uid,
       });
+
+      // AGGIUNTO: Cancella il token hardware locale dopo l'eliminazione dell'account
+      try {
+        await FirebaseMessaging.instance.deleteToken();
+      } catch (e) {
+        debugPrint("Errore rimozione token post eliminazione account: $e");
+      }
 
       await FirebaseAuth.instance.signOut();
 
