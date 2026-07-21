@@ -236,13 +236,22 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                               final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
                                   .httpsCallable('inviaNotificaAnnullamentoAlBarbiere');
 
-                              final String nomeClienteReale = (user.displayName != null && user.displayName!.isNotEmpty)
-                                  ? user.displayName!
-                                  : (user.email ?? 'Un cliente');
+                              // Recupera il nome reale dell'utente se user.displayName è vuoto
+                              String nomeClienteReale = user.displayName ?? '';
+                              if (nomeClienteReale.isEmpty) {
+                                final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                                if (userDoc.exists && userDoc.data() != null) {
+                                  nomeClienteReale = userDoc.data()!['name'] ?? userDoc.data()!['nome'] ?? '';
+                                }
+                              }
+                              if (nomeClienteReale.isEmpty) {
+                                nomeClienteReale = user.email ?? 'Un cliente';
+                              }
 
                               await callable.call(<String, dynamic>{
                                 'date': dataApp,
                                 'slot': ora,
+                                'barberName': barber, // AGGIUNTO: Nome dello specialista
                                 'serviceNome': servizi.join(", "),
                                 'clienteNome': nomeClienteReale,
                               });
@@ -256,7 +265,7 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                                 .doc(idDocumento)
                                 .delete();
 
-                            // 3. Disdice la sveglia locale dei 15 minuti prima
+                            // 3. Disdice la sveglia locale
                             await NotificationService().cancellaNotifica(idDocumento.hashCode);
 
                             if (context.mounted) {

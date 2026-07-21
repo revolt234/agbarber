@@ -3,7 +3,7 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-// 1. ELIMINA UTENTE (Corretto CORS)
+// 1. ELIMINA UTENTE
 exports.eliminaUtenteCompleto = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
   const data = request.data;
@@ -59,7 +59,7 @@ exports.eliminaUtenteCompleto = onCall({ region: "europe-west3" }, async (reques
   }
 });
 
-// 2. CREA PRENOTAZIONE SICURA (Corretto CORS)
+// 2. CREA PRENOTAZIONE SICURA
 exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
   const data = request.data;
@@ -208,11 +208,13 @@ exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (reques
       );
     }
 
+    const testoNotifica = "Ehi dove sei? Il barbiere ti sta aspettando al salone!";
+
     const messaggioPush = {
       token: fcmToken,
       notification: {
         title: "Il barbiere ti aspetta! 💈",
-        body: "Ehi dove sei? Il barbiere ti sta aspettando al salone!",
+        body: testoNotifica,
       },
       android: {
         priority: "high",
@@ -225,7 +227,6 @@ exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (reques
         payload: {
           aps: {
             sound: "default",
-            // MODIFICATO: Rimosso "badge: 1" per evitare che rimanga il pallino rosso bloccato sull'icona del cliente
           },
         },
       },
@@ -239,7 +240,6 @@ exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (reques
     return { success: true, message: "Sollecito inviato con successo al dispositivo del cliente." };
 
   } catch (error) {
-    // Log di produzione compatto ma estremamente utile
     console.error("Errore invio sollecito push:", error.message);
     if (error.errorInfo) {
       console.error("Dettagli errore FCM:", JSON.stringify(error.errorInfo));
@@ -249,12 +249,12 @@ exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (reques
     throw new HttpsError("internal", error.message);
   }
 });
-// 4. INVIA NOTIFICA PERSONALIZZATA CLIENTE (Corretto CORS e aggiornato alla v2)
+
+// 4. INVIA NOTIFICA PERSONALIZZATA CLIENTE
 exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
   const data = request.data;
 
-  // 1. Verifichiamo che l'operatore (barbiere) sia autenticato
   if (!auth) {
     throw new HttpsError(
       "unauthenticated",
@@ -275,7 +275,6 @@ exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, 
   try {
     const db = admin.firestore();
 
-    // Verifichiamo il ruolo di chi effettua la richiesta
     const callerDoc = await db.collection("users").doc(auth.uid).get();
     if (!callerDoc.exists || callerDoc.data().role !== "barbiere") {
       throw new HttpsError(
@@ -284,7 +283,6 @@ exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, 
       );
     }
 
-    // 2. Recuperiamo il documento del cliente da Firestore per estrarre il token FCM
     const userDoc = await db.collection("users").doc(userIdCliente).get();
 
     if (!userDoc.exists) {
@@ -304,7 +302,6 @@ exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, 
       );
     }
 
-    // 3. Costruiamo il payload della notifica push
     const payload = {
       token: tokenFcm,
       notification: {
@@ -315,18 +312,18 @@ exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, 
         payload: {
           aps: {
             sound: "default",
-            badge: 0, // Impostato a 0 per non causare il glitch del badge 1 su iOS
+            badge: 0,
           },
         },
       },
       android: {
+        priority: "high",
         notification: {
           sound: "default",
         },
       },
     };
 
-    // 4. Inviamo la notifica tramite l'SDK di Firebase Admin
     await admin.messaging().send(payload);
 
     return { success: true, message: "Notifica inviata con successo!" };
@@ -339,12 +336,12 @@ exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, 
     );
   }
 });
+
 // 5. INVIA NOTIFICA NUOVA PRENOTAZIONE AL BARBIERE
 exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
   const data = request.data;
 
-  // 1. Verifichiamo che l'utente che ha prenotato sia autenticato
   if (!auth) {
     throw new HttpsError(
       "unauthenticated",
@@ -364,7 +361,6 @@ exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west
   try {
     const db = admin.firestore();
 
-    // 2. Cerchiamo tutti gli utenti nella collezione 'users' che hanno il ruolo 'barbiere'
     const barbieriSnap = await db.collection("users").where("role", "==", "barbiere").get();
 
     if (barbieriSnap.empty) {
@@ -385,14 +381,15 @@ exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west
       console.warn("Nessun barbiere ha un token notifiche (fcmToken/pushToken) valido.");
       return { success: false, message: "Il barbiere non ha le notifiche push attive." };
     }
+    const dateFormatted = date.split('-').reverse().join('/');
+    const testoNotifica = `${dateFormatted} ore ${slot} con ${barberName || "lo staff"}: ${clienteNome || "Un cliente"} - ${serviceNome}`;
 
-    // 3. Inviamo la notifica push a tutti i dispositivi barbiere trovati
     const invii = tokens.map((token) => {
       const messaggioPush = {
         token: token,
         notification: {
           title: "Nuova Prenotazione! 💈",
-          body: `${clienteNome || "Un cliente"} ha prenotato "${serviceNome}" per il ${date} alle ${slot} con ${barberName || "lo staff"}.`,
+          body: testoNotifica,
         },
         android: {
           priority: "high",
@@ -436,7 +433,6 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
   const auth = request.auth;
   const data = request.data;
 
-  // 1. Verifichiamo che l'utente sia autenticato
   if (!auth) {
     throw new HttpsError(
       "unauthenticated",
@@ -444,7 +440,7 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
     );
   }
 
-  const { date, slot, serviceNome, clienteNome } = data;
+  const { date, slot, barberName, serviceNome, clienteNome } = data;
 
   if (!date || !slot) {
     throw new HttpsError(
@@ -456,7 +452,6 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
   try {
     const db = admin.firestore();
 
-    // 2. Cerchiamo tutti gli utenti nella collezione 'users' che hanno il ruolo 'barbiere'
     const barbieriSnap = await db.collection("users").where("role", "==", "barbiere").get();
 
     if (barbieriSnap.empty) {
@@ -478,13 +473,18 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
       return { success: false, message: "Il barbiere non ha le notifiche push attive." };
     }
 
-    // 3. Inviamo la notifica push di disdetta a tutti i dispositivi barbiere trovati
+    // Formattiamo la data da YYYY-MM-DD a DD/MM/YYYY per massima chiarezza
+    const dateFormatted = date.split('-').reverse().join('/');
+
+    // Testo ottimizzato: dati essenziali subito visibili
+    const testoAnnullamento = `${dateFormatted} ore ${slot} con ${barberName || "Staff"}: ${clienteNome || "Un cliente"} - ${serviceNome || "Servizio"}.`;
+
     const invii = tokens.map((token) => {
       const messaggioPush = {
         token: token,
         notification: {
           title: "Prenotazione Annullata ❌",
-          body: `${clienteNome || "Un cliente"} ha disdetto l'appuntamento per "${serviceNome || "Servizio"}" del ${date} alle ${slot}. Lo slot è di nuovo libero.`,
+          body: testoAnnullamento,
         },
         android: {
           priority: "high",
