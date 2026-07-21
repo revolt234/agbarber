@@ -865,6 +865,23 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                   final String oraInizioStr = data['slot'] ?? '--:--';
                                   final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
 
+                                  // MODIFICATO: Rilevazione del flag per le prenotazioni periodiche
+                                  final bool isPeriodico = data['isPeriodico'] == true;
+
+                                  // Colori dinamici in base alla natura della prenotazione (Standard vs Periodico)
+                                  final Color coloreSfondoCard = isPeriodico
+                                      ? agOro.withValues(alpha: 0.95)
+                                      : agVerde.withValues(alpha: 0.95);
+                                  final Color coloreTestoCard = isPeriodico
+                                      ? Colors.black
+                                      : Colors.white;
+                                  final Color colorePrezzoCard = isPeriodico
+                                      ? const Color(0xFF164638)
+                                      : agOro;
+                                  final Color coloreBordoCard = isPeriodico
+                                      ? agVerde
+                                      : agOro;
+
                                   return Positioned(
                                     top: topPos + 2,
                                     left: leftPos,
@@ -874,9 +891,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                       onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata, appointmentId),
                                       child: Container(
                                         decoration: BoxDecoration(
-                                          color: agVerde.withValues(alpha: 0.95),
+                                          color: coloreSfondoCard,
                                           borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: agOro, width: 1.2),
+                                          border: Border.all(color: coloreBordoCard, width: 1.2),
                                           boxShadow: [
                                             BoxShadow(
                                               color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.15),
@@ -896,14 +913,14 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                 Expanded(
                                                   child: Text(
                                                     clienteNome,
-                                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                    style: TextStyle(color: coloreTestoCard, fontWeight: FontWeight.bold, fontSize: 13),
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                                 const SizedBox(width: 4),
                                                 Text(
                                                   '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
-                                                  style: TextStyle(color: agOro, fontWeight: FontWeight.bold, fontSize: 13),
+                                                  style: TextStyle(color: colorePrezzoCard, fontWeight: FontWeight.bold, fontSize: 13),
                                                 ),
                                               ],
                                             ),

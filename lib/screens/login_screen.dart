@@ -212,18 +212,21 @@ class _LoginScreenState extends State<LoginScreen> {
           password: password,
         );
 
-        // MODIFICATO: Aggiorna il token anche al momento del login se il dispositivo è cambiato
+        // MODIFICATO: Aggiunge il token nell'array fcmTokens (multi-dispositivo) al momento del login
         if (userCredential.user != null && !kIsWeb) {
           try {
             final String? token = await FirebaseMessaging.instance.getToken();
-            if (token != null) {
+            if (token != null && token.isNotEmpty) {
               await FirebaseFirestore.instance
                   .collection('users')
                   .doc(userCredential.user!.uid)
-                  .update({'fcmToken': token});
+                  .update({
+                'fcmTokens': FieldValue.arrayUnion([token]),
+                'fcmToken': token, // Mantengo retrocompatibilità
+              });
             }
           } catch (e) {
-            debugPrint("Impossibile aggiornare l'fcmToken al login: $e");
+            debugPrint("Impossibile aggiornare gli fcmTokens al login: $e");
           }
         }
       } else {
@@ -250,6 +253,8 @@ class _LoginScreenState extends State<LoginScreen> {
             }
           }
 
+          final List<String> listaTokenIniziale = (token != null && token.isNotEmpty) ? [token] : [];
+
           await FirebaseFirestore.instance
               .collection('users')
               .doc(userCredential.user!.uid)
@@ -258,7 +263,8 @@ class _LoginScreenState extends State<LoginScreen> {
             'email': email,
             'role': 'cliente',
             'phone': telefonoFinale,
-            'fcmToken': token ?? '', // AGGIUNTO: Salvataggio nativo del token per i solleciti push
+            'fcmToken': token ?? '', // Campo legacy
+            'fcmTokens': listaTokenIniziale, // MODIFICATO: Salvataggio multi-dispositivo nativo del token
             'createdAt': FieldValue.serverTimestamp(),
           });
         }

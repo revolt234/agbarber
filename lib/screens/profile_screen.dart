@@ -17,6 +17,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = false;
   String _telefonoCorrente = "Caricamento..."; // AGGIUNTO: Stato locale per il numero di telefono
   int _appuntamentiSaltati = 0; // AGGIUNTO: Stato locale per gli appuntamenti saltati
+  double _debitoPresente = 0.0; // AGGIUNTO: Stato locale per il debito del cliente
 
   @override
   void initState() {
@@ -24,7 +25,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _recuperaDatiIniziali(); // MODIFICATO: Cambiato nome per riflettere il recupero completo
   }
 
-  // MODIFICATO: Recupera il numero di telefono e gli appuntamenti saltati corrente da Firestore
+  // MODIFICATO: Recupera il numero di telefono, gli appuntamenti saltati e il debito corrente da Firestore
   Future<void> _recuperaDatiIniziali() async {
     if (_user == null) return;
     try {
@@ -38,11 +39,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _telefonoCorrente = dati['phone'] ?? 'Nessun cellulare';
           _appuntamentiSaltati = dati['appuntamentisaltati'] ?? 0;
+          _debitoPresente = (dati['debito'] ?? 0).toDouble();
         });
       } else {
         setState(() {
           _telefonoCorrente = 'Nessun cellulare';
           _appuntamentiSaltati = 0;
+          _debitoPresente = 0.0;
         });
       }
     } catch (e) {
@@ -51,6 +54,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _telefonoCorrente = 'Nessun cellulare';
           _appuntamentiSaltati = 0;
+          _debitoPresente = 0.0;
         });
       }
     }
@@ -496,6 +500,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               '$_appuntamentiSaltati',
               style: TextStyle(
                 color: _appuntamentiSaltati > 0 ? Colors.red : Colors.green,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          // AGGIUNTO: Voce informativa per visualizzare il debito presente
+          ListTile(
+            leading: const Icon(Icons.account_balance_wallet, color: Colors.red),
+            title: Text('Debito Presente', style: TextStyle(color: coloreTestoPrimario)),
+            subtitle: Text(
+              '€ ${_debitoPresente.toStringAsFixed(2)}',
+              style: TextStyle(
+                color: _debitoPresente > 0 ? Colors.red : Colors.green,
                 fontWeight: FontWeight.bold,
               ),
             ),

@@ -14,6 +14,7 @@ import 'screens/storico_prenotazioni_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'screens/gestione_servizi_screen.dart';
 import 'screens/gestione_operatori_screen.dart';
+import 'screens/gestione_periodico_screen.dart';
 import 'screens/gestione_orari_screen.dart';
 import 'screens/gestione_calendario_screen.dart';
 import 'screens/gestione_turni_operatori_screen.dart';
@@ -472,6 +473,29 @@ class BarbiereHomePage extends StatelessWidget {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade900),
               onPressed: () async {
                 Navigator.pop(context);
+
+                try {
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    final token = await FirebaseMessaging.instance.getToken();
+                    if (token != null && token.isNotEmpty) {
+                      // 1. Rimuove il token dell'utente da Firestore
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(user.uid)
+                          .update({
+                        'fcmTokens': FieldValue.arrayRemove([token]),
+                        'fcmToken': FieldValue.delete(),
+                      });
+                    }
+                  }
+                  // 2. Cancellazione fisica del token FCM dal dispositivo hardware
+                  await FirebaseMessaging.instance.deleteToken();
+                } catch (e) {
+                  debugPrint("Errore nella rimozione del token FCM al logout: $e");
+                }
+
+                // 3. Disconnessione utente da Firebase Auth
                 await FirebaseAuth.instance.signOut();
               },
               child: const Text(
@@ -700,6 +724,31 @@ class BarbiereHomePage extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => const GestioneClientiScreen()),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF164638),
+                    child: Icon(Icons.autorenew, color: Colors.white),
+                  ),
+                  title: const Text(
+                    'Programma Periodico',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  subtitle: const Text('Fissa automaticamente gli appuntamenti ricorrenti per un cliente'),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFFE2B13C), size: 30),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const GestionePeriodicoScreen()),
                     );
                   },
                 ),

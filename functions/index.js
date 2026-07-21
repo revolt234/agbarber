@@ -8,7 +8,6 @@ exports.eliminaUtenteCompleto = onCall({ region: "europe-west3" }, async (reques
   const auth = request.auth;
   const data = request.data;
 
-  // Verifica di sicurezza: l'utente deve essere autenticato
   if (!auth) {
     throw new HttpsError(
       "unauthenticated",
@@ -162,7 +161,54 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
   }
 });
 
-// 3. INVIA SOLLECITO CLIENTE
+// Helper per estrarre tutti i token validi da un documento utente (retrocompatibile)
+function estraiTuttiIToken(datiUtente) {
+  const tokens = new Set();
+
+  // Array multi-dispositivo (nuovo sistema)
+  if (Array.isArray(datiUtente.fcmTokens)) {
+    datiUtente.fcmTokens.forEach((t) => {
+      if (t && typeof t === 'string' && t.trim().length > 0) tokens.add(t.trim());
+    });
+  }
+
+  // Fallback campo singolo (vecchio sistema)
+  if (datiUtente.fcmToken && typeof datiUtente.fcmToken === 'string') {
+    tokens.add(datiUtente.fcmToken.trim());
+  }
+  if (datiUtente.pushToken && typeof datiUtente.pushToken === 'string') {
+    tokens.add(datiUtente.pushToken.trim());
+  }
+
+  return Array.from(tokens);
+}
+
+// Helper per inviare push a una lista di token e pulire i token non più validi
+async function inviaNotificheEPulisciToken(tokens, messaggioBase, userDocRef) {
+  const invii = tokens.map(async (token) => {
+    try {
+      const messaggioPush = { ...messaggioBase, token: token };
+      await admin.messaging().send(messaggioPush);
+    } catch (err) {
+      // Se il token è invalido o il dispositivo si è disconnesso/ha disinstallato, lo rimuoviamo dal DB
+      if (
+        err.code === 'messaging/invalid-registration-token' ||
+        err.code === 'messaging/registration-token-not-registered'
+      ) {
+        if (userDocRef) {
+          await userDocRef.update({
+            fcmTokens: admin.firestore.FieldValue.arrayRemove(token)
+          });
+        }
+      }
+      console.warn(`Invio notifica fallito per il token ${token}:`, err.message);
+    }
+  });
+
+  await Promise.all(invii);
+}
+
+// 3. INVIA SOLLECITO CLIENTE (Multi-Dispositivo con Autopulizia Token)
 exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
   const data = request.data;
@@ -193,15 +239,15 @@ exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (reques
       );
     }
 
-    const clientDoc = await db.collection("users").doc(userIdCliente).get();
+    const clientRef = db.collection("users").doc(userIdCliente);
+    const clientDoc = await clientRef.get();
     if (!clientDoc.exists) {
       throw new HttpsError("not-found", "Impossibile trovare il profilo del cliente.");
     }
 
-    const clienteData = clientDoc.data();
-    const fcmToken = clienteData.fcmToken || clienteData.pushToken;
+    const tokens = estraiTuttiIToken(clientDoc.data());
 
-    if (!fcmToken) {
+    if (tokens.length === 0) {
       throw new HttpsError(
         "failed-precondition",
         "Il cliente non ha le notifiche push attive o un dispositivo registrato."
@@ -210,8 +256,7 @@ exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (reques
 
     const testoNotifica = "Ehi dove sei? Il barbiere ti sta aspettando al salone!";
 
-    const messaggioPush = {
-      token: fcmToken,
+    const messaggioBase = {
       notification: {
         title: "Il barbiere ti aspetta! 💈",
         body: testoNotifica,
@@ -235,22 +280,18 @@ exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (reques
       }
     };
 
-    await admin.messaging().send(messaggioPush);
+    await inviaNotificheEPulisciToken(tokens, messaggioBase, clientRef);
 
-    return { success: true, message: "Sollecito inviato con successo al dispositivo del cliente." };
+    return { success: true, message: `Sollecito inviato con successo.` };
 
   } catch (error) {
     console.error("Errore invio sollecito push:", error.message);
-    if (error.errorInfo) {
-      console.error("Dettagli errore FCM:", JSON.stringify(error.errorInfo));
-    }
-
     if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", error.message);
   }
 });
 
-// 4. INVIA NOTIFICA PERSONALIZZATA CLIENTE
+// 4. INVIA NOTIFICA PERSONALIZZATA CLIENTE (Multi-Dispositivo con Autopulizia Token)
 exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
   const data = request.data;
@@ -283,7 +324,8 @@ exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, 
       );
     }
 
-    const userDoc = await db.collection("users").doc(userIdCliente).get();
+    const userRef = db.collection("users").doc(userIdCliente);
+    const userDoc = await userRef.get();
 
     if (!userDoc.exists) {
       throw new HttpsError(
@@ -292,18 +334,16 @@ exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, 
       );
     }
 
-    const userData = userDoc.data();
-    const tokenFcm = userData.fcmToken || userData.pushToken;
+    const tokens = estraiTuttiIToken(userDoc.data());
 
-    if (!tokenFcm) {
+    if (tokens.length === 0) {
       throw new HttpsError(
         "failed-precondition",
-        "Il cliente non ha un token notifiche valido registrato."
+        "Il cliente non ha dispositivi attivi per ricevere notifiche."
       );
     }
 
-    const payload = {
-      token: tokenFcm,
+    const messaggioBase = {
       notification: {
         title: "AG Barber",
         body: messaggioPersonalizzato,
@@ -324,9 +364,9 @@ exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, 
       },
     };
 
-    await admin.messaging().send(payload);
+    await inviaNotificheEPulisciToken(tokens, messaggioBase, userRef);
 
-    return { success: true, message: "Notifica inviata con successo!" };
+    return { success: true, message: `Notifica inviata con successo!` };
   } catch (error) {
     console.error("Errore durante l'invio della notifica personalizzata:", error);
     if (error instanceof HttpsError) throw error;
@@ -337,7 +377,7 @@ exports.inviaNotificaPersonalizzataCliente = onCall({ region: "europe-west3" }, 
   }
 });
 
-// 5. INVIA NOTIFICA NUOVA PRENOTAZIONE AL BARBIERE
+// 5. INVIA NOTIFICA NUOVA PRENOTAZIONE AL BARBIERE (Multi-Dispositivo Simultaneo con Autopulizia Token)
 exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
   const data = request.data;
@@ -368,55 +408,44 @@ exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west
       return { success: false, message: "Nessun barbiere trovato." };
     }
 
-    const tokens = [];
-    barbieriSnap.docs.forEach((doc) => {
-      const d = doc.data();
-      const token = d.fcmToken || d.pushToken;
-      if (token && !tokens.includes(token)) {
-        tokens.push(token);
-      }
-    });
-
-    if (tokens.length === 0) {
-      console.warn("Nessun barbiere ha un token notifiche (fcmToken/pushToken) valido.");
-      return { success: false, message: "Il barbiere non ha le notifiche push attive." };
-    }
     const dateFormatted = date.split('-').reverse().join('/');
     const testoNotifica = `${dateFormatted} ore ${slot} con ${barberName || "lo staff"}: ${clienteNome || "Un cliente"} - ${serviceNome}`;
 
-    const invii = tokens.map((token) => {
-      const messaggioPush = {
-        token: token,
+    const messaggioBase = {
+      notification: {
+        title: "Nuova Prenotazione! 💈",
+        body: testoNotifica,
+      },
+      android: {
+        priority: "high",
         notification: {
-          title: "Nuova Prenotazione! 💈",
-          body: testoNotifica,
+          sound: "default",
+          icon: "ic_stat_name",
         },
-        android: {
-          priority: "high",
-          notification: {
+      },
+      apns: {
+        payload: {
+          aps: {
             sound: "default",
-            icon: "ic_stat_name",
+            badge: 0,
           },
         },
-        apns: {
-          payload: {
-            aps: {
-              sound: "default",
-              badge: 0,
-            },
-          },
-        },
-        data: {
-          type: "nuova_prenotazione",
-        },
-      };
+      },
+      data: {
+        type: "nuova_prenotazione",
+      },
+    };
 
-      return admin.messaging().send(messaggioPush);
+    const inviiGruppo = barbieriSnap.docs.map(async (doc) => {
+      const tokens = estraiTuttiIToken(doc.data());
+      if (tokens.length > 0) {
+        await inviaNotificheEPulisciToken(tokens, messaggioBase, doc.ref);
+      }
     });
 
-    await Promise.all(invii);
+    await Promise.all(inviiGruppo);
 
-    return { success: true, message: `Notifica inviata con successo a ${tokens.length} barbieri.` };
+    return { success: true, message: `Notifica inviata con successo.` };
 
   } catch (error) {
     console.error("Errore durante l'invio della notifica al barbiere:", error);
@@ -428,7 +457,7 @@ exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west
   }
 });
 
-// 6. INVIA NOTIFICA ANNULLAMENTO PRENOTAZIONE AL BARBIERE
+// 6. INVIA NOTIFICA ANNULLAMENTO PRENOTAZIONE AL BARBIERE (Multi-Dispositivo Simultaneo con Autopulizia Token)
 exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
   const data = request.data;
@@ -459,59 +488,44 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
       return { success: false, message: "Nessun barbiere trovato." };
     }
 
-    const tokens = [];
-    barbieriSnap.docs.forEach((doc) => {
-      const d = doc.data();
-      const token = d.fcmToken || d.pushToken;
-      if (token && !tokens.includes(token)) {
-        tokens.push(token);
+    const dateFormatted = date.split('-').reverse().join('/');
+    const testoAnnullamento = `${dateFormatted} ore ${slot} con ${barberName || "Staff"}: ${clienteNome || "Un cliente"} - ${serviceNome || "Servizio"}.`;
+
+    const messaggioBase = {
+      notification: {
+        title: "Prenotazione Annullata ❌",
+        body: testoAnnullamento,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          sound: "default",
+          icon: "ic_stat_name",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 0,
+          },
+        },
+      },
+      data: {
+        type: "annullamento_prenotazione",
+      },
+    };
+
+    const inviiGruppo = barbieriSnap.docs.map(async (doc) => {
+      const tokens = estraiTuttiIToken(doc.data());
+      if (tokens.length > 0) {
+        await inviaNotificheEPulisciToken(tokens, messaggioBase, doc.ref);
       }
     });
 
-    if (tokens.length === 0) {
-      console.warn("Nessun barbiere ha un token notifiche (fcmToken/pushToken) valido.");
-      return { success: false, message: "Il barbiere non ha le notifiche push attive." };
-    }
+    await Promise.all(inviiGruppo);
 
-    // Formattiamo la data da YYYY-MM-DD a DD/MM/YYYY per massima chiarezza
-    const dateFormatted = date.split('-').reverse().join('/');
-
-    // Testo ottimizzato: dati essenziali subito visibili
-    const testoAnnullamento = `${dateFormatted} ore ${slot} con ${barberName || "Staff"}: ${clienteNome || "Un cliente"} - ${serviceNome || "Servizio"}.`;
-
-    const invii = tokens.map((token) => {
-      const messaggioPush = {
-        token: token,
-        notification: {
-          title: "Prenotazione Annullata ❌",
-          body: testoAnnullamento,
-        },
-        android: {
-          priority: "high",
-          notification: {
-            sound: "default",
-            icon: "ic_stat_name",
-          },
-        },
-        apns: {
-          payload: {
-            aps: {
-              sound: "default",
-              badge: 0,
-            },
-          },
-        },
-        data: {
-          type: "annullamento_prenotazione",
-        },
-      };
-
-      return admin.messaging().send(messaggioPush);
-    });
-
-    await Promise.all(invii);
-
-    return { success: true, message: `Notifica di annullamento inviata con successo a ${tokens.length} barbieri.` };
+    return { success: true, message: `Notifica di annullamento inviata con successo.` };
 
   } catch (error) {
     console.error("Errore durante l'invio della notifica di annullamento:", error);
@@ -520,5 +534,149 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
       "internal",
       error.message || "Errore interno durante l'invio della notifica al barbiere."
     );
+  }
+});
+
+// 7. CREA PRENOTAZIONI PERIODICHE SICURE (Solo Barbiere/Admin)
+exports.creaPrenotazioniPeriodicheSicure = onCall({ region: "europe-west3" }, async (request) => {
+  const auth = request.auth;
+  const data = request.data;
+
+  if (!auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Devi essere autenticato per eseguire questa operazione."
+    );
+  }
+
+  const { userIdCliente, barberId, barberName, serviceNome, servicePrezzo, duration, dateList, slot } = data;
+
+  if (!userIdCliente || !barberId || !barberName || !serviceNome || !servicePrezzo || !duration || !dateList || !slot) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Parametri obbligatori mancanti per la creazione del periodico."
+    );
+  }
+
+  const minutiDaStringa = (s) => {
+    const parti = s.split(':');
+    return parseInt(parti[0], 10) * 60 + parseInt(parti[1], 10);
+  };
+
+  try {
+    const db = admin.firestore();
+
+    const callerDoc = await db.collection("users").doc(auth.uid).get();
+    if (!callerDoc.exists || callerDoc.data().role !== "barbiere") {
+      throw new HttpsError(
+        "permission-denied",
+        "Solo un operatore o barbiere può creare prenotazioni periodiche."
+      );
+    }
+
+    const clientDoc = await db.collection("users").doc(userIdCliente).get();
+    if (!clientDoc.exists) {
+      throw new HttpsError("not-found", "Cliente non trovato nel database.");
+    }
+
+    const clienteData = clientDoc.data();
+    const nomeClienteReale = clienteData.name || clienteData.nome || "Cliente";
+    const emailCliente = clienteData.email || "Cliente anonimo";
+
+    const nuovoInizioMinuti = minutiDaStringa(slot);
+    const nuovoFineMinuti = nuovoInizioMinuti + parseInt(duration, 10);
+
+    const adessoLocaleStr = new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" });
+    const adesso = new Date(adessoLocaleStr);
+    const anno = adesso.getFullYear();
+    const mese = String(adesso.getMonth() + 1).padStart(2, '0');
+    const giorno = String(adesso.getDate()).padStart(2, '0');
+    const oggiDataStr = `${anno}-${mese}-${giorno}`;
+    const minutiAttualiServer = adesso.getHours() * 60 + adesso.getMinutes();
+
+    let createConSuccesso = 0;
+    let saltateOccupate = 0;
+    const dateSaltate = [];
+
+    for (const dateStr of dateList) {
+      if (dateStr === oggiDataStr && nuovoInizioMinuti <= minutiAttualiServer) {
+        saltateOccupate++;
+        dateSaltate.push(dateStr);
+        continue;
+      }
+
+      const bloccoSlotId = `${dateStr}_${barberId}_${slot.replace(':', '')}`;
+
+      const esitoInserimento = await db.runTransaction(async (transaction) => {
+        const docBloccoRef = db.collection("appointments").doc(bloccoSlotId);
+        const snapshotBlocco = await transaction.get(docBloccoRef);
+
+        if (snapshotBlocco.exists) {
+          return false;
+        }
+
+        const queryIncastri = db.collection("appointments")
+          .where("date", "==", dateStr)
+          .where("barberId", "==", barberId);
+
+        const querySnapshot = await transaction.get(queryIncastri);
+
+        let siSovrappone = false;
+        for (const doc of querySnapshot.docs) {
+          const datiApp = doc.data();
+          if (datiApp.slot) {
+            const appInizio = minutiDaStringa(datiApp.slot);
+            const appDurata = datiApp.duration || datiApp.totalDuration || 30;
+            const appFine = appInizio + appDurata;
+
+            if (nuovoInizioMinuti < appFine && nuovoFineMinuti > appInizio) {
+              siSovrappone = true;
+              break;
+            }
+          }
+        }
+
+        if (siSovrappone) {
+          return false;
+        }
+
+        transaction.set(docBloccoRef, {
+          date: dateStr,
+          slot: slot,
+          duration: parseInt(duration, 10),
+          barberId: barberId,
+          barberName: barberName,
+          userId: userIdCliente,
+          userName: nomeClienteReale,
+          userEmail: emailCliente,
+          services: [serviceNome],
+          totalPrice: parseFloat(servicePrezzo),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          isPeriodico: true
+        });
+
+        return true;
+      });
+
+      if (esitoInserimento === true) {
+        createConSuccesso++;
+      } else {
+        saltateOccupate++;
+        dateSaltate.push(dateStr);
+      }
+    }
+
+    return {
+      success: true,
+      createConSuccesso,
+      saltateOccupate,
+      dateSaltate,
+      message: `Processo completato: ${createConSuccesso} create, ${saltateOccupate} saltate.`
+    };
+
+  } catch (error) {
+    console.error("Errore durante la creazione delle prenotazioni periodiche:", error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError("internal", error.message);
   }
 });
