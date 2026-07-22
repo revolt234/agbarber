@@ -12,6 +12,8 @@ class PrenotazioneDataScreen extends StatefulWidget {
   final int servizioDurata;
   final double servizioPrezzo;
   final DateTime dataInizialeSelezionata;
+  final String? clienteId;   // Opzionale: passato in caso di prenotazione per conto di un cliente
+  final String? clienteNome; // Opzionale: passato in caso di prenotazione per conto di un cliente
 
   const PrenotazioneDataScreen({
     super.key,
@@ -20,6 +22,8 @@ class PrenotazioneDataScreen extends StatefulWidget {
     required this.servizioDurata,
     required this.servizioPrezzo,
     required this.dataInizialeSelezionata,
+    this.clienteId,
+    this.clienteNome,
   });
 
   @override
@@ -473,9 +477,30 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     );
   }
 
-  void _mostraPannelloConferma(BuildContext context, String oraSelezionata, String dataStr) {
+  void _mostraPannelloConferma(BuildContext context, String oraSelezionata, String dataStr) async {
     int minutiPreavvisoSelezionati = 30;
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Risoluzione dinamica del cliente target (se passato dal barbiere o se utente loggato)
+    final User? userCorrente = FirebaseAuth.instance.currentUser;
+    final String targetUserIdEffective = widget.clienteId ?? userCorrente?.uid ?? '';
+
+    String targetClienteNomeEffective = widget.clienteNome ?? userCorrente?.displayName ?? '';
+    if (targetClienteNomeEffective.isEmpty && targetUserIdEffective.isNotEmpty) {
+      try {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(targetUserIdEffective).get();
+        if (userDoc.exists && userDoc.data() != null) {
+          targetClienteNomeEffective = userDoc.data()!['name'] ?? userDoc.data()!['nome'] ?? '';
+        }
+      } catch (e) {
+        debugPrint("Errore lettura nome utente Firestore: $e");
+      }
+    }
+    if (targetClienteNomeEffective.isEmpty) {
+      targetClienteNomeEffective = userCorrente?.email ?? 'Cliente';
+    }
+
+    if (!context.mounted) return;
 
     showModalBottomSheet(
       context: context,
@@ -507,6 +532,8 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                       ),
                       Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
 
+                      Text('Cliente: $targetClienteNomeEffective', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
                       Text('Servizio: ${widget.servizioNome}', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 6),
                       Text('Data: $dataStr all\'orario $oraSelezionata', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
@@ -547,8 +574,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                             setState(() => _isSaving = true);
 
                             try {
-                              final user = FirebaseAuth.instance.currentUser;
-                              if (user == null) throw 'Utente non autenticato';
+                              if (targetUserIdEffective.isEmpty) throw 'Utente non autenticato';
 
                               final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
                                   .httpsCallable('creaPrenotazioneSicura');
@@ -561,6 +587,8 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                 'barberName': _barbiereSelezionatoNome,
                                 'serviceNome': widget.servizioNome,
                                 'servicePrezzo': widget.servizioPrezzo,
+                                'targetUserId': targetUserIdEffective,
+                                'targetUserName': targetClienteNomeEffective,
                               });
 
                               final Map<String, dynamic> datiRisposta = Map<String, dynamic>.from(response.data as Map);
@@ -569,19 +597,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
                               final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
 
-                              // --- CORRETTO: Recupero nome dal profilo Firestore ed invio dati puliti ---
                               try {
-                                String nomeClienteReale = user.displayName ?? '';
-                                if (nomeClienteReale.isEmpty) {
-                                  final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                                  if (userDoc.exists && userDoc.data() != null) {
-                                    nomeClienteReale = userDoc.data()!['name'] ?? userDoc.data()!['nome'] ?? '';
-                                  }
-                                }
-                                if (nomeClienteReale.isEmpty) {
-                                  nomeClienteReale = user.email ?? 'Un cliente';
-                                }
-
                                 final HttpsCallable callableNotificaBarbiere = FirebaseFunctions.instanceFor(region: 'europe-west3')
                                     .httpsCallable('inviaNotificaNuovaPrenotazioneAlBarbiere');
 
@@ -590,7 +606,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                   'slot': oraSelezionata,
                                   'barberName': _barbiereSelezionatoNome ?? 'lo staff',
                                   'serviceNome': widget.servizioNome,
-                                  'clienteNome': nomeClienteReale,
+                                  'clienteNome': targetClienteNomeEffective,
                                 });
                               } catch (e) {
                                 debugPrint("Errore durante l'invio della notifica al barbiere: $e");

@@ -70,7 +70,7 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
     );
   }
 
-  const { date, slot, duration, barberId, barberName, serviceNome, servicePrezzo } = data;
+  const { date, slot, duration, barberId, barberName, serviceNome, servicePrezzo, targetUserId, targetUserName } = data;
 
   if (!date || !slot || !duration || !barberId || !barberName || !serviceNome || !servicePrezzo) {
     throw new HttpsError(
@@ -87,10 +87,19 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
   try {
     const db = admin.firestore();
 
-    let nomeRealeCliente = "Cliente";
-    const userDoc = await db.collection("users").doc(auth.uid).get();
+    // Determinazione dell'ID cliente (targetUserId se prenotato dal barbiere, altrimenti auth.uid)
+    const effectiveUserId = targetUserId || auth.uid;
+
+    let nomeRealeCliente = targetUserName || "Cliente";
+    let emailCliente = auth.token.email || "Cliente anonimo";
+
+    const userDoc = await db.collection("users").doc(effectiveUserId).get();
     if (userDoc.exists && userDoc.data()) {
-      nomeRealeCliente = userDoc.data().name || auth.token.name || "Cliente";
+      const userData = userDoc.data();
+      if (!targetUserName) {
+        nomeRealeCliente = userData.name || userData.nome || auth.token.name || "Cliente";
+      }
+      emailCliente = userData.email || emailCliente;
     }
 
     const nuovoInizioMinuti = minutiDaStringa(slot);
@@ -133,9 +142,9 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
         duration: parseInt(duration, 10),
         barberId: barberId,
         barberName: barberName,
-        userId: auth.uid,
+        userId: effectiveUserId,
         userName: nomeRealeCliente,
-        userEmail: auth.token.email || 'Cliente anonimo',
+        userEmail: emailCliente,
         services: [serviceNome],
         totalPrice: parseFloat(servicePrezzo),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),

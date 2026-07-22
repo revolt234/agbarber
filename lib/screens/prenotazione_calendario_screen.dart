@@ -9,6 +9,8 @@ class PrenotazioneCalendarioScreen extends StatefulWidget {
   final String servizioNome;
   final int servizioDurata;
   final double servizioPrezzo;
+  final String? clienteId;   // Opzionale: ID del cliente selezionato
+  final String? clienteNome; // Opzionale: Nome del cliente selezionato
 
   const PrenotazioneCalendarioScreen({
     super.key,
@@ -16,6 +18,8 @@ class PrenotazioneCalendarioScreen extends StatefulWidget {
     required this.servizioNome,
     required this.servizioDurata,
     required this.servizioPrezzo,
+    this.clienteId,
+    this.clienteNome,
   });
 
   @override
@@ -472,6 +476,8 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                                   servizioDurata: widget.servizioDurata,
                                   servizioPrezzo: widget.servizioPrezzo,
                                   dataInizialeSelezionata: giornoDate,
+                                  clienteId: widget.clienteId,     // PASSATO IL CLIENTE
+                                  clienteNome: widget.clienteNome, // PASSATO IL CLIENTE
                                 ),
                               ),
                             );

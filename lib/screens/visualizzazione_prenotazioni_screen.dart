@@ -4,7 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // AGGIUNTO: Necessario per il recupero forzato del token utente corretto
+import 'package:firebase_auth/firebase_auth.dart';
+import 'prenotazione_servizi_barbiere_screen.dart'; // Importato per la navigazione alla schermata del cliente
 
 class VisualizzazionePrenotazioniScreen extends StatefulWidget {
   const VisualizzazionePrenotazioniScreen({super.key});
@@ -50,6 +51,181 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     if (data.containsKey('totalDuration')) return data['totalDuration'];
     if (data.containsKey('services_duration')) return data['services_duration'];
     return 30;
+  }
+
+  // Dialog/BottomSheet per la selezione del cliente e reindirizzamento alla prenotazione
+  void _mostraSelezionaClienteEAvviaPrenotazione() {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color coloreSfondo = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final Color coloreTesto = isDarkMode ? Colors.white : Colors.black87;
+    final TextEditingController searchController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (bottomSheetContext) {
+        return FractionallySizedBox(
+          heightFactor: 0.9, // Copre la schermata fino in alto
+          child: Container(
+            decoration: BoxDecoration(
+              color: coloreSfondo,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Intestazione con titolo e pulsante di chiusura
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'SELEZIONA CLIENTE',
+                        style: TextStyle(
+                          color: coloreTesto,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: coloreTesto),
+                        onPressed: () => Navigator.pop(bottomSheetContext),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // StreamBuilder per caricare i clienti ed elencarli in alto sopra la tastiera
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .where('role', isNotEqualTo: 'barbiere')
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)));
+                        }
+                        final clientiDocs = snapshot.data!.docs;
+
+                        return RawAutocomplete<QueryDocumentSnapshot>(
+                          textEditingController: searchController,
+                          displayStringForOption: (doc) {
+                            final d = doc.data() as Map<String, dynamic>;
+                            final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
+                            final email = d['email'] ?? '';
+                            return email.isNotEmpty ? "$nome ($email)" : nome;
+                          },
+                          optionsBuilder: (TextEditingValue textEditingValue) {
+                            if (textEditingValue.text.isEmpty) {
+                              return clientiDocs;
+                            }
+                            final query = textEditingValue.text.toLowerCase();
+                            return clientiDocs.where((doc) {
+                              final d = doc.data() as Map<String, dynamic>;
+                              final nome = (d['name'] ?? d['nome'] ?? '').toString().toLowerCase();
+                              final email = (d['email'] ?? '').toString().toLowerCase();
+                              return nome.contains(query) || email.contains(query);
+                            });
+                          },
+                          onSelected: (QueryDocumentSnapshot doc) {
+                            final d = doc.data() as Map<String, dynamic>;
+                            final nomeCliente = d['name'] ?? d['nome'] ?? 'Cliente';
+
+                            Navigator.pop(bottomSheetContext);
+
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => PrenotazioneServiziBarbiereScreen(
+                                  clienteId: doc.id,
+                                  clienteNome: nomeCliente,
+                                ),
+                              ),
+                            );
+                          },
+                          fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                            return TextField(
+                              controller: controller,
+                              focusNode: focusNode,
+                              autofocus: true,
+                              style: TextStyle(color: coloreTesto),
+                              decoration: InputDecoration(
+                                hintText: 'Cerca cliente per nome o email...',
+                                hintStyle: TextStyle(
+                                  color: isDarkMode ? Colors.white54 : Colors.black45,
+                                  fontSize: 14,
+                                ),
+                                prefixIcon: Icon(Icons.search, color: agOro),
+                                suffixIcon: controller.text.isNotEmpty
+                                    ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 20),
+                                  onPressed: () {
+                                    controller.clear();
+                                  },
+                                )
+                                    : null,
+                                filled: true,
+                                fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            );
+                          },
+                          optionsViewBuilder: (context, onSelected, options) {
+                            return Align(
+                              alignment: Alignment.topLeft,
+                              child: Material(
+                                elevation: 0,
+                                color: Colors.transparent,
+                                child: Container(
+                                  margin: const EdgeInsets.only(top: 8),
+                                  child: ListView.separated(
+                                    padding: EdgeInsets.zero,
+                                    shrinkWrap: true,
+                                    itemCount: options.length,
+                                    separatorBuilder: (context, index) => const Divider(height: 1),
+                                    itemBuilder: (BuildContext context, int index) {
+                                      final doc = options.elementAt(index);
+                                      final d = doc.data() as Map<String, dynamic>;
+                                      final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
+                                      final email = d['email'] ?? 'No email';
+
+                                      return ListTile(
+                                        dense: true,
+                                        title: Text(
+                                          nome,
+                                          style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold),
+                                        ),
+                                        subtitle: Text(
+                                          email,
+                                          style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54),
+                                        ),
+                                        onTap: () => onSelected(doc),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _selezionaData(BuildContext context) async {
@@ -145,7 +321,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
         return StatefulBuilder(
             builder: (BuildContext context, StateSetter setModalState) {
-              // Verifica se l'appuntamento ha un flag 'pagato' impostato a false
               final bool isContrassegnatoNonPagato = data['pagato'] == false;
 
               return Container(
@@ -332,7 +507,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                             ],
                           ),
                           const SizedBox(height: 16),
-                          // SEZIONE GESTIONE DEBITO / MANCATO PAGAMENTO
                           Text(
                             'STATO PAGAMENTO',
                             style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
@@ -355,7 +529,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
                               try {
                                 if (selected) {
-                                  // Esegue una transazione atomica per incrementare in modo sicuro il debito dell'utente
                                   await FirebaseFirestore.instance.runTransaction((transaction) async {
                                     final userSnapshot = await transaction.get(userRef);
                                     double debitoAttuale = 0.0;
@@ -371,7 +544,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                     data['pagato'] = false;
                                   });
                                 } else {
-                                  // Esegue una transazione atomica per stornare/rimborsare il debito se deselezionato
                                   await FirebaseFirestore.instance.runTransaction((transaction) async {
                                     final userSnapshot = await transaction.get(userRef);
                                     double debitoAttuale = 0.0;
@@ -427,7 +599,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                 : () async {
                               setModalState(() => isInvioInCorso = true);
                               try {
-                                // MODIFICATO: Forza il refresh immediato del token utente per evitare la scadenza delle credenziali OAuth2 su iOS
                                 await FirebaseAuth.instance.currentUser?.getIdToken(true);
 
                                 final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
@@ -448,7 +619,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               } catch (e) {
                                 setModalState(() => isInvioInCorso = false);
 
-                                // MODIFICATO: Estrae il messaggio di errore nativo proveniente dalle Cloud Functions per diagnostica
                                 String erroreDettaglio = e is FirebaseFunctionsException
                                     ? e.message ?? e.toString()
                                     : e.toString();
@@ -587,6 +757,13 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         backgroundColor: agVerde,
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
+      ),
+      // FloatingActionButton '+' in basso a destra per selezionare un cliente
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: agOro,
+        foregroundColor: Colors.black,
+        onPressed: _mostraSelezionaClienteEAvviaPrenotazione,
+        child: const Icon(Icons.add, size: 28),
       ),
       body: SafeArea(
         child: Column(
@@ -865,10 +1042,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                   final String oraInizioStr = data['slot'] ?? '--:--';
                                   final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
 
-                                  // MODIFICATO: Rilevazione del flag per le prenotazioni periodiche
                                   final bool isPeriodico = data['isPeriodico'] == true;
 
-                                  // Colori dinamici in base alla natura della prenotazione (Standard vs Periodico)
                                   final Color coloreSfondoCard = isPeriodico
                                       ? agOro.withValues(alpha: 0.95)
                                       : agVerde.withValues(alpha: 0.95);
