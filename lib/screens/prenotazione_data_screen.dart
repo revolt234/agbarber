@@ -481,24 +481,17 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     int minutiPreavvisoSelezionati = 30;
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Risoluzione dinamica del cliente target (se passato dal barbiere o se utente loggato)
+    // Risoluzione cliente: usa direttamente i dati passati (cliente registrato o ospite),
+    // altrimenti usa i dati dell'utente loggato (cliente autonomo).
     final User? userCorrente = FirebaseAuth.instance.currentUser;
-    final String targetUserIdEffective = widget.clienteId ?? userCorrente?.uid ?? '';
 
-    String targetClienteNomeEffective = widget.clienteNome ?? userCorrente?.displayName ?? '';
-    if (targetClienteNomeEffective.isEmpty && targetUserIdEffective.isNotEmpty) {
-      try {
-        final userDoc = await FirebaseFirestore.instance.collection('users').doc(targetUserIdEffective).get();
-        if (userDoc.exists && userDoc.data() != null) {
-          targetClienteNomeEffective = userDoc.data()!['name'] ?? userDoc.data()!['nome'] ?? '';
-        }
-      } catch (e) {
-        debugPrint("Errore lettura nome utente Firestore: $e");
-      }
-    }
-    if (targetClienteNomeEffective.isEmpty) {
-      targetClienteNomeEffective = userCorrente?.email ?? 'Cliente';
-    }
+    final String targetUserIdEffective = (widget.clienteId != null && widget.clienteId!.isNotEmpty)
+        ? widget.clienteId!
+        : (userCorrente?.uid ?? '');
+
+    final String targetClienteNomeEffective = (widget.clienteNome != null && widget.clienteNome!.trim().isNotEmpty)
+        ? widget.clienteNome!.trim()
+        : (userCorrente?.displayName ?? userCorrente?.email ?? 'Cliente');
 
     if (!context.mounted) return;
 

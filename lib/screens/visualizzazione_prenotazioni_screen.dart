@@ -66,6 +66,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       useSafeArea: true,
       builder: (bottomSheetContext) {
         String queryRicerca = "";
+        bool isClienteRegistrato = true;
+        final TextEditingController nomeOspiteController = TextEditingController();
+        final FocusNode ospiteFocusNode = FocusNode();
 
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -102,100 +105,211 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                       ),
                       const SizedBox(height: 8),
 
-                      // Campo di ricerca
-                      TextField(
-                        autofocus: true,
-                        style: TextStyle(color: coloreTesto),
-                        onChanged: (val) {
-                          setModalState(() {
-                            queryRicerca = val.toLowerCase().trim();
-                          });
-                        },
-                        decoration: InputDecoration(
-                          hintText: 'Cerca cliente per nome o email...',
-                          hintStyle: TextStyle(
-                            color: isDarkMode ? Colors.white54 : Colors.black45,
-                            fontSize: 14,
-                          ),
-                          prefixIcon: Icon(Icons.search, color: agOro),
-                          filled: true,
-                          fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      // Scelta tra Cliente Registrato o Meno
+                      Text(
+                        'Cliente registrato:',
+                        style: TextStyle(color: coloreTesto, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<bool>(
+                          segments: const [
+                            ButtonSegment<bool>(
+                              value: true,
+                              label: Text('Sì'),
+                              icon: Icon(Icons.person),
+                            ),
+                            ButtonSegment<bool>(
+                              value: false,
+                              label: Text('No (Ospite)'),
+                              icon: Icon(Icons.person_add_alt_1),
+                            ),
+                          ],
+                          selected: {isClienteRegistrato},
+                          onSelectionChanged: (Set<bool> newSelection) {
+                            setModalState(() {
+                              isClienteRegistrato = newSelection.first;
+                            });
+                            // Se si seleziona Ospite, sposta subito il focus sul campo di testo
+                            if (!isClienteRegistrato) {
+                              Future.microtask(() => ospiteFocusNode.requestFocus());
+                            }
+                          },
+                          style: ButtonStyle(
+                            backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                              if (states.contains(WidgetState.selected)) {
+                                return agVerde;
+                              }
+                              return isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100;
+                            }),
+                            foregroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                              if (states.contains(WidgetState.selected)) {
+                                return Colors.white;
+                              }
+                              return coloreTesto;
+                            }),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
 
-                      // Lista clienti posizionata direttamente sotto il campo di testo
-                      Expanded(
-                        child: StreamBuilder<QuerySnapshot>(
-                          stream: FirebaseFirestore.instance
-                              .collection('users')
-                              .where('role', isNotEqualTo: 'barbiere')
-                              .snapshots(),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) {
-                              return const Center(
-                                child: CircularProgressIndicator(color: Color(0xFFE2B13C)),
+                      // VISTA CLIENTE REGISTRATO
+                      if (isClienteRegistrato) ...[
+                        // Campo di ricerca
+                        TextField(
+                          autofocus: true,
+                          style: TextStyle(color: coloreTesto),
+                          onChanged: (val) {
+                            setModalState(() {
+                              queryRicerca = val.toLowerCase().trim();
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Cerca cliente per nome o email...',
+                            hintStyle: TextStyle(
+                              color: isDarkMode ? Colors.white54 : Colors.black45,
+                              fontSize: 14,
+                            ),
+                            prefixIcon: Icon(Icons.search, color: agOro),
+                            filled: true,
+                            fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Lista clienti da Firestore
+                        Expanded(
+                          child: StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .where('role', isNotEqualTo: 'barbiere')
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData) {
+                                return const Center(
+                                  child: CircularProgressIndicator(color: Color(0xFFE2B13C)),
+                                );
+                              }
+
+                              final clientiDocs = snapshot.data!.docs.where((doc) {
+                                final d = doc.data() as Map<String, dynamic>;
+                                final nome = (d['name'] ?? d['nome'] ?? '').toString().toLowerCase();
+                                final email = (d['email'] ?? '').toString().toLowerCase();
+                                return queryRicerca.isEmpty || nome.contains(queryRicerca) || email.contains(queryRicerca);
+                              }).toList();
+
+                              if (clientiDocs.isEmpty) {
+                                return Center(
+                                  child: Text(
+                                    'Nessun cliente trovato',
+                                    style: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45),
+                                  ),
+                                );
+                              }
+
+                              return ListView.separated(
+                                itemCount: clientiDocs.length,
+                                separatorBuilder: (context, index) => const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final doc = clientiDocs[index];
+                                  final d = doc.data() as Map<String, dynamic>;
+                                  final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
+                                  final email = d['email'] ?? 'No email';
+
+                                  return ListTile(
+                                    dense: true,
+                                    title: Text(
+                                      nome,
+                                      style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    subtitle: Text(
+                                      email,
+                                      style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54),
+                                    ),
+                                    onTap: () {
+                                      Navigator.pop(bottomSheetContext);
+
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => PrenotazioneServiziBarbiereScreen(
+                                            clienteId: doc.id,
+                                            clienteNome: nome,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
                               );
-                            }
+                            },
+                          ),
+                        ),
+                      ]
+                      // VISTA CLIENTE NON REGISTRATO (OSPITE)
+                      else ...[
+                        TextField(
+                          controller: nomeOspiteController,
+                          focusNode: ospiteFocusNode,
+                          autofocus: true,
+                          style: TextStyle(color: coloreTesto),
+                          onChanged: (_) => setModalState(() {}),
+                          decoration: InputDecoration(
+                            labelText: 'Nome e Cognome cliente non registrato',
+                            labelStyle: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54),
+                            hintText: 'Es. Mario Rossi',
+                            hintStyle: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38),
+                            prefixIcon: Icon(Icons.person_outline, color: agVerde),
+                            filled: true,
+                            fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: agOro, width: 2),
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: agOro,
+                              foregroundColor: const Color(0xFF121212),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: nomeOspiteController.text.trim().isEmpty
+                                ? null
+                                : () {
+                              final nomeInserito = nomeOspiteController.text.trim();
+                              Navigator.pop(bottomSheetContext);
 
-                            final clientiDocs = snapshot.data!.docs.where((doc) {
-                              final d = doc.data() as Map<String, dynamic>;
-                              final nome = (d['name'] ?? d['nome'] ?? '').toString().toLowerCase();
-                              final email = (d['email'] ?? '').toString().toLowerCase();
-                              return queryRicerca.isEmpty || nome.contains(queryRicerca) || email.contains(queryRicerca);
-                            }).toList();
-
-                            if (clientiDocs.isEmpty) {
-                              return Center(
-                                child: Text(
-                                  'Nessun cliente trovato',
-                                  style: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45),
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => PrenotazioneServiziBarbiereScreen(
+                                    clienteId: 'OSPITE',
+                                    clienteNome: nomeInserito,
+                                  ),
                                 ),
                               );
-                            }
-
-                            return ListView.separated(
-                              itemCount: clientiDocs.length,
-                              separatorBuilder: (context, index) => const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final doc = clientiDocs[index];
-                                final d = doc.data() as Map<String, dynamic>;
-                                final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
-                                final email = d['email'] ?? 'No email';
-
-                                return ListTile(
-                                  dense: true,
-                                  title: Text(
-                                    nome,
-                                    style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 15),
-                                  ),
-                                  subtitle: Text(
-                                    email,
-                                    style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54),
-                                  ),
-                                  onTap: () {
-                                    Navigator.pop(bottomSheetContext);
-
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => PrenotazioneServiziBarbiereScreen(
-                                          clienteId: doc.id,
-                                          clienteNome: nome,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
-                            );
-                          },
+                            },
+                            child: const Text(
+                              'PROSEGUI',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                      ],
                     ],
                   ),
                 ),

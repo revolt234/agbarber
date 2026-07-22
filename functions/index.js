@@ -91,15 +91,20 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
     const effectiveUserId = targetUserId || auth.uid;
 
     let nomeRealeCliente = targetUserName || "Cliente";
-    let emailCliente = auth.token.email || "Cliente anonimo";
+    let emailCliente = (auth.token && auth.token.email) ? auth.token.email : "Cliente anonimo";
 
-    const userDoc = await db.collection("users").doc(effectiveUserId).get();
-    if (userDoc.exists && userDoc.data()) {
-      const userData = userDoc.data();
-      if (!targetUserName) {
-        nomeRealeCliente = userData.name || userData.nome || auth.token.name || "Cliente";
+    // Se NON è un ospite non registrato, recupera le informazioni dal profilo utente in Firestore
+    if (effectiveUserId !== "OSPITE") {
+      const userDoc = await db.collection("users").doc(effectiveUserId).get();
+      if (userDoc.exists && userDoc.data()) {
+        const userData = userDoc.data();
+        if (!targetUserName) {
+          nomeRealeCliente = userData.name || userData.nome || (auth.token && auth.token.name) || "Cliente";
+        }
+        emailCliente = userData.email || emailCliente;
       }
-      emailCliente = userData.email || emailCliente;
+    } else {
+      emailCliente = "Cliente Non Registrato";
     }
 
     const nuovoInizioMinuti = minutiDaStringa(slot);
