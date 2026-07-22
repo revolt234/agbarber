@@ -58,7 +58,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final Color coloreSfondo = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final Color coloreTesto = isDarkMode ? Colors.white : Colors.black87;
-    final TextEditingController searchController = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -66,163 +65,143 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       backgroundColor: Colors.transparent,
       useSafeArea: true,
       builder: (bottomSheetContext) {
-        return FractionallySizedBox(
-          heightFactor: 0.9, // Copre la schermata fino in alto
-          child: Container(
-            decoration: BoxDecoration(
-              color: coloreSfondo,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Intestazione con titolo e pulsante di chiusura
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        String queryRicerca = "";
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return FractionallySizedBox(
+              heightFactor: 0.9, // Copre la schermata fino in alto
+              child: Container(
+                decoration: BoxDecoration(
+                  color: coloreSfondo,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'SELEZIONA CLIENTE',
-                        style: TextStyle(
-                          color: coloreTesto,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          letterSpacing: 0.5,
+                      // Intestazione con titolo e pulsante di chiusura
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'SELEZIONA CLIENTE',
+                            style: TextStyle(
+                              color: coloreTesto,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close, color: coloreTesto),
+                            onPressed: () => Navigator.pop(bottomSheetContext),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Campo di ricerca
+                      TextField(
+                        autofocus: true,
+                        style: TextStyle(color: coloreTesto),
+                        onChanged: (val) {
+                          setModalState(() {
+                            queryRicerca = val.toLowerCase().trim();
+                          });
+                        },
+                        decoration: InputDecoration(
+                          hintText: 'Cerca cliente per nome o email...',
+                          hintStyle: TextStyle(
+                            color: isDarkMode ? Colors.white54 : Colors.black45,
+                            fontSize: 14,
+                          ),
+                          prefixIcon: Icon(Icons.search, color: agOro),
+                          filled: true,
+                          fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.close, color: coloreTesto),
-                        onPressed: () => Navigator.pop(bottomSheetContext),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
+                      const SizedBox(height: 12),
 
-                  // StreamBuilder per caricare i clienti ed elencarli in alto sopra la tastiera
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('users')
-                          .where('role', isNotEqualTo: 'barbiere')
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)));
-                        }
-                        final clientiDocs = snapshot.data!.docs;
-
-                        return RawAutocomplete<QueryDocumentSnapshot>(
-                          textEditingController: searchController,
-                          displayStringForOption: (doc) {
-                            final d = doc.data() as Map<String, dynamic>;
-                            final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
-                            final email = d['email'] ?? '';
-                            return email.isNotEmpty ? "$nome ($email)" : nome;
-                          },
-                          optionsBuilder: (TextEditingValue textEditingValue) {
-                            if (textEditingValue.text.isEmpty) {
-                              return clientiDocs;
+                      // Lista clienti posizionata direttamente sotto il campo di testo
+                      Expanded(
+                        child: StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('users')
+                              .where('role', isNotEqualTo: 'barbiere')
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) {
+                              return const Center(
+                                child: CircularProgressIndicator(color: Color(0xFFE2B13C)),
+                              );
                             }
-                            final query = textEditingValue.text.toLowerCase();
-                            return clientiDocs.where((doc) {
+
+                            final clientiDocs = snapshot.data!.docs.where((doc) {
                               final d = doc.data() as Map<String, dynamic>;
                               final nome = (d['name'] ?? d['nome'] ?? '').toString().toLowerCase();
                               final email = (d['email'] ?? '').toString().toLowerCase();
-                              return nome.contains(query) || email.contains(query);
-                            });
-                          },
-                          onSelected: (QueryDocumentSnapshot doc) {
-                            final d = doc.data() as Map<String, dynamic>;
-                            final nomeCliente = d['name'] ?? d['nome'] ?? 'Cliente';
+                              return queryRicerca.isEmpty || nome.contains(queryRicerca) || email.contains(queryRicerca);
+                            }).toList();
 
-                            Navigator.pop(bottomSheetContext);
+                            if (clientiDocs.isEmpty) {
+                              return Center(
+                                child: Text(
+                                  'Nessun cliente trovato',
+                                  style: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45),
+                                ),
+                              );
+                            }
 
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => PrenotazioneServiziBarbiereScreen(
-                                  clienteId: doc.id,
-                                  clienteNome: nomeCliente,
-                                ),
-                              ),
-                            );
-                          },
-                          fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                            return TextField(
-                              controller: controller,
-                              focusNode: focusNode,
-                              autofocus: true,
-                              style: TextStyle(color: coloreTesto),
-                              decoration: InputDecoration(
-                                hintText: 'Cerca cliente per nome o email...',
-                                hintStyle: TextStyle(
-                                  color: isDarkMode ? Colors.white54 : Colors.black45,
-                                  fontSize: 14,
-                                ),
-                                prefixIcon: Icon(Icons.search, color: agOro),
-                                suffixIcon: controller.text.isNotEmpty
-                                    ? IconButton(
-                                  icon: const Icon(Icons.clear, size: 20),
-                                  onPressed: () {
-                                    controller.clear();
-                                  },
-                                )
-                                    : null,
-                                filled: true,
-                                fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            );
-                          },
-                          optionsViewBuilder: (context, onSelected, options) {
-                            return Align(
-                              alignment: Alignment.topLeft,
-                              child: Material(
-                                elevation: 0,
-                                color: Colors.transparent,
-                                child: Container(
-                                  margin: const EdgeInsets.only(top: 8),
-                                  child: ListView.separated(
-                                    padding: EdgeInsets.zero,
-                                    shrinkWrap: true,
-                                    itemCount: options.length,
-                                    separatorBuilder: (context, index) => const Divider(height: 1),
-                                    itemBuilder: (BuildContext context, int index) {
-                                      final doc = options.elementAt(index);
-                                      final d = doc.data() as Map<String, dynamic>;
-                                      final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
-                                      final email = d['email'] ?? 'No email';
+                            return ListView.separated(
+                              itemCount: clientiDocs.length,
+                              separatorBuilder: (context, index) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final doc = clientiDocs[index];
+                                final d = doc.data() as Map<String, dynamic>;
+                                final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
+                                final email = d['email'] ?? 'No email';
 
-                                      return ListTile(
-                                        dense: true,
-                                        title: Text(
-                                          nome,
-                                          style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold),
-                                        ),
-                                        subtitle: Text(
-                                          email,
-                                          style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54),
-                                        ),
-                                        onTap: () => onSelected(doc),
-                                      );
-                                    },
+                                return ListTile(
+                                  dense: true,
+                                  title: Text(
+                                    nome,
+                                    style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 15),
                                   ),
-                                ),
-                              ),
+                                  subtitle: Text(
+                                    email,
+                                    style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54),
+                                  ),
+                                  onTap: () {
+                                    Navigator.pop(bottomSheetContext);
+
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => PrenotazioneServiziBarbiereScreen(
+                                          clienteId: doc.id,
+                                          clienteNome: nome,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
                             );
                           },
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
