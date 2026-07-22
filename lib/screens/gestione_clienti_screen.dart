@@ -10,7 +10,12 @@ class GestioneClientiScreen extends StatefulWidget {
   State<GestioneClientiScreen> createState() => _GestioneClientiScreenState();
 }
 
-enum FiltroOrdinamento { nome, appuntamentiSaltati, debito }
+enum FiltroOrdinamento {
+  nome,
+  appuntamentiSaltati,
+  saldoDecrescente, // Mostra prima i saldi più ALTI / Positivi (+50, +10, 0, -20)
+  saldoCrescente    // Mostra prima i saldi più BASSI / Negativi (-50, -20, 0, +10)
+}
 
 class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
   final TextEditingController _searchController = TextEditingController();
@@ -38,11 +43,11 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
     super.dispose();
   }
 
-  // Metodo di supporto per mostrare il dialogo di modifica del debito
-  void _mostraDialogModificaDebito(String uid, double debitoAttuale) {
+  // Metodo di supporto per mostrare il dialogo di modifica del saldo
+  void _mostraDialogModificaSaldo(String uid, double saldoAttuale) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final TextEditingController debitoController = TextEditingController(
-      text: debitoAttuale.toStringAsFixed(2).replaceAll('.', ','),
+    final TextEditingController saldoController = TextEditingController(
+      text: saldoAttuale.toStringAsFixed(2).replaceAll('.', ','),
     );
 
     showDialog(
@@ -51,7 +56,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
         return AlertDialog(
           backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
           title: Text(
-            'Modifica Debito Cliente',
+            'Modifica Saldo Cliente',
             style: TextStyle(
               color: isDarkMode ? Colors.white : Colors.black87,
               fontWeight: FontWeight.bold,
@@ -62,7 +67,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Inserisci il nuovo importo del debito:',
+                'Inserisci il nuovo Saldo:',
                 style: TextStyle(
                   color: isDarkMode ? Colors.white70 : Colors.black87,
                   fontSize: 14,
@@ -70,7 +75,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: debitoController,
+                controller: saldoController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
                 decoration: InputDecoration(
@@ -101,10 +106,10 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                 backgroundColor: const Color(0xFF164638),
               ),
               onPressed: () async {
-                final String input = debitoController.text.trim().replaceAll(',', '.');
-                final double? nuovoDebito = double.tryParse(input);
+                final String input = saldoController.text.trim().replaceAll(',', '.');
+                final double? nuovoSaldo = double.tryParse(input);
 
-                if (nuovoDebito == null) {
+                if (nuovoSaldo == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Inserisci un valore numerico valido.'),
@@ -114,27 +119,18 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                   return;
                 }
 
-                if (nuovoDebito < 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Il debito non può essere un valore negativo.'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
 
                 Navigator.pop(context);
 
                 try {
                   await FirebaseFirestore.instance.collection('users').doc(uid).update({
-                    'debito': nuovoDebito,
+                    'saldo': nuovoSaldo,
                   });
 
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Debito aggiornato a € ${nuovoDebito.toStringAsFixed(2).replaceAll('.', ',')}'),
+                        content: Text('Saldo aggiornato a € ${nuovoSaldo.toStringAsFixed(2).replaceAll('.', ',')}'),
                         backgroundColor: Colors.green,
                       ),
                     );
@@ -291,33 +287,36 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
 
                       const SizedBox(height: 12),
 
-                      // INFORMAZIONE DEBITO TOTALE CON GESTIONE CLICK E MODIFICA DINAMICA
+                      // INFORMAZIONE SALDO TOTALE CON GESTIONE CLICK E MODIFICA DINAMICA
                       StreamBuilder<DocumentSnapshot>(
                           stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
                           builder: (context, userSnap) {
-                            double debito = 0.0;
+                            double saldo = 0.0;
                             if (userSnap.hasData && userSnap.data!.exists && userSnap.data!.data() != null) {
                               final userData = userSnap.data!.data() as Map<String, dynamic>;
-                              debito = (userData['debito'] ?? 0.0).toDouble();
+                              saldo = (userData['saldo'] ?? 0.0).toDouble();
                             }
 
+                            final bool isPositivoOZero = saldo >= 0;
+                            final Color coloreSaldo = isPositivoOZero ? Colors.green : Colors.red;
+
                             return InkWell(
-                              onTap: () => _mostraDialogModificaDebito(uid, debito),
+                              onTap: () => _mostraDialogModificaSaldo(uid, saldo),
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 4.0),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.monetization_on, color: debito > 0 ? Colors.red : Colors.green, size: 22),
+                                    Icon(Icons.monetization_on, color: coloreSaldo, size: 22),
                                     const SizedBox(width: 10),
                                     Text(
-                                      'Debito Totale: ',
+                                      'Saldo Totale: ',
                                       style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
                                     ),
                                     Text(
-                                      '€ ${debito.toStringAsFixed(2).replaceAll('.', ',')}',
+                                      '€ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}',
                                       style: TextStyle(
-                                        color: debito > 0 ? Colors.red : Colors.green,
+                                        color: coloreSaldo,
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -947,15 +946,28 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                 ),
                               ),
                               PopupMenuItem<FiltroOrdinamento>(
-                                value: FiltroOrdinamento.debito,
+                                value: FiltroOrdinamento.saldoCrescente,
                                 child: Row(
                                   children: [
                                     Icon(
                                       Icons.monetization_on,
-                                      color: _filtroAttivo == FiltroOrdinamento.debito ? const Color(0xFFE2B13C) : Colors.grey,
+                                      color: _filtroAttivo == FiltroOrdinamento.saldoCrescente ? Colors.red : Colors.grey,
                                     ),
                                     const SizedBox(width: 10),
-                                    const Text('Per Debito'),
+                                    const Text('Saldo: crescente'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem<FiltroOrdinamento>(
+                                value: FiltroOrdinamento.saldoDecrescente,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.monetization_on,
+                                      color: _filtroAttivo == FiltroOrdinamento.saldoDecrescente ? Colors.green : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Text('Saldo: decrescente'),
                                   ],
                                 ),
                               ),
@@ -1038,16 +1050,25 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                 if (saltatiA != saltatiB) {
                                   return saltatiB.compareTo(saltatiA); // Discendente
                                 }
-                                return nomeA.compareTo(nomeB); // Fallback alfabetico ascendente
-                              } else if (_filtroAttivo == FiltroOrdinamento.debito) {
-                                final double debitoA = (datiA['debito'] ?? 0.0).toDouble();
-                                final double debitoB = (datiB['debito'] ?? 0.0).toDouble();
-                                if (debitoA != debitoB) {
-                                  return debitoB.compareTo(debitoA); // Discendente
+                                return nomeA.compareTo(nomeB);
+                              } else if (_filtroAttivo == FiltroOrdinamento.saldoDecrescente) {
+                                // Da quello con SALDO PIÙ ALTO (Positivo) a quello con SALDO PIÙ BASSO (Negativo)
+                                final double saldoA = (datiA['saldo'] ?? 0.0).toDouble(); // Nota: usa 'saldo' se nel DB il campo si chiama così
+                                final double saldoB = (datiB['saldo'] ?? 0.0).toDouble();
+                                if (saldoA != saldoB) {
+                                  return saldoB.compareTo(saldoA);
                                 }
-                                return nomeA.compareTo(nomeB); // Fallback alfabetico ascendente
+                                return nomeA.compareTo(nomeB);
+                              } else if (_filtroAttivo == FiltroOrdinamento.saldoCrescente) {
+                                // Da quello con SALDO PIÙ BASSO (Negativo/Debitori) a quello con SALDO PIÙ ALTO (Positivo)
+                                final double saldoA = (datiA['saldo'] ?? 0.0).toDouble();
+                                final double saldoB = (datiB['saldo'] ?? 0.0).toDouble();
+                                if (saldoA != saldoB) {
+                                  return saldoA.compareTo(saldoB);
+                                }
+                                return nomeA.compareTo(nomeB);
                               } else {
-                                return nomeA.compareTo(nomeB); // Ascendente alfabetico
+                                return nomeA.compareTo(nomeB); // Ascendente alfabetico (default)
                               }
                             });
 

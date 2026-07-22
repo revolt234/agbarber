@@ -51,8 +51,9 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
   Map<String, dynamic> _orariNegozioBase = {};
   bool _isLoadingConfig = true;
 
-  // Controller dedicato alla ricerca testuale del cliente
+  // Controller dedicati alla ricerca testuale di cliente e servizio
   final TextEditingController _clienteTextController = TextEditingController();
+  final TextEditingController _servizioTextController = TextEditingController();
 
   final List<String> _giorniSettimana = [
     'domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'
@@ -78,6 +79,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
   @override
   void dispose() {
     _clienteTextController.dispose();
+    _servizioTextController.dispose();
     super.dispose();
   }
 
@@ -106,6 +108,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
       _clienteTextController.clear();
       _barbiereSelezionatoId = null;
       _servizioSelezionatoId = null;
+      _servizioTextController.clear();
       _barbiereData = null;
       _servizioData = null;
       _dataInizio = DateTime.now();
@@ -557,106 +560,166 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
 
               const SizedBox(height: 16),
 
-              // 2. SELEZIONE OPERATORE & SERVIZIO
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('2. Operatore:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 14)),
-                        const SizedBox(height: 6),
-                        StreamBuilder<QuerySnapshot>(
-                          stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) return const SizedBox.shrink();
-                            final barbieri = snapshot.data!.docs;
+              // 2. SELEZIONE OPERATORE
+              Text('2. Operatore:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 6),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const SizedBox.shrink();
+                  final barbieri = snapshot.data!.docs;
 
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(color: coloreCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade400)),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  isExpanded: true,
-                                  hint: const Text('Operatore'),
-                                  value: _barbiereSelezionatoId,
-                                  items: barbieri.map((doc) {
-                                    final d = doc.data() as Map<String, dynamic>;
-                                    return DropdownMenuItem<String>(
-                                      value: doc.id,
-                                      child: Text(d['name'] ?? 'Staff', style: TextStyle(color: coloreTesto)),
-                                    );
-                                  }).toList(),
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      final selectedDoc = barbieri.firstWhere((element) => element.id == val);
-                                      setState(() {
-                                        _barbiereSelezionatoId = val;
-                                        _barbiereData = selectedDoc.data() as Map<String, dynamic>;
-                                        _analisiRisultati.clear();
-                                      });
-                                    }
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(color: coloreCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade400)),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        hint: const Text('Operatore'),
+                        value: _barbiereSelezionatoId,
+                        items: barbieri.map((doc) {
+                          final d = doc.data() as Map<String, dynamic>;
+                          return DropdownMenuItem<String>(
+                            value: doc.id,
+                            child: Text(d['name'] ?? 'Staff', style: TextStyle(color: coloreTesto)),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            final selectedDoc = barbieri.firstWhere((element) => element.id == val);
+                            setState(() {
+                              _barbiereSelezionatoId = val;
+                              _barbiereData = selectedDoc.data() as Map<String, dynamic>;
+                              _analisiRisultati.clear();
+                            });
+                          }
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('3. Servizio:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 14)),
-                        const SizedBox(height: 6),
-                        StreamBuilder<QuerySnapshot>(
-                          stream: FirebaseFirestore.instance.collection('services').snapshots(),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) return const SizedBox.shrink();
-                            final servizi = snapshot.data!.docs;
-
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(color: coloreCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade400)),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  isExpanded: true,
-                                  hint: const Text('Servizio'),
-                                  value: _servizioSelezionatoId,
-                                  items: servizi.map((doc) {
-                                    final d = doc.data() as Map<String, dynamic>;
-                                    return DropdownMenuItem<String>(
-                                      value: doc.id,
-                                      child: Text("${d['name']} (${d['duration']}m)", style: TextStyle(color: coloreTesto)),
-                                    );
-                                  }).toList(),
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      final selectedDoc = servizi.firstWhere((element) => element.id == val);
-                                      setState(() {
-                                        _servizioSelezionatoId = val;
-                                        _servizioData = selectedDoc.data() as Map<String, dynamic>;
-                                        _analisiRisultati.clear();
-                                      });
-                                    }
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
 
               const SizedBox(height: 16),
 
-              // 3. REGOLAZIONE DATE (INIZIO E FINE), ORA E CADENZA
+              // 3. SELEZIONE SERVIZIO (RawAutocomplete stile Cliente)
+              Text('3. Servizio:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 6),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('services').snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const LinearProgressIndicator(color: Color(0xFFE2B13C));
+                  final serviziDocs = snapshot.data!.docs;
+
+                  return RawAutocomplete<QueryDocumentSnapshot>(
+                    textEditingController: _servizioTextController,
+                    displayStringForOption: (doc) {
+                      final d = doc.data() as Map<String, dynamic>;
+                      final nome = d['name'] ?? 'Servizio';
+                      final durata = d['duration'] ?? 30;
+                      return "$nome (${durata}m)";
+                    },
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return serviziDocs;
+                      }
+                      final query = textEditingValue.text.toLowerCase();
+                      return serviziDocs.where((doc) {
+                        final d = doc.data() as Map<String, dynamic>;
+                        final nome = (d['name'] ?? '').toString().toLowerCase();
+                        return nome.contains(query);
+                      });
+                    },
+                    onSelected: (QueryDocumentSnapshot doc) {
+                      setState(() {
+                        _servizioSelezionatoId = doc.id;
+                        _servizioData = doc.data() as Map<String, dynamic>;
+                        _analisiRisultati.clear();
+                      });
+                    },
+                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                      return TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        style: TextStyle(color: coloreTesto),
+                        decoration: InputDecoration(
+                          hintText: 'Cerca servizio per nome...',
+                          hintStyle: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45, fontSize: 14),
+                          prefixIcon: Icon(Icons.content_cut, color: constColorOro),
+                          suffixIcon: controller.text.isNotEmpty
+                              ? IconButton(
+                            icon: const Icon(Icons.clear, size: 20),
+                            onPressed: () {
+                              controller.clear();
+                              _servizioSelezionatoId = null;
+                              _servizioData = null;
+                              if (_analisiRisultati.isNotEmpty) {
+                                setState(() {
+                                  _analisiRisultati.clear();
+                                });
+                              }
+                            },
+                          )
+                              : null,
+                          filled: true,
+                          fillColor: coloreCard,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade400),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: constColorOro, width: 2),
+                          ),
+                        ),
+                      );
+                    },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 6,
+                          color: coloreCard,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            constraints: const BoxConstraints(maxHeight: 220),
+                            width: MediaQuery.of(context).size.width - 32,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade400),
+                            ),
+                            child: ListView.separated(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              separatorBuilder: (context, index) => const Divider(height: 1),
+                              itemBuilder: (BuildContext context, int index) {
+                                final doc = options.elementAt(index);
+                                final d = doc.data() as Map<String, dynamic>;
+                                final nome = d['name'] ?? 'Servizio';
+                                final durata = d['duration'] ?? 30;
+                                final prezzo = (d['price'] ?? 0.0).toDouble();
+
+                                return ListTile(
+                                  dense: true,
+                                  title: Text(nome, style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
+                                  subtitle: Text("Durata: ${durata}m - Prezzo: € ${prezzo.toStringAsFixed(2).replaceAll('.', ',')}", style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54)),
+                                  onTap: () => onSelected(doc),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+
+              const SizedBox(height: 16),
+
+              // 4. REGOLAZIONE DATE (INIZIO E FINE), ORA E CADENZA
               Card(
                 color: coloreCard,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

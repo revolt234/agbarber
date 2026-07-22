@@ -18,7 +18,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = false;
   String _telefonoCorrente = "Caricamento..."; // AGGIUNTO: Stato locale per il numero di telefono
   int _appuntamentiSaltati = 0; // AGGIUNTO: Stato locale per gli appuntamenti saltati
-  double _debitoPresente = 0.0; // AGGIUNTO: Stato locale per il debito del cliente
+  double _saldoTotale = 0.0; // MODIFICATO: Stato locale per il saldo del cliente
 
   @override
   void initState() {
@@ -26,7 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _recuperaDatiIniziali(); // MODIFICATO: Cambiato nome per riflettere il recupero completo
   }
 
-  // MODIFICATO: Recupera il numero di telefono, gli appuntamenti saltati e il debito corrente da Firestore
+  // MODIFICATO: Recupera il numero di telefono, gli appuntamenti saltati e il saldo corrente da Firestore
   Future<void> _recuperaDatiIniziali() async {
     if (_user == null) return;
     try {
@@ -40,13 +40,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _telefonoCorrente = dati['phone'] ?? 'Nessun cellulare';
           _appuntamentiSaltati = dati['appuntamentisaltati'] ?? 0;
-          _debitoPresente = (dati['debito'] ?? 0).toDouble();
+          _saldoTotale = (dati['saldo'] ?? 0).toDouble();
         });
       } else {
         setState(() {
           _telefonoCorrente = 'Nessun cellulare';
           _appuntamentiSaltati = 0;
-          _debitoPresente = 0.0;
+          _saldoTotale = 0.0;
         });
       }
     } catch (e) {
@@ -55,7 +55,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _telefonoCorrente = 'Nessun cellulare';
           _appuntamentiSaltati = 0;
-          _debitoPresente = 0.0;
+          _saldoTotale = 0.0;
         });
       }
     }
@@ -388,6 +388,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final Color coloreTestoPrimario = isDarkMode ? Colors.white : Colors.black87;
     final Color coloreTestoSecondario = isDarkMode ? Colors.grey : Colors.black54;
 
+    final bool isPositivoOZero = _saldoTotale >= 0;
+    final Color coloreSaldo = isPositivoOZero ? Colors.green : Colors.red;
+
     return Scaffold(
       backgroundColor: coloreSfondoSchermata,
       appBar: AppBar(
@@ -523,7 +526,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // AGGIUNTO: Voce informativa per visualizzare gli appuntamenti saltati
           ListTile(
-            leading: const Icon(Icons.event_busy, color: Colors.red),
+            leading: Icon(
+              Icons.event_busy,
+              color: _appuntamentiSaltati > 0 ? Colors.red : Colors.green,
+            ),
             title: Text('Appuntamenti Saltati', style: TextStyle(color: coloreTestoPrimario)),
             subtitle: Text(
               '$_appuntamentiSaltati',
@@ -534,14 +540,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
 
-          // AGGIUNTO: Voce informativa per visualizzare il debito presente
+          // MODIFICATO: Voce informativa per visualizzare il saldo totale
           ListTile(
-            leading: const Icon(Icons.account_balance_wallet, color: Colors.red),
-            title: Text('Debito Presente', style: TextStyle(color: coloreTestoPrimario)),
+            leading: Icon(Icons.account_balance_wallet, color: coloreSaldo),
+            title: Text('Saldo Totale', style: TextStyle(color: coloreTestoPrimario)),
             subtitle: Text(
-              '€ ${_debitoPresente.toStringAsFixed(2)}',
+              '€ ${_saldoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
               style: TextStyle(
-                color: _debitoPresente > 0 ? Colors.red : Colors.green,
+                color: coloreSaldo,
                 fontWeight: FontWeight.bold,
               ),
             ),

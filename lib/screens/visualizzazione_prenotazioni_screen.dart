@@ -427,6 +427,43 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                           ],
                         ),
 
+                        // AGGIUNTO: VISUALIZZAZIONE SALDO CLIENTE CON LOGICA VERDE / ROSSA
+                        if (clienteId != null) ...[
+                          const SizedBox(height: 12),
+                          StreamBuilder<DocumentSnapshot>(
+                            stream: FirebaseFirestore.instance.collection('users').doc(clienteId).snapshots(),
+                            builder: (context, userSnap) {
+                              double saldo = 0.0;
+                              if (userSnap.hasData && userSnap.data!.exists && userSnap.data!.data() != null) {
+                                final userData = userSnap.data!.data() as Map<String, dynamic>;
+                                saldo = (userData['saldo'] ?? 0.0).toDouble();
+                              }
+
+                              final bool isPositivoOZero = saldo >= 0;
+                              final Color coloreSaldo = isPositivoOZero ? Colors.green : Colors.red;
+
+                              return Row(
+                                children: [
+                                  Icon(Icons.monetization_on, color: coloreSaldo, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Saldo Totale: ',
+                                    style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500),
+                                  ),
+                                  Text(
+                                    '€ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}',
+                                    style: TextStyle(
+                                      color: coloreSaldo,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+
                         if (mostraSelettorePresenza) ...[
                           Divider(color: isDarkMode ? Colors.grey : Colors.grey.shade300, height: 24),
                           Text(
@@ -492,7 +529,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                           ),
                           const SizedBox(height: 8),
                           FilterChip(
-                            label: const Text('IL CLIENTE NON HA PAGATO'),
+                            label: const Text('USA IL SALDO'),
                             selected: isContrassegnatoNonPagato,
                             selectedColor: Colors.red.shade900,
                             checkmarkColor: Colors.white,
@@ -510,12 +547,12 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                 if (selected) {
                                   await FirebaseFirestore.instance.runTransaction((transaction) async {
                                     final userSnapshot = await transaction.get(userRef);
-                                    double debitoAttuale = 0.0;
+                                    double saldoAttuale = 0.0;
                                     if (userSnapshot.exists && userSnapshot.data() != null) {
                                       final userData = userSnapshot.data() as Map<String, dynamic>;
-                                      debitoAttuale = (userData['debito'] ?? 0.0).toDouble();
+                                      saldoAttuale = (userData['saldo'] ?? 0.0).toDouble();
                                     }
-                                    transaction.update(userRef, {'debito': debitoAttuale + prezzoTotale});
+                                    transaction.update(userRef, {'saldo': saldoAttuale - prezzoTotale});
                                     transaction.update(appRef, {'pagato': false});
                                   });
 
@@ -525,15 +562,12 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                 } else {
                                   await FirebaseFirestore.instance.runTransaction((transaction) async {
                                     final userSnapshot = await transaction.get(userRef);
-                                    double debitoAttuale = 0.0;
+                                    double saldoAttuale = 0.0;
                                     if (userSnapshot.exists && userSnapshot.data() != null) {
                                       final userData = userSnapshot.data() as Map<String, dynamic>;
-                                      debitoAttuale = (userData['debito'] ?? 0.0).toDouble();
+                                      saldoAttuale = (userData['saldo'] ?? 0.0).toDouble();
                                     }
-                                    double nuovoDebito = debitoAttuale - prezzoTotale;
-                                    if (nuovoDebito < 0) nuovoDebito = 0.0;
-
-                                    transaction.update(userRef, {'debito': nuovoDebito});
+                                    transaction.update(userRef, {'saldo': saldoAttuale + prezzoTotale});
                                     transaction.update(appRef, {'pagato': true});
                                   });
 
@@ -542,7 +576,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                   });
                                 }
                               } catch (e) {
-                                debugPrint("Errore aggiornamento debito/pagamento: $e");
+                                debugPrint("Errore aggiornamento saldo: $e");
                               }
                             },
                           ),
