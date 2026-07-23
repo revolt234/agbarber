@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Necessario per recuperare il token del dispositivo
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -137,6 +137,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _inviaForm() async {
+    // 1. CHIUSURA NATIVA IMMEDIATA DELLA TASTIERA E DEL FOCUS
+    FocusManager.instance.primaryFocus?.unfocus();
+    await SystemChannels.textInput.invokeMethod('TextInput.hide');
+
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -203,7 +207,6 @@ class _LoginScreenState extends State<LoginScreen> {
           password: password,
         );
 
-        // MODIFICATO: Aggiunge il token nell'array fcmTokens (multi-dispositivo) al momento del login
         if (userCredential.user != null && !kIsWeb) {
           try {
             final String? token = await FirebaseMessaging.instance.getToken();
@@ -213,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   .doc(userCredential.user!.uid)
                   .update({
                 'fcmTokens': FieldValue.arrayUnion([token]),
-                'fcmToken': token, // Mantengo retrocompatibilità
+                'fcmToken': token,
               });
             }
           } catch (e) {
@@ -232,11 +235,9 @@ class _LoginScreenState extends State<LoginScreen> {
           final String telInserito = _telefonoController.text.trim();
           final String telefonoFinale = telInserito.isNotEmpty ? telInserito : 'Nessun cellulare';
 
-          // MODIFICATO: Recupero preventivo dell'fcmToken del dispositivo in fase di registrazione
           String? token;
           if (!kIsWeb) {
             try {
-              // Richiede i permessi per le notifiche push
               await FirebaseMessaging.instance.requestPermission();
               token = await FirebaseMessaging.instance.getToken();
             } catch (e) {
@@ -254,15 +255,15 @@ class _LoginScreenState extends State<LoginScreen> {
             'email': email,
             'role': 'cliente',
             'phone': telefonoFinale,
-            'fcmToken': token ?? '', // Campo legacy
-            'fcmTokens': listaTokenIniziale, // MODIFICATO: Salvataggio multi-dispositivo nativo del token
+            'fcmToken': token ?? '',
+            'fcmTokens': listaTokenIniziale,
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
       }
 
-      // Chiude qualsiasi tastiera/focus ancora attivo prima della navigazione
-      FocusManager.instance.primaryFocus?.unfocus();
+      // 2. MICRO-PAUSA DI SICUREZZA PER GARANTIRE LA DISTRUZIONE DEL CANALE TASTIERA PRIMA DI NAVIGARE
+      await Future.delayed(const Duration(milliseconds: 100));
 
       if (mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
@@ -465,6 +466,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 OutlinedButton(
                   onPressed: () {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    SystemChannels.textInput.invokeMethod('TextInput.hide');
                     if (Navigator.of(context).canPop()) {
                       Navigator.pop(context);
                     } else {
