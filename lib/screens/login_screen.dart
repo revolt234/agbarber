@@ -69,6 +69,12 @@ class _LoginScreenState extends State<LoginScreen> {
               maxLength: 45,
               style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
               textInputAction: TextInputAction.done,
+              onTap: () {
+                if (FocusScope.of(context).hasFocus) {
+                  FocusScope.of(context).unfocus();
+                  Future.microtask(() => FocusScope.of(context).requestFocus());
+                }
+              },
               decoration: const InputDecoration(
                 labelText: 'Email',
                 labelStyle: TextStyle(color: Colors.grey),
@@ -137,7 +143,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _inviaForm() async {
-    // 1. CHIUSURA NATIVA IMMEDIATA DELLA TASTIERA E DEL FOCUS
+    // 1. DISSOCIAZIONE COMPLETA E NATIVA DEL CANALE TASTIERA PRIMA DELL'AUTENTICAZIONE
+    FocusScope.of(context).unfocus();
     FocusManager.instance.primaryFocus?.unfocus();
     await SystemChannels.textInput.invokeMethod('TextInput.hide');
 
@@ -262,8 +269,11 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
-      // 2. MICRO-PAUSA DI SICUREZZA PER GARANTIRE LA DISTRUZIONE DEL CANALE TASTIERA PRIMA DI NAVIGARE
-      await Future.delayed(const Duration(milliseconds: 100));
+      // 2. GARANTISCE CHE IL CANALE NATIVO TASTIERA SIA CHIUSO PRIMA DI SMONTARE LA ROTTA
+      FocusScope.of(context).unfocus();
+      FocusManager.instance.primaryFocus?.unfocus();
+      await SystemChannels.textInput.invokeMethod('TextInput.hide');
+      await Future.delayed(const Duration(milliseconds: 150));
 
       if (mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
@@ -318,178 +328,210 @@ class _LoginScreenState extends State<LoginScreen> {
     final Color coloreTestoInput = isDarkMode ? Colors.white : Colors.black87;
     final Color coloreBordiInput = isDarkMode ? Colors.grey : Colors.grey.shade400;
 
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        backgroundColor: coloreSfondoSchermata,
-        body: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  'assets/A di barber.png',
-                  width: 120,
-                  height: 120,
-                ),
-                const SizedBox(height: 32),
-                Text(
-                  _isLogin ? 'Accedi a AG Barber' : 'Crea il tuo Account',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: coloreTestoTitoli),
-                ),
-                const SizedBox(height: 24),
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          FocusScope.of(context).unfocus();
+        }
+      },
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          backgroundColor: coloreSfondoSchermata,
+          body: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/A di barber.png',
+                    width: 120,
+                    height: 120,
+                  ),
+                  const SizedBox(height: 32),
+                  Text(
+                    _isLogin ? 'Accedi a AG Barber' : 'Crea il tuo Account',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: coloreTestoTitoli),
+                  ),
+                  const SizedBox(height: 24),
 
-                if (!_isLogin) ...[
+                  if (!_isLogin) ...[
+                    TextField(
+                      controller: _nomeCognomeController,
+                      focusNode: _nomeCognomeFocus,
+                      maxLength: 45,
+                      style: TextStyle(color: coloreTestoInput),
+                      textInputAction: TextInputAction.next,
+                      onTap: () {
+                        if (_nomeCognomeFocus.hasFocus) {
+                          _nomeCognomeFocus.unfocus();
+                          Future.microtask(() => _nomeCognomeFocus.requestFocus());
+                        }
+                      },
+                      onSubmitted: (_) => FocusScope.of(context).requestFocus(_telefonoFocus),
+                      decoration: InputDecoration(
+                        labelText: 'Nome e Cognome',
+                        labelStyle: const TextStyle(color: Colors.grey),
+                        counterText: "",
+                        enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
+                        focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
+                        prefixIcon: const Icon(Icons.person, color: Color(0xFFE2B13C)),
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextField(
+                      controller: _telefonoController,
+                      focusNode: _telefonoFocus,
+                      maxLength: 10,
+                      style: TextStyle(color: coloreTestoInput),
+                      textInputAction: TextInputAction.next,
+                      onTap: () {
+                        if (_telefonoFocus.hasFocus) {
+                          _telefonoFocus.unfocus();
+                          Future.microtask(() => _telefonoFocus.requestFocus());
+                        }
+                      },
+                      onSubmitted: (_) => FocusScope.of(context).requestFocus(_emailFocus),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      decoration: InputDecoration(
+                        labelText: 'Cellulare (Opzionale)',
+                        labelStyle: const TextStyle(color: Colors.grey),
+                        counterText: "",
+                        enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
+                        focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
+                        prefixIcon: const Icon(Icons.phone, color: Color(0xFFE2B13C)),
+                      ),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   TextField(
-                    controller: _nomeCognomeController,
-                    focusNode: _nomeCognomeFocus,
+                    controller: _emailController,
+                    focusNode: _emailFocus,
                     maxLength: 45,
                     style: TextStyle(color: coloreTestoInput),
                     textInputAction: TextInputAction.next,
-                    onSubmitted: (_) => FocusScope.of(context).requestFocus(_telefonoFocus),
+                    onTap: () {
+                      if (_emailFocus.hasFocus) {
+                        _emailFocus.unfocus();
+                        Future.microtask(() => _emailFocus.requestFocus());
+                      }
+                    },
+                    onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
                     decoration: InputDecoration(
-                      labelText: 'Nome e Cognome',
+                      labelText: 'Email',
                       labelStyle: const TextStyle(color: Colors.grey),
                       counterText: "",
                       enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
                       focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
-                      prefixIcon: const Icon(Icons.person, color: Color(0xFFE2B13C)),
+                      prefixIcon: const Icon(Icons.email, color: Color(0xFFE2B13C)),
                     ),
-                    textCapitalization: TextCapitalization.words,
+                    keyboardType: TextInputType.emailAddress,
                   ),
                   const SizedBox(height: 16),
 
                   TextField(
-                    controller: _telefonoController,
-                    focusNode: _telefonoFocus,
-                    maxLength: 10,
+                    controller: _passwordController,
+                    focusNode: _passwordFocus,
+                    maxLength: 45,
                     style: TextStyle(color: coloreTestoInput),
-                    textInputAction: TextInputAction.next,
-                    onSubmitted: (_) => FocusScope.of(context).requestFocus(_emailFocus),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+                    textInputAction: TextInputAction.done,
+                    onTap: () {
+                      if (_passwordFocus.hasFocus) {
+                        _passwordFocus.unfocus();
+                        Future.microtask(() => _passwordFocus.requestFocus());
+                      }
+                    },
+                    onSubmitted: (_) => _inviaForm(),
                     decoration: InputDecoration(
-                      labelText: 'Cellulare (Opzionale)',
+                      labelText: 'Password',
                       labelStyle: const TextStyle(color: Colors.grey),
                       counterText: "",
                       enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
                       focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
-                      prefixIcon: const Icon(Icons.phone, color: Color(0xFFE2B13C)),
+                      prefixIcon: const Icon(Icons.lock, color: Color(0xFFE2B13C)),
                     ),
-                    keyboardType: TextInputType.phone,
+                    obscureText: true,
+                  ),
+
+                  if (_isLogin)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _mostraDialogoRecuperoPassword,
+                        child: const Text(
+                          'Hai dimenticato la password?',
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  _isLoading
+                      ? const CircularProgressIndicator(color: Color(0xFFE2B13C))
+                      : ElevatedButton(
+                    onPressed: _inviaForm,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF164638),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text(_isLogin ? 'ACCEDI' : 'REGISTRATI', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
                   const SizedBox(height: 16),
-                ],
-
-                TextField(
-                  controller: _emailController,
-                  focusNode: _emailFocus,
-                  maxLength: 45,
-                  style: TextStyle(color: coloreTestoInput),
-                  textInputAction: TextInputAction.next,
-                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    labelStyle: const TextStyle(color: Colors.grey),
-                    counterText: "",
-                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
-                    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
-                    prefixIcon: const Icon(Icons.email, color: Color(0xFFE2B13C)),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _isLogin = !_isLogin;
+                      _nomeCognomeController.clear();
+                      _emailController.clear();
+                      _passwordController.clear();
+                      _telefonoController.clear();
+                    }),
+                    child: Text(
+                      _isLogin
+                          ? 'Non hai un account? Registrati qui'
+                          : 'Hai già un account? Accedi',
+                      style: const TextStyle(color: Color(0xFFE2B13C)),
+                    ),
                   ),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 8),
 
-                TextField(
-                  controller: _passwordController,
-                  focusNode: _passwordFocus,
-                  maxLength: 45,
-                  style: TextStyle(color: coloreTestoInput),
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _inviaForm(),
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    labelStyle: const TextStyle(color: Colors.grey),
-                    counterText: "",
-                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
-                    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
-                    prefixIcon: const Icon(Icons.lock, color: Color(0xFFE2B13C)),
-                  ),
-                  obscureText: true,
-                ),
-
-                if (_isLogin)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: _mostraDialogoRecuperoPassword,
-                      child: const Text(
-                        'Hai dimenticato la password?',
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                  OutlinedButton(
+                    onPressed: () {
+                      FocusScope.of(context).unfocus();
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      SystemChannels.textInput.invokeMethod('TextInput.hide');
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.pop(context);
+                      } else {
+                        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                      }
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF164638), width: 1.5),
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text(
+                      'CONTINUA COME OSPITE',
+                      style: TextStyle(
+                        color: Color(0xFF164638),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        letterSpacing: 1.1,
                       ),
                     ),
                   ),
-
-                const SizedBox(height: 16),
-
-                _isLoading
-                    ? const CircularProgressIndicator(color: Color(0xFFE2B13C))
-                    : ElevatedButton(
-                  onPressed: _inviaForm,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF164638),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(_isLogin ? 'ACCEDI' : 'REGISTRATI', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () => setState(() {
-                    _isLogin = !_isLogin;
-                    _nomeCognomeController.clear();
-                    _emailController.clear();
-                    _passwordController.clear();
-                    _telefonoController.clear();
-                  }),
-                  child: Text(
-                    _isLogin
-                        ? 'Non hai un account? Registrati qui'
-                        : 'Hai già un account? Accedi',
-                    style: const TextStyle(color: Color(0xFFE2B13C)),
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                OutlinedButton(
-                  onPressed: () {
-                    FocusManager.instance.primaryFocus?.unfocus();
-                    SystemChannels.textInput.invokeMethod('TextInput.hide');
-                    if (Navigator.of(context).canPop()) {
-                      Navigator.pop(context);
-                    } else {
-                      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-                    }
-                  },
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF164638), width: 1.5),
-                    minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text(
-                    'CONTINUA COME OSPITE',
-                    style: TextStyle(
-                      color: Color(0xFF164638),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
