@@ -121,7 +121,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
 
   // Scansione di sicurezza per verificare sovrapposizioni e aperture prima del salvataggio
   Future<void> _analizzaDisponibilita() async {
-    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
 
     if (_clienteSelezionatoId == null || _barbiereSelezionatoId == null || _servizioSelezionatoId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -303,7 +303,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
 
   // Genera le prenotazioni valide chiamando la Cloud Function sicura
   Future<void> _confermaECreaPrenotazioni() async {
-    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
 
     final valide = _analisiRisultati.where((element) => !element.isOccupato && !element.isChiuso).toList();
 
@@ -424,7 +424,6 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
     final Color coloreCard = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
     final Color coloreTesto = isDarkMode ? Colors.white : Colors.black87;
 
-    // Calcolo del padding inferiore del sistema (barra a 3 pulsanti / gesture bar)
     final double paddingInBassoSistema = MediaQuery.of(context).padding.bottom;
 
     if (_isLoadingConfig) {
@@ -435,25 +434,31 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
     }
 
     return PopScope(
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) {
-          FocusScope.of(context).unfocus();
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (didPop) return;
+
+        // Se un campo di testo ha il focus, lo rimuoviamo prima per chiudere la tastiera pulita
+        final currentFocus = FocusScope.of(context);
+        if (!currentFocus.hasPrimaryFocus && currentFocus.focusedChild != null) {
+          currentFocus.unfocus();
+        } else {
+          Navigator.of(context).pop();
         }
       },
       child: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
         behavior: HitTestBehavior.opaque,
         child: Scaffold(
           backgroundColor: coloreSfondo,
+          resizeToAvoidBottomInset: true, // Gestione nativa del ridimensionamento senza macchie nere
           appBar: AppBar(
             title: const Text('PROGRAMMA PERIODICO', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
             backgroundColor: constColorVerde,
             iconTheme: const IconThemeData(color: Colors.white),
           ),
-          // SafeArea integrata per evitare sovrapposizioni e problemi di sistema
           body: SafeArea(
             child: SingleChildScrollView(
-              // Padding calcolato esattamente sulla barra di navigazione del sistema (Pixel / Android / iOS)
               padding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 16.0 + paddingInBassoSistema),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -492,21 +497,13 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
                             _clienteSelezionatoId = doc.id;
                             _analisiRisultati.clear();
                           });
-                          FocusScope.of(context).unfocus();
+                          FocusManager.instance.primaryFocus?.unfocus();
                         },
                         fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
                           return TextField(
                             controller: controller,
                             focusNode: focusNode,
                             style: TextStyle(color: coloreTesto),
-                            onTap: () {
-                              if (focusNode.hasFocus) {
-                                focusNode.unfocus();
-                                Future.microtask(() {
-                                  if (mounted) focusNode.requestFocus();
-                                });
-                              }
-                            },
                             decoration: InputDecoration(
                               hintText: 'Cerca cliente per nome o email...',
                               hintStyle: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45, fontSize: 14),
@@ -608,7 +605,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
                             }).toList(),
                             onChanged: (val) {
                               if (val != null) {
-                                FocusScope.of(context).unfocus();
+                                FocusManager.instance.primaryFocus?.unfocus();
                                 final selectedDoc = barbieri.firstWhere((element) => element.id == val);
                                 setState(() {
                                   _barbiereSelezionatoId = val;
@@ -659,21 +656,13 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
                             _servizioData = doc.data() as Map<String, dynamic>;
                             _analisiRisultati.clear();
                           });
-                          FocusScope.of(context).unfocus();
+                          FocusManager.instance.primaryFocus?.unfocus();
                         },
                         fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
                           return TextField(
                             controller: controller,
                             focusNode: focusNode,
                             style: TextStyle(color: coloreTesto),
-                            onTap: () {
-                              if (focusNode.hasFocus) {
-                                focusNode.unfocus();
-                                Future.microtask(() {
-                                  if (mounted) focusNode.requestFocus();
-                                });
-                              }
-                            },
                             decoration: InputDecoration(
                               hintText: 'Cerca servizio per nome...',
                               hintStyle: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45, fontSize: 14),
@@ -765,7 +754,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
                             subtitle: Text(DateFormat('EEEE dd MMMM yyyy', 'it_IT').format(_dataInizio)),
                             trailing: Icon(Icons.calendar_month, color: constColorOro),
                             onTap: () async {
-                              FocusScope.of(context).unfocus();
+                              FocusManager.instance.primaryFocus?.unfocus();
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: _dataInizio,
@@ -790,7 +779,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
                             subtitle: Text(DateFormat('EEEE dd MMMM yyyy', 'it_IT').format(_dataFine)),
                             trailing: Icon(Icons.event, color: constColorOro),
                             onTap: () async {
-                              FocusScope.of(context).unfocus();
+                              FocusManager.instance.primaryFocus?.unfocus();
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: _dataFine.isBefore(_dataInizio) ? _dataInizio : _dataFine,
@@ -812,7 +801,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
                             subtitle: Text(_formattaOra(_orarioSelezionato)),
                             trailing: Icon(Icons.access_time, color: constColorOro),
                             onTap: () async {
-                              FocusScope.of(context).unfocus();
+                              FocusManager.instance.primaryFocus?.unfocus();
                               final picked = await showTimePicker(
                                 context: context,
                                 initialTime: _orarioSelezionato,
@@ -855,7 +844,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
                                       }).toList(),
                                       onChanged: (val) {
                                         if (val != null) {
-                                          FocusScope.of(context).unfocus();
+                                          FocusManager.instance.primaryFocus?.unfocus();
                                           setState(() {
                                             _cadenzaSettimane = val;
                                             _analisiRisultati.clear();
