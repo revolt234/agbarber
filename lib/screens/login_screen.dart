@@ -261,6 +261,9 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
+      // Chiude qualsiasi tastiera/focus ancora attivo prima della navigazione
+      FocusManager.instance.primaryFocus?.unfocus();
+
       if (mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }

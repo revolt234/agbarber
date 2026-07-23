@@ -67,13 +67,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     String queryRicerca = "";
     bool isClienteRegistrato = true;
 
-    // Standard corretto: richiede il focus dopo il primo rendering completo del modale
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (ricercaFocusNode.canRequestFocus) {
-        ricercaFocusNode.requestFocus();
-      }
-    });
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -138,14 +131,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                           onSelectionChanged: (Set<bool> newSelection) {
                             setModalState(() {
                               isClienteRegistrato = newSelection.first;
-                            });
-                            // Sposta correttamente il focus in base alla vista selezionata
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (isClienteRegistrato) {
-                                if (ricercaFocusNode.canRequestFocus) ricercaFocusNode.requestFocus();
-                              } else {
-                                if (ospiteFocusNode.canRequestFocus) ospiteFocusNode.requestFocus();
-                              }
                             });
                           },
                           style: ButtonStyle(
