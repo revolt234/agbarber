@@ -72,7 +72,9 @@ class _LoginScreenState extends State<LoginScreen> {
               onTap: () {
                 if (FocusScope.of(context).hasFocus) {
                   FocusScope.of(context).unfocus();
-                  Future.microtask(() => FocusScope.of(context).requestFocus());
+                  Future.microtask(() {
+                    if (mounted) FocusScope.of(context).requestFocus();
+                  });
                 }
               },
               decoration: const InputDecoration(
@@ -336,6 +338,7 @@ class _LoginScreenState extends State<LoginScreen> {
       },
       child: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
         child: Scaffold(
           backgroundColor: coloreSfondoSchermata,
           body: Center(
@@ -366,7 +369,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       onTap: () {
                         if (_nomeCognomeFocus.hasFocus) {
                           _nomeCognomeFocus.unfocus();
-                          Future.microtask(() => _nomeCognomeFocus.requestFocus());
+                          Future.microtask(() {
+                            if (mounted) _nomeCognomeFocus.requestFocus();
+                          });
                         }
                       },
                       onSubmitted: (_) => FocusScope.of(context).requestFocus(_telefonoFocus),
@@ -391,7 +396,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       onTap: () {
                         if (_telefonoFocus.hasFocus) {
                           _telefonoFocus.unfocus();
-                          Future.microtask(() => _telefonoFocus.requestFocus());
+                          Future.microtask(() {
+                            if (mounted) _telefonoFocus.requestFocus();
+                          });
                         }
                       },
                       onSubmitted: (_) => FocusScope.of(context).requestFocus(_emailFocus),
@@ -420,7 +427,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     onTap: () {
                       if (_emailFocus.hasFocus) {
                         _emailFocus.unfocus();
-                        Future.microtask(() => _emailFocus.requestFocus());
+                        Future.microtask(() {
+                          if (mounted) _emailFocus.requestFocus();
+                        });
                       }
                     },
                     onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
@@ -445,7 +454,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     onTap: () {
                       if (_passwordFocus.hasFocus) {
                         _passwordFocus.unfocus();
-                        Future.microtask(() => _passwordFocus.requestFocus());
+                        Future.microtask(() {
+                          if (mounted) _passwordFocus.requestFocus();
+                        });
                       }
                     },
                     onSubmitted: (_) => _inviaForm(),

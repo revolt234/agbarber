@@ -121,6 +121,8 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
 
   // Scansione di sicurezza per verificare sovrapposizioni e aperture prima del salvataggio
   Future<void> _analizzaDisponibilita() async {
+    FocusScope.of(context).unfocus();
+
     if (_clienteSelezionatoId == null || _barbiereSelezionatoId == null || _servizioSelezionatoId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Seleziona cliente, operatore e servizio per procedere.')),
@@ -301,6 +303,8 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
 
   // Genera le prenotazioni valide chiamando la Cloud Function sicura
   Future<void> _confermaECreaPrenotazioni() async {
+    FocusScope.of(context).unfocus();
+
     final valide = _analisiRisultati.where((element) => !element.isOccupato && !element.isChiuso).toList();
 
     if (valide.isEmpty) {
@@ -430,485 +434,519 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: coloreSfondo,
-      appBar: AppBar(
-        title: const Text('PROGRAMMA PERIODICO', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
-        backgroundColor: constColorVerde,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      // SafeArea integrata per evitare sovrapposizioni e problemi di sistema
-      body: SafeArea(
-        child: SingleChildScrollView(
-          // Padding calcolato esattamente sulla barra di navigazione del sistema (Pixel / Android / iOS)
-          padding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 16.0 + paddingInBassoSistema),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. SELEZIONE CLIENTE CON CAMPO DI RICERCA TESTUALE RAPIDA
-              Text('1. Seleziona Cliente:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 15)),
-              const SizedBox(height: 6),
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('users').where('role', isNotEqualTo: 'barbiere').snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const LinearProgressIndicator(color: Color(0xFFE2B13C));
-                  final clientiDocs = snapshot.data!.docs;
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          FocusScope.of(context).unfocus();
+        }
+      },
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: Scaffold(
+          backgroundColor: coloreSfondo,
+          appBar: AppBar(
+            title: const Text('PROGRAMMA PERIODICO', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
+            backgroundColor: constColorVerde,
+            iconTheme: const IconThemeData(color: Colors.white),
+          ),
+          // SafeArea integrata per evitare sovrapposizioni e problemi di sistema
+          body: SafeArea(
+            child: SingleChildScrollView(
+              // Padding calcolato esattamente sulla barra di navigazione del sistema (Pixel / Android / iOS)
+              padding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 16.0 + paddingInBassoSistema),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. SELEZIONE CLIENTE CON CAMPO DI RICERCA TESTUALE RAPIDA
+                  Text('1. Seleziona Cliente:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 6),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('users').where('role', isNotEqualTo: 'barbiere').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const LinearProgressIndicator(color: Color(0xFFE2B13C));
+                      final clientiDocs = snapshot.data!.docs;
 
-                  return RawAutocomplete<QueryDocumentSnapshot>(
-                    textEditingController: _clienteTextController,
-                    displayStringForOption: (doc) {
-                      final d = doc.data() as Map<String, dynamic>;
-                      final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
-                      final email = d['email'] ?? '';
-                      return email.isNotEmpty ? "$nome ($email)" : nome;
-                    },
-                    optionsBuilder: (TextEditingValue textEditingValue) {
-                      if (textEditingValue.text.isEmpty) {
-                        return clientiDocs;
-                      }
-                      final query = textEditingValue.text.toLowerCase();
-                      return clientiDocs.where((doc) {
-                        final d = doc.data() as Map<String, dynamic>;
-                        final nome = (d['name'] ?? d['nome'] ?? '').toString().toLowerCase();
-                        final email = (d['email'] ?? '').toString().toLowerCase();
-                        return nome.contains(query) || email.contains(query);
-                      });
-                    },
-                    onSelected: (QueryDocumentSnapshot doc) {
-                      setState(() {
-                        _clienteSelezionatoId = doc.id;
-                        _analisiRisultati.clear();
-                      });
-                    },
-                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                      return TextField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        style: TextStyle(color: coloreTesto),
-                        decoration: InputDecoration(
-                          hintText: 'Cerca cliente per nome o email...',
-                          hintStyle: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45, fontSize: 14),
-                          prefixIcon: Icon(Icons.search, color: constColorOro),
-                          suffixIcon: controller.text.isNotEmpty
-                              ? IconButton(
-                            icon: const Icon(Icons.clear, size: 20),
-                            onPressed: () {
-                              controller.clear();
-                              _clienteSelezionatoId = null;
-                              if (_analisiRisultati.isNotEmpty) {
-                                setState(() {
-                                  _analisiRisultati.clear();
-                                });
-                              }
-                            },
-                          )
-                              : null,
-                          filled: true,
-                          fillColor: coloreCard,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade400),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: constColorOro, width: 2),
-                          ),
-                        ),
-                      );
-                    },
-                    optionsViewBuilder: (context, onSelected, options) {
-                      return Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          elevation: 6,
-                          color: coloreCard,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            constraints: const BoxConstraints(maxHeight: 220),
-                            width: MediaQuery.of(context).size.width - 32,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade400),
-                            ),
-                            child: ListView.separated(
-                              padding: EdgeInsets.zero,
-                              shrinkWrap: true,
-                              itemCount: options.length,
-                              separatorBuilder: (context, index) => const Divider(height: 1),
-                              itemBuilder: (BuildContext context, int index) {
-                                final doc = options.elementAt(index);
-                                final d = doc.data() as Map<String, dynamic>;
-                                final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
-                                final email = d['email'] ?? 'No email';
-
-                                return ListTile(
-                                  dense: true,
-                                  title: Text(nome, style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
-                                  subtitle: Text(email, style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54)),
-                                  onTap: () => onSelected(doc),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-
-              const SizedBox(height: 16),
-
-              // 2. SELEZIONE OPERATORE
-              Text('2. Operatore:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 6),
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox.shrink();
-                  final barbieri = snapshot.data!.docs;
-
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(color: coloreCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade400)),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        hint: const Text('Operatore'),
-                        value: _barbiereSelezionatoId,
-                        items: barbieri.map((doc) {
+                      return RawAutocomplete<QueryDocumentSnapshot>(
+                        textEditingController: _clienteTextController,
+                        displayStringForOption: (doc) {
                           final d = doc.data() as Map<String, dynamic>;
-                          return DropdownMenuItem<String>(
-                            value: doc.id,
-                            child: Text(d['name'] ?? 'Staff', style: TextStyle(color: coloreTesto)),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            final selectedDoc = barbieri.firstWhere((element) => element.id == val);
-                            setState(() {
-                              _barbiereSelezionatoId = val;
-                              _barbiereData = selectedDoc.data() as Map<String, dynamic>;
-                              _analisiRisultati.clear();
-                            });
-                          }
+                          final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
+                          final email = d['email'] ?? '';
+                          return email.isNotEmpty ? "$nome ($email)" : nome;
                         },
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 16),
-
-              // 3. SELEZIONE SERVIZIO (RawAutocomplete stile Cliente)
-              Text('3. Servizio:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 6),
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('services').snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const LinearProgressIndicator(color: Color(0xFFE2B13C));
-                  final serviziDocs = snapshot.data!.docs;
-
-                  return RawAutocomplete<QueryDocumentSnapshot>(
-                    textEditingController: _servizioTextController,
-                    displayStringForOption: (doc) {
-                      final d = doc.data() as Map<String, dynamic>;
-                      final nome = d['name'] ?? 'Servizio';
-                      final durata = d['duration'] ?? 30;
-                      return "$nome (${durata}m)";
-                    },
-                    optionsBuilder: (TextEditingValue textEditingValue) {
-                      if (textEditingValue.text.isEmpty) {
-                        return serviziDocs;
-                      }
-                      final query = textEditingValue.text.toLowerCase();
-                      return serviziDocs.where((doc) {
-                        final d = doc.data() as Map<String, dynamic>;
-                        final nome = (d['name'] ?? '').toString().toLowerCase();
-                        return nome.contains(query);
-                      });
-                    },
-                    onSelected: (QueryDocumentSnapshot doc) {
-                      setState(() {
-                        _servizioSelezionatoId = doc.id;
-                        _servizioData = doc.data() as Map<String, dynamic>;
-                        _analisiRisultati.clear();
-                      });
-                    },
-                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                      return TextField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        style: TextStyle(color: coloreTesto),
-                        decoration: InputDecoration(
-                          hintText: 'Cerca servizio per nome...',
-                          hintStyle: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45, fontSize: 14),
-                          prefixIcon: Icon(Icons.content_cut, color: constColorOro),
-                          suffixIcon: controller.text.isNotEmpty
-                              ? IconButton(
-                            icon: const Icon(Icons.clear, size: 20),
-                            onPressed: () {
-                              controller.clear();
-                              _servizioSelezionatoId = null;
-                              _servizioData = null;
-                              if (_analisiRisultati.isNotEmpty) {
-                                setState(() {
-                                  _analisiRisultati.clear();
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) {
+                            return clientiDocs;
+                          }
+                          final query = textEditingValue.text.toLowerCase();
+                          return clientiDocs.where((doc) {
+                            final d = doc.data() as Map<String, dynamic>;
+                            final nome = (d['name'] ?? d['nome'] ?? '').toString().toLowerCase();
+                            final email = (d['email'] ?? '').toString().toLowerCase();
+                            return nome.contains(query) || email.contains(query);
+                          });
+                        },
+                        onSelected: (QueryDocumentSnapshot doc) {
+                          setState(() {
+                            _clienteSelezionatoId = doc.id;
+                            _analisiRisultati.clear();
+                          });
+                          FocusScope.of(context).unfocus();
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            style: TextStyle(color: coloreTesto),
+                            onTap: () {
+                              if (focusNode.hasFocus) {
+                                focusNode.unfocus();
+                                Future.microtask(() {
+                                  if (mounted) focusNode.requestFocus();
                                 });
                               }
                             },
-                          )
-                              : null,
-                          filled: true,
-                          fillColor: coloreCard,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade400),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: constColorOro, width: 2),
-                          ),
-                        ),
-                      );
-                    },
-                    optionsViewBuilder: (context, onSelected, options) {
-                      return Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          elevation: 6,
-                          color: coloreCard,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            constraints: const BoxConstraints(maxHeight: 220),
-                            width: MediaQuery.of(context).size.width - 32,
-                            decoration: BoxDecoration(
+                            decoration: InputDecoration(
+                              hintText: 'Cerca cliente per nome o email...',
+                              hintStyle: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45, fontSize: 14),
+                              prefixIcon: Icon(Icons.search, color: constColorOro),
+                              suffixIcon: controller.text.isNotEmpty
+                                  ? IconButton(
+                                icon: const Icon(Icons.clear, size: 20),
+                                onPressed: () {
+                                  controller.clear();
+                                  _clienteSelezionatoId = null;
+                                  if (_analisiRisultati.isNotEmpty) {
+                                    setState(() {
+                                      _analisiRisultati.clear();
+                                    });
+                                  }
+                                },
+                              )
+                                  : null,
+                              filled: true,
+                              fillColor: coloreCard,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.shade400),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: constColorOro, width: 2),
+                              ),
+                            ),
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 6,
+                              color: coloreCard,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade400),
-                            ),
-                            child: ListView.separated(
-                              padding: EdgeInsets.zero,
-                              shrinkWrap: true,
-                              itemCount: options.length,
-                              separatorBuilder: (context, index) => const Divider(height: 1),
-                              itemBuilder: (BuildContext context, int index) {
-                                final doc = options.elementAt(index);
-                                final d = doc.data() as Map<String, dynamic>;
-                                final nome = d['name'] ?? 'Servizio';
-                                final durata = d['duration'] ?? 30;
-                                final prezzo = (d['price'] ?? 0.0).toDouble();
+                              child: Container(
+                                constraints: const BoxConstraints(maxHeight: 220),
+                                width: MediaQuery.of(context).size.width - 32,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey.shade400),
+                                ),
+                                child: ListView.separated(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  separatorBuilder: (context, index) => const Divider(height: 1),
+                                  itemBuilder: (BuildContext context, int index) {
+                                    final doc = options.elementAt(index);
+                                    final d = doc.data() as Map<String, dynamic>;
+                                    final nome = d['name'] ?? d['nome'] ?? 'Senza Nome';
+                                    final email = d['email'] ?? 'No email';
 
-                                return ListTile(
-                                  dense: true,
-                                  title: Text(nome, style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
-                                  subtitle: Text("Durata: ${durata}m - Prezzo: € ${prezzo.toStringAsFixed(2).replaceAll('.', ',')}", style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54)),
-                                  onTap: () => onSelected(doc),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-
-              const SizedBox(height: 16),
-
-              // 4. REGOLAZIONE DATE (INIZIO E FINE), ORA E CADENZA
-              Card(
-                color: coloreCard,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      ListTile(
-                        dense: true,
-                        title: Text('Data inizio', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
-                        subtitle: Text(DateFormat('EEEE dd MMMM yyyy', 'it_IT').format(_dataInizio)),
-                        trailing: Icon(Icons.calendar_month, color: constColorOro),
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _dataInizio,
-                            firstDate: DateTime.now(),
-                            lastDate: DateTime.now().add(const Duration(days: 365)),
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              _dataInizio = picked;
-                              if (_dataFine.isBefore(_dataInizio)) {
-                                _dataFine = _dataInizio.add(const Duration(days: 60));
-                              }
-                              _analisiRisultati.clear();
-                            });
-                          }
-                        },
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        dense: true,
-                        title: Text('Data fine', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
-                        subtitle: Text(DateFormat('EEEE dd MMMM yyyy', 'it_IT').format(_dataFine)),
-                        trailing: Icon(Icons.event, color: constColorOro),
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _dataFine.isBefore(_dataInizio) ? _dataInizio : _dataFine,
-                            firstDate: _dataInizio,
-                            lastDate: _dataInizio.add(const Duration(days: 365)),
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              _dataFine = picked;
-                              _analisiRisultati.clear();
-                            });
-                          }
-                        },
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        dense: true,
-                        title: Text('Orario di preferenza', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
-                        subtitle: Text(_formattaOra(_orarioSelezionato)),
-                        trailing: Icon(Icons.access_time, color: constColorOro),
-                        onTap: () async {
-                          final picked = await showTimePicker(
-                            context: context,
-                            initialTime: _orarioSelezionato,
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              _orarioSelezionato = picked;
-                              _analisiRisultati.clear();
-                            });
-                          }
-                        },
-                      ),
-                      const Divider(height: 1),
-                      // Selettore della cadenza messo a capo con layout ampio a tutta larghezza
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Cadenza appuntamento:',
-                              style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            const SizedBox(height: 4),
-                            SizedBox(
-                              width: double.infinity,
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<int>(
-                                  value: _cadenzaSettimane,
-                                  isExpanded: true,
-                                  dropdownColor: coloreCard,
-                                  items: [1, 2, 3, 4].map((num) {
-                                    return DropdownMenuItem<int>(
-                                      value: num,
-                                      child: Text(
-                                        num == 1 ? 'Ogni settimana' : 'Ogni $num settimane',
-                                        style: TextStyle(color: coloreTesto, fontWeight: FontWeight.w500),
-                                      ),
+                                    return ListTile(
+                                      dense: true,
+                                      title: Text(nome, style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
+                                      subtitle: Text(email, style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54)),
+                                      onTap: () => onSelected(doc),
                                     );
-                                  }).toList(),
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      setState(() {
-                                        _cadenzaSettimane = val;
-                                        _analisiRisultati.clear();
-                                      });
-                                    }
                                   },
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
+                          );
+                        },
+                      );
+                    },
                   ),
-                ),
-              ),
 
-              const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
-              // BOTTONE VERIFICA CALENDARIO
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: constColorVerde,
-                    foregroundColor: Colors.white,
+                  // 2. SELEZIONE OPERATORE
+                  Text('2. Operatore:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 6),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const SizedBox.shrink();
+                      final barbieri = snapshot.data!.docs;
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(color: coloreCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade400)),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            hint: const Text('Operatore'),
+                            value: _barbiereSelezionatoId,
+                            items: barbieri.map((doc) {
+                              final d = doc.data() as Map<String, dynamic>;
+                              return DropdownMenuItem<String>(
+                                value: doc.id,
+                                child: Text(d['name'] ?? 'Staff', style: TextStyle(color: coloreTesto)),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                FocusScope.of(context).unfocus();
+                                final selectedDoc = barbieri.firstWhere((element) => element.id == val);
+                                setState(() {
+                                  _barbiereSelezionatoId = val;
+                                  _barbiereData = selectedDoc.data() as Map<String, dynamic>;
+                                  _analisiRisultati.clear();
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 3. SELEZIONE SERVIZIO (RawAutocomplete stile Cliente)
+                  Text('3. Servizio:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 6),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('services').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const LinearProgressIndicator(color: Color(0xFFE2B13C));
+                      final serviziDocs = snapshot.data!.docs;
+
+                      return RawAutocomplete<QueryDocumentSnapshot>(
+                        textEditingController: _servizioTextController,
+                        displayStringForOption: (doc) {
+                          final d = doc.data() as Map<String, dynamic>;
+                          final nome = d['name'] ?? 'Servizio';
+                          final durata = d['duration'] ?? 30;
+                          return "$nome (${durata}m)";
+                        },
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) {
+                            return serviziDocs;
+                          }
+                          final query = textEditingValue.text.toLowerCase();
+                          return serviziDocs.where((doc) {
+                            final d = doc.data() as Map<String, dynamic>;
+                            final nome = (d['name'] ?? '').toString().toLowerCase();
+                            return nome.contains(query);
+                          });
+                        },
+                        onSelected: (QueryDocumentSnapshot doc) {
+                          setState(() {
+                            _servizioSelezionatoId = doc.id;
+                            _servizioData = doc.data() as Map<String, dynamic>;
+                            _analisiRisultati.clear();
+                          });
+                          FocusScope.of(context).unfocus();
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            style: TextStyle(color: coloreTesto),
+                            onTap: () {
+                              if (focusNode.hasFocus) {
+                                focusNode.unfocus();
+                                Future.microtask(() {
+                                  if (mounted) focusNode.requestFocus();
+                                });
+                              }
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Cerca servizio per nome...',
+                              hintStyle: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45, fontSize: 14),
+                              prefixIcon: Icon(Icons.content_cut, color: constColorOro),
+                              suffixIcon: controller.text.isNotEmpty
+                                  ? IconButton(
+                                icon: const Icon(Icons.clear, size: 20),
+                                onPressed: () {
+                                  controller.clear();
+                                  _servizioSelezionatoId = null;
+                                  _servizioData = null;
+                                  if (_analisiRisultati.isNotEmpty) {
+                                    setState(() {
+                                      _analisiRisultati.clear();
+                                    });
+                                  }
+                                },
+                              )
+                                  : null,
+                              filled: true,
+                              fillColor: coloreCard,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.shade400),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: constColorOro, width: 2),
+                              ),
+                            ),
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 6,
+                              color: coloreCard,
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                constraints: const BoxConstraints(maxHeight: 220),
+                                width: MediaQuery.of(context).size.width - 32,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey.shade400),
+                                ),
+                                child: ListView.separated(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  separatorBuilder: (context, index) => const Divider(height: 1),
+                                  itemBuilder: (BuildContext context, int index) {
+                                    final doc = options.elementAt(index);
+                                    final d = doc.data() as Map<String, dynamic>;
+                                    final nome = d['name'] ?? 'Servizio';
+                                    final durata = d['duration'] ?? 30;
+                                    final prezzo = (d['price'] ?? 0.0).toDouble();
+
+                                    return ListTile(
+                                      dense: true,
+                                      title: Text(nome, style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
+                                      subtitle: Text("Durata: ${durata}m - Prezzo: € ${prezzo.toStringAsFixed(2).replaceAll('.', ',')}", style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54)),
+                                      onTap: () => onSelected(doc),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 4. REGOLAZIONE DATE (INIZIO E FINE), ORA E CADENZA
+                  Card(
+                    color: coloreCard,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: _isAnalizzando
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.search),
-                  label: Text(_isAnalizzando ? 'VERIFICA IN CORSO...' : 'VERIFICA CALENDARIO'),
-                  onPressed: _isAnalizzando ? null : _analizzaDisponibilita,
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ANTEPRIMA ESITI VERIFICA E CONFERMA FINALE
-              if (_analisiRisultati.isNotEmpty) ...[
-                Text('Anteprima Date e Conflitti:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 8),
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _analisiRisultati.length,
-                  itemBuilder: (context, index) {
-                    final item = _analisiRisultati[index];
-                    final bool haProblema = item.isOccupato || item.isChiuso;
-
-                    return Card(
-                      color: haProblema ? Colors.red.shade900.withValues(alpha: 0.3) : Colors.green.shade900.withValues(alpha: 0.3),
-                      margin: const EdgeInsets.only(bottom: 6),
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(
-                          haProblema ? Icons.error_outline : Icons.check_circle_outline,
-                          color: haProblema ? Colors.redAccent : Colors.greenAccent,
-                        ),
-                        title: Text(
-                          "${DateFormat('EEEE dd/MM/yyyy', 'it_IT').format(item.data)} alle ${item.slot}",
-                          style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: haProblema ? Text(item.motivo ?? 'Non disponibile', style: const TextStyle(color: Colors.redAccent)) : const Text('Disponibile', style: TextStyle(color: Colors.greenAccent)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            dense: true,
+                            title: Text('Data inizio', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
+                            subtitle: Text(DateFormat('EEEE dd MMMM yyyy', 'it_IT').format(_dataInizio)),
+                            trailing: Icon(Icons.calendar_month, color: constColorOro),
+                            onTap: () async {
+                              FocusScope.of(context).unfocus();
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _dataInizio,
+                                firstDate: DateTime.now(),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (picked != null) {
+                                setState(() {
+                                  _dataInizio = picked;
+                                  if (_dataFine.isBefore(_dataInizio)) {
+                                    _dataFine = _dataInizio.add(const Duration(days: 60));
+                                  }
+                                  _analisiRisultati.clear();
+                                });
+                              }
+                            },
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            dense: true,
+                            title: Text('Data fine', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
+                            subtitle: Text(DateFormat('EEEE dd MMMM yyyy', 'it_IT').format(_dataFine)),
+                            trailing: Icon(Icons.event, color: constColorOro),
+                            onTap: () async {
+                              FocusScope.of(context).unfocus();
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _dataFine.isBefore(_dataInizio) ? _dataInizio : _dataFine,
+                                firstDate: _dataInizio,
+                                lastDate: _dataInizio.add(const Duration(days: 365)),
+                              );
+                              if (picked != null) {
+                                setState(() {
+                                  _dataFine = picked;
+                                  _analisiRisultati.clear();
+                                });
+                              }
+                            },
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            dense: true,
+                            title: Text('Orario di preferenza', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold)),
+                            subtitle: Text(_formattaOra(_orarioSelezionato)),
+                            trailing: Icon(Icons.access_time, color: constColorOro),
+                            onTap: () async {
+                              FocusScope.of(context).unfocus();
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: _orarioSelezionato,
+                              );
+                              if (picked != null) {
+                                setState(() {
+                                  _orarioSelezionato = picked;
+                                  _analisiRisultati.clear();
+                                });
+                              }
+                            },
+                          ),
+                          const Divider(height: 1),
+                          // Selettore della cadenza messo a capo con layout ampio a tutta larghezza
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Cadenza appuntamento:',
+                                  style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                                const SizedBox(height: 4),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<int>(
+                                      value: _cadenzaSettimane,
+                                      isExpanded: true,
+                                      dropdownColor: coloreCard,
+                                      items: [1, 2, 3, 4].map((num) {
+                                        return DropdownMenuItem<int>(
+                                          value: num,
+                                          child: Text(
+                                            num == 1 ? 'Ogni settimana' : 'Ogni $num settimane',
+                                            style: TextStyle(color: coloreTesto, fontWeight: FontWeight.w500),
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: (val) {
+                                        if (val != null) {
+                                          FocusScope.of(context).unfocus();
+                                          setState(() {
+                                            _cadenzaSettimane = val;
+                                            _analisiRisultati.clear();
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 20),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: constColorOro,
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    onPressed: _isCreando ? null : _confermaECreaPrenotazioni,
-                    child: _isCreando
-                        ? const CircularProgressIndicator(color: Colors.black)
-                        : const Text('CONFERMA ED INSERISCI PRENOTAZIONI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   ),
-                ),
-              ],
-            ],
+
+                  const SizedBox(height: 20),
+
+                  // BOTTONE VERIFICA CALENDARIO
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: constColorVerde,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: _isAnalizzando
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.search),
+                      label: Text(_isAnalizzando ? 'VERIFICA IN CORSO...' : 'VERIFICA CALENDARIO'),
+                      onPressed: _isAnalizzando ? null : _analizzaDisponibilita,
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ANTEPRIMA ESITI VERIFICA E CONFERMA FINALE
+                  if (_analisiRisultati.isNotEmpty) ...[
+                    Text('Anteprima Date e Conflitti:', style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 8),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _analisiRisultati.length,
+                      itemBuilder: (context, index) {
+                        final item = _analisiRisultati[index];
+                        final bool haProblema = item.isOccupato || item.isChiuso;
+
+                        return Card(
+                          color: haProblema ? Colors.red.shade900.withValues(alpha: 0.3) : Colors.green.shade900.withValues(alpha: 0.3),
+                          margin: const EdgeInsets.only(bottom: 6),
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(
+                              haProblema ? Icons.error_outline : Icons.check_circle_outline,
+                              color: haProblema ? Colors.redAccent : Colors.greenAccent,
+                            ),
+                            title: Text(
+                              "${DateFormat('EEEE dd/MM/yyyy', 'it_IT').format(item.data)} alle ${item.slot}",
+                              style: TextStyle(color: coloreTesto, fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: haProblema ? Text(item.motivo ?? 'Non disponibile', style: const TextStyle(color: Colors.redAccent)) : const Text('Disponibile', style: TextStyle(color: Colors.greenAccent)),
+                          ),
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: constColorOro,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: _isCreando ? null : _confermaECreaPrenotazioni,
+                        child: _isCreando
+                            ? const CircularProgressIndicator(color: Colors.black)
+                            : const Text('CONFERMA ED INSERISCI PRENOTAZIONI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
