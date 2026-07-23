@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart'; // AGGIUNTO
 
 class GestioneOperatoriScreen extends StatefulWidget {
   const GestioneOperatoriScreen({super.key});
@@ -10,11 +11,23 @@ class GestioneOperatoriScreen extends StatefulWidget {
 
 class _GestioneOperatoriScreenState extends State<GestioneOperatoriScreen> {
   final _nomeController = TextEditingController();
+  final _nomeFocusNode = FocusNode(); // AGGIUNTO
 
   @override
   void dispose() {
     _nomeController.dispose();
+    _nomeFocusNode.dispose(); // AGGIUNTO
     super.dispose();
+  }
+
+  // Metodo helper per resettare la selezione del testo (come in GestionePeriodicoScreen)
+  void _resettaSelezioneTesto(TextEditingController controller) {
+    final text = controller.text;
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    SystemChannels.textInput.invokeMethod('TextInput.show');
   }
 
   void _mostraDialogAggiungiOperatore() {
@@ -26,6 +39,8 @@ class _GestioneOperatoriScreenState extends State<GestioneOperatoriScreen> {
         title: const Text('Aggiungi Operatore'),
         content: TextField(
           controller: _nomeController,
+          focusNode: _nomeFocusNode, // AGGIUNTO
+          onTap: () => _resettaSelezioneTesto(_nomeController), // AGGIUNTO
           decoration: const InputDecoration(
             labelText: 'Nome dell\'operatore (es. Gerardo)',
             border: OutlineInputBorder(),

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:url_launcher/url_launcher.dart'; // AGGIUNTO: Necessario per avviare il dialer telefonico nativo
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart'; // AGGIUNTO per SystemChannels
 
 class GestioneClientiScreen extends StatefulWidget {
   const GestioneClientiScreen({super.key});
@@ -13,8 +14,8 @@ class GestioneClientiScreen extends StatefulWidget {
 enum FiltroOrdinamento {
   nome,
   appuntamentiSaltati,
-  saldoDecrescente, // Mostra prima i saldi più ALTI / Positivi (+50, +10, 0, -20)
-  saldoCrescente    // Mostra prima i saldi più BASSI / Negativi (-50, -20, 0, +10)
+  saldoDecrescente,
+  saldoCrescente
 }
 
 class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
@@ -24,14 +25,12 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
   bool _isProcessingAction = false;
   FiltroOrdinamento _filtroAttivo = FiltroOrdinamento.nome;
 
-  // AGGIUNTO: Variabili persistenti per memorizzare gli Stream in modo che non si ricreino ad ogni setState
   late Stream<QuerySnapshot> _bannedEmailsStream;
   late Stream<QuerySnapshot> _usersStream;
 
   @override
   void initState() {
     super.initState();
-    // Inizializziamo gli stream una volta sola all'avvio del widget
     _bannedEmailsStream = FirebaseFirestore.instance.collection('banned_emails').snapshots();
     _usersStream = FirebaseFirestore.instance.collection('users').snapshots();
   }
@@ -43,7 +42,16 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
     super.dispose();
   }
 
-  // Metodo di supporto per mostrare il dialogo di modifica del saldo
+  // Metodo helper per resettare la selezione del testo (come in GestionePeriodicoScreen)
+  void _resettaSelezioneTesto(TextEditingController controller) {
+    final text = controller.text;
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    SystemChannels.textInput.invokeMethod('TextInput.show');
+  }
+
   void _mostraDialogModificaSaldo(String uid, double saldoAttuale) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final TextEditingController saldoController = TextEditingController(
@@ -78,6 +86,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                 controller: saldoController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+                onTap: () => _resettaSelezioneTesto(saldoController), // AGGIUNTO
                 decoration: InputDecoration(
                   prefixText: '€ ',
                   prefixStyle: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold),
@@ -118,7 +127,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                   );
                   return;
                 }
-
 
                 Navigator.pop(context);
 
@@ -204,7 +212,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                       const SizedBox(height: 6),
                       Text('Email: $email', style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14)),
 
-                      // CELLULARE SOTTO L'EMAIL (ESTRATTO IN TEMPO REALE)
                       StreamBuilder<DocumentSnapshot>(
                           stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
                           builder: (context, userSnap) {
@@ -265,7 +272,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
 
                       Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
 
-                      // INFORMAZIONE APPUNTAMENTI SALTATI
                       Row(
                         children: [
                           Icon(Icons.event_busy, color: appuntamentiSaltati > 0 ? Colors.red : agOro, size: 22),
@@ -287,7 +293,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
 
                       const SizedBox(height: 12),
 
-                      // INFORMAZIONE SALDO TOTALE CON GESTIONE CLICK E MODIFICA DINAMICA
                       StreamBuilder<DocumentSnapshot>(
                           stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
                           builder: (context, userSnap) {
@@ -331,7 +336,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                       ),
 
                       const SizedBox(height: 28),
-                      // NUOVO BOTTONE: INVIA NOTIFICA PERSONALIZZATA
                       SizedBox(
                         width: double.infinity,
                         height: 48,
@@ -354,7 +358,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                       ),
 
                       const SizedBox(height: 12),
-                      // PRIMO BOTTONE: DISABILITA / ABILITA UTENTE
                       SizedBox(
                         width: double.infinity,
                         height: 48,
@@ -382,7 +385,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
 
                       const SizedBox(height: 12),
 
-                      // SECONDO BOTTONE: RIMUOVI ACCOUNT
                       SizedBox(
                         width: double.infinity,
                         height: 48,
@@ -408,7 +410,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                       Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 1),
                       const SizedBox(height: 16),
 
-                      // TERZO BOTTONE: CHIUDI PANNELLO
                       SizedBox(
                         width: double.infinity,
                         height: 48,
@@ -433,7 +434,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
     );
   }
 
-  // Metodo di supporto per mostrare il dialogo di inserimento del messaggio e invocazione della Cloud Function
   void _mostraDialogInviaNotificaPersonalizzata(String uid, String nomeCliente) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final TextEditingController messaggioController = TextEditingController();
@@ -467,6 +467,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                 maxLength: 150,
                 maxLines: 3,
                 style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+                onTap: () => _resettaSelezioneTesto(messaggioController), // AGGIUNTO
                 decoration: InputDecoration(
                   hintText: 'Scrivi qui...',
                   hintStyle: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45),
@@ -509,7 +510,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
 
                 Navigator.pop(context);
 
-                // Richiamo alla funzione ottimizzata senza causare il glitch grafico di ricostruzione degli Stream
                 await _inviaNotificaPersonalizzataTramiteCloudFunction(uid, nomeCliente, testo);
               },
               child: const Text(
@@ -867,6 +867,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                             focusNode: _searchFocusNode,
                             maxLength: 45,
                             style: TextStyle(color: coloreTestoTitoli),
+                            onTap: () => _resettaSelezioneTesto(_searchController), // AGGIUNTO
                             decoration: InputDecoration(
                               hintText: 'Cerca cliente per nome...',
                               counterText: "",
@@ -897,7 +898,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        // Pulsante di ordinamento e filtro affianco alla ricerca
                         Container(
                           decoration: BoxDecoration(
                             color: coloreInputSfondo,
@@ -979,7 +979,6 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                   ),
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
-                      // MODIFICATO: Collegato alla variabile dello stream persistente inizializzata in initState
                       stream: _bannedEmailsStream,
                       builder: (context, bannedSnapshot) {
                         final Set<String> emailBannate = {};
@@ -990,27 +989,21 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                         }
 
                         return StreamBuilder<QuerySnapshot>(
-                          // MODIFICATO: Collegato alla variabile dello stream persistente inizializzata in initState
                           stream: _usersStream,
                           builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
                               return const Center(
                                 child: CircularProgressIndicator(
                                   color: Color(0xFFE2B13C),
                                 ),
                               );
                             }
-                            if (!snapshot.hasData ||
-                                snapshot.data!.docs.isEmpty) {
+                            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                               return Center(
                                 child: Text(
                                   'Nessun cliente registrato nel database.',
                                   style: TextStyle(
-                                    color:
-                                    isDarkMode
-                                        ? Colors.white60
-                                        : Colors.black54,
+                                    color: isDarkMode ? Colors.white60 : Colors.black54,
                                   ),
                                 ),
                               );
@@ -1018,25 +1011,18 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
 
                             final tuttiIDocs = snapshot.data!.docs;
 
-                            // Filtro locale per ruolo e query di ricerca
-                            final docsFiltrati =
-                            tuttiIDocs.where((doc) {
-                              final dati =
-                              doc.data() as Map<String, dynamic>;
+                            final docsFiltrati = tuttiIDocs.where((doc) {
+                              final dati = doc.data() as Map<String, dynamic>;
 
-                              // Escludi gli utenti che hanno ruolo "barbiere"
                               final String ruolo = (dati['role'] ?? '').toString();
                               if (ruolo == 'barbiere') {
                                 return false;
                               }
 
-                              final String nomeCompleto =
-                              (dati['name'] ?? '').toString()
-                                  .toLowerCase();
+                              final String nomeCompleto = (dati['name'] ?? '').toString().toLowerCase();
                               return nomeCompleto.contains(_searchQuery);
                             }).toList();
 
-                            // Ordinamento locale dinamico con gestione priorità e fallback alfabetico secondario
                             docsFiltrati.sort((a, b) {
                               final datiA = a.data() as Map<String, dynamic>;
                               final datiB = b.data() as Map<String, dynamic>;
@@ -1048,19 +1034,17 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                 final int saltatiA = datiA['appuntamentisaltati'] ?? 0;
                                 final int saltatiB = datiB['appuntamentisaltati'] ?? 0;
                                 if (saltatiA != saltatiB) {
-                                  return saltatiB.compareTo(saltatiA); // Discendente
+                                  return saltatiB.compareTo(saltatiA);
                                 }
                                 return nomeA.compareTo(nomeB);
                               } else if (_filtroAttivo == FiltroOrdinamento.saldoDecrescente) {
-                                // Da quello con SALDO PIÙ ALTO (Positivo) a quello con SALDO PIÙ BASSO (Negativo)
-                                final double saldoA = (datiA['saldo'] ?? 0.0).toDouble(); // Nota: usa 'saldo' se nel DB il campo si chiama così
+                                final double saldoA = (datiA['saldo'] ?? 0.0).toDouble();
                                 final double saldoB = (datiB['saldo'] ?? 0.0).toDouble();
                                 if (saldoA != saldoB) {
                                   return saldoB.compareTo(saldoA);
                                 }
                                 return nomeA.compareTo(nomeB);
                               } else if (_filtroAttivo == FiltroOrdinamento.saldoCrescente) {
-                                // Da quello con SALDO PIÙ BASSO (Negativo/Debitori) a quello con SALDO PIÙ ALTO (Positivo)
                                 final double saldoA = (datiA['saldo'] ?? 0.0).toDouble();
                                 final double saldoB = (datiB['saldo'] ?? 0.0).toDouble();
                                 if (saldoA != saldoB) {
@@ -1068,7 +1052,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                 }
                                 return nomeA.compareTo(nomeB);
                               } else {
-                                return nomeA.compareTo(nomeB); // Ascendente alfabetico (default)
+                                return nomeA.compareTo(nomeB);
                               }
                             });
 
@@ -1077,10 +1061,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                 child: Text(
                                   'Nessun risultato corrispondente alla ricerca.',
                                   style: TextStyle(
-                                    color:
-                                    isDarkMode
-                                        ? Colors.white60
-                                        : Colors.black54,
+                                    color: isDarkMode ? Colors.white60 : Colors.black54,
                                   ),
                                 ),
                               );
@@ -1094,26 +1075,19 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                               itemCount: docsFiltrati.length,
                               itemBuilder: (context, index) {
                                 final userDoc = docsFiltrati[index];
-                                final dati =
-                                userDoc.data() as Map<String, dynamic>;
+                                final dati = userDoc.data() as Map<String, dynamic>;
 
                                 final String uid = userDoc.id;
-                                final String nome =
-                                    dati['name'] ?? 'Cliente Anonimo';
-                                final String email =
-                                    dati['email'] ?? 'Nessuna Email';
-                                final String telefonoRaw =
-                                    dati['phone'] ??
-                                        '';
+                                final String nome = dati['name'] ?? 'Cliente Anonimo';
+                                final String email = dati['email'] ?? 'Nessuna Email';
+                                final String telefonoRaw = dati['phone'] ?? '';
 
                                 final String? telefonoValido = (telefonoRaw.trim().isNotEmpty &&
                                     telefonoRaw.trim() != 'Nessun cellulare')
                                     ? telefonoRaw.trim()
                                     : null;
 
-                                // Lettura dinamica del contatore appuntamenti saltati
-                                final int appuntamentiSaltati =
-                                    dati['appuntamentisaltati'] ?? 0;
+                                final int appuntamentiSaltati = dati['appuntamentisaltati'] ?? 0;
 
                                 final bool isBannato = emailBannate.contains(
                                   email.trim().toLowerCase(),
@@ -1135,9 +1109,7 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                       backgroundColor: const Color(0xFF164638),
                                       child: Text(
                                         nome.isNotEmpty
-                                            ? nome
-                                            .substring(0, 1)
-                                            .toUpperCase()
+                                            ? nome.substring(0, 1).toUpperCase()
                                             : 'C',
                                         style: const TextStyle(
                                           color: Colors.white,
@@ -1156,16 +1128,12 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                     subtitle: Padding(
                                       padding: const EdgeInsets.only(top: 4.0),
                                       child: Column(
-                                        crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             'Email: $email',
                                             style: TextStyle(
-                                              color:
-                                              isDarkMode
-                                                  ? Colors.white70
-                                                  : Colors.black87,
+                                              color: isDarkMode ? Colors.white70 : Colors.black87,
                                               fontSize: 13,
                                             ),
                                           ),

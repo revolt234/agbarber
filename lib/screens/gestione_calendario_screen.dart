@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart'; // AGGIUNTO per SystemChannels
 
 class GestioneCalendarioScreen extends StatefulWidget {
   const GestioneCalendarioScreen({super.key});
@@ -10,18 +11,35 @@ class GestioneCalendarioScreen extends StatefulWidget {
 
 class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
   final _notaController = TextEditingController();
+  final _notaFocusNode = FocusNode(); // AGGIUNTO
   String _statusScelto = 'chiuso';
 
-  // Struttura oraria predefinita per le aperture straordinarie
   Map<String, dynamic> _orariStraordinari = {
     'mattina': {'apertura': '09:00', 'chiusura': '13:00'},
     'pomeriggio': {'apertura': '14:30', 'chiusura': '19:30'},
   };
 
   @override
+  void initState() {
+    super.initState();
+    // Non serve inizializzare altro, il FocusNode è già creato.
+  }
+
+  @override
   void dispose() {
     _notaController.dispose();
+    _notaFocusNode.dispose(); // AGGIUNTO
     super.dispose();
+  }
+
+  // Metodo helper per resettare la selezione (come in GestionePeriodicoScreen)
+  void _resettaSelezioneTesto(TextEditingController controller) {
+    final text = controller.text;
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    SystemChannels.textInput.invokeMethod('TextInput.show');
   }
 
   Future<void> _selezionaGiornoEccezione() async {
@@ -63,7 +81,6 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
   void _mostraDialogConfiguraGiorno(String dataFormattata) {
     _notaController.clear();
     _statusScelto = 'chiuso';
-    // Reset orari predefiniti ad ogni apertura dialogo
     _orariStraordinari = {
       'mattina': {'apertura': '09:00', 'chiusura': '13:00'},
       'pomeriggio': {'apertura': '14:30', 'chiusura': '19:30'},
@@ -95,7 +112,6 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
                   const SizedBox(height: 16),
                   const Text("Orari Apertura Straordinaria", style: TextStyle(fontWeight: FontWeight.bold)),
                   const Divider(),
-                  // Mattina
                   const Text("Turno Mattina", style: TextStyle(fontSize: 12, color: Colors.grey)),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -112,7 +128,6 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Pomeriggio
                   const Text("Turno Pomeriggio", style: TextStyle(fontSize: 12, color: Colors.grey)),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -132,6 +147,8 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _notaController,
+                  focusNode: _notaFocusNode, // AGGIUNTO
+                  onTap: () => _resettaSelezioneTesto(_notaController), // AGGIUNTO
                   decoration: const InputDecoration(
                     labelText: 'Motivazione (es. Ferie, Santo Patrono)',
                     border: OutlineInputBorder(),
@@ -165,7 +182,6 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      // Se è aperto, includiamo gli orari inseriti nel pop-up dentro il documento
       if (_statusScelto == 'aperto') {
         mappaSalvataggio['mattina'] = _orariStraordinari['mattina'];
         mappaSalvataggio['pomeriggio'] = _orariStraordinari['pomeriggio'];

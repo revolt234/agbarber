@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart'; // AGGIUNTO
 
 class GestioneServiziScreen extends StatefulWidget {
   const GestioneServiziScreen({super.key});
@@ -12,10 +13,12 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
   final _nomeController = TextEditingController();
   final _prezzoController = TextEditingController();
 
-  // Sostituito il controller con una variabile intera per gestire il dropdown
+  // NUOVI FocusNode per i campi di testo
+  final _nomeFocusNode = FocusNode();
+  final _prezzoFocusNode = FocusNode();
+
   int? _durataSelezionata;
 
-  // CORREZIONE: Generazione dinamica dei minuti da 30 a 120 con passaggi di 10 minuti
   final List<int> _opzioniDurata = List<int>.generate(
     ((120 - 30) ~/ 10) + 1,
         (index) => 30 + (index * 10),
@@ -25,27 +28,35 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
   void dispose() {
     _nomeController.dispose();
     _prezzoController.dispose();
+    _nomeFocusNode.dispose();   // AGGIUNTO
+    _prezzoFocusNode.dispose(); // AGGIUNTO
     super.dispose();
   }
 
-  // Mostra il pop-up (funziona sia per NUOVI servizi sia per MODIFICARE quelli esistenti)
+  // Metodo helper per resettare la selezione del testo (come in GestionePeriodicoScreen)
+  void _resettaSelezioneTesto(TextEditingController controller) {
+    final text = controller.text;
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    SystemChannels.textInput.invokeMethod('TextInput.show');
+  }
+
   void _mostraDialogServizio({String? docId, String? nomeIniziale, double? prezzoIniziale, int? durataIniziale}) {
     if (docId != null) {
-      // Se passiamo un docId, siamo in modalità MODIFICA: precompiliamo i campi
       _nomeController.text = nomeIniziale ?? '';
       _prezzoController.text = prezzoIniziale?.toStringAsFixed(2) ?? '';
-      // Se la durata memorizzata è presente nelle opzioni, la seleziona, altrimenti mette il default (30)
       _durataSelezionata = _opzioniDurata.contains(durataIniziale) ? durataIniziale : 30;
     } else {
-      // Altrimenti siamo in modalità INSERIMENTO: svuotiamo i campi e impostiamo il valore iniziale del dropdown
       _nomeController.clear();
       _prezzoController.clear();
-      _durataSelezionata = 30; // Valore predefinito alla creazione
+      _durataSelezionata = 30;
     }
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder( // Utilizzato per aggiornare il dropdown all'interno del dialogo
+      builder: (context) => StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
               title: Text(docId == null ? 'Aggiungi Nuovo Servizio' : 'Modifica Servizio'),
@@ -55,6 +66,8 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
                   children: [
                     TextField(
                       controller: _nomeController,
+                      focusNode: _nomeFocusNode,           // AGGIUNTO
+                      onTap: () => _resettaSelezioneTesto(_nomeController), // AGGIUNTO
                       decoration: const InputDecoration(
                         labelText: 'Nome Servizio',
                         border: OutlineInputBorder(),
@@ -63,6 +76,8 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _prezzoController,
+                      focusNode: _prezzoFocusNode,         // AGGIUNTO
+                      onTap: () => _resettaSelezioneTesto(_prezzoController), // AGGIUNTO
                       decoration: const InputDecoration(
                         labelText: 'Prezzo (€)',
                         border: OutlineInputBorder(),
@@ -72,7 +87,6 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // DropdownButtonFormField con la nuova lista granulare di 10 min in 10 min
                     DropdownButtonFormField<int>(
                       initialValue: _durataSelezionata,
                       decoration: const InputDecoration(
@@ -111,7 +125,6 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
     );
   }
 
-  // Gestisce sia il salvataggio del nuovo servizio che l'aggiornamento
   Future<void> _salvaServizioFirebase(String? docId) async {
     final nome = _nomeController.text.trim();
     final prezzoSetted = double.tryParse(_prezzoController.text.trim());
@@ -132,11 +145,9 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
       };
 
       if (docId == null) {
-        // CREAZIONE di un nuovo documento
         datiServizio['createdAt'] = FieldValue.serverTimestamp();
         await FirebaseFirestore.instance.collection('services').add(datiServizio);
       } else {
-        // AGGIORNAMENTO di un documento esistente
         await FirebaseFirestore.instance.collection('services').doc(docId).update(datiServizio);
       }
 
@@ -148,7 +159,6 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
     }
   }
 
-  // AGGIUNTO: Pop-up di conferma prima dell'eliminazione per evitare tocchi accidentali
   void _mostraConfermaEliminazione(String docId, String nomeServizio) {
     showDialog(
       context: context,
@@ -164,7 +174,7 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () async {
-                Navigator.pop(context); // Chiude il pop-up di conferma
+                Navigator.pop(context);
                 await _eliminaServizio(docId);
               },
               child: const Text('Elimina', style: TextStyle(color: Colors.white)),
@@ -244,7 +254,7 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _mostraConfermaEliminazione(servizioDoc.id, nome), // MODIFICATO: Chiama il pop-up di conferma
+                        onPressed: () => _mostraConfermaEliminazione(servizioDoc.id, nome),
                       ),
                     ],
                   ),
@@ -256,7 +266,7 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF164638),
-        onPressed: () => _mostraDialogServizio(), // Apre vuoto per inserimento
+        onPressed: () => _mostraDialogServizio(),
         child: const Icon(Icons.add, color: Colors.white, size: 30),
       ),
     );
