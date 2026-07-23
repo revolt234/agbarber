@@ -23,7 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final FocusNode _nomeCognomeFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
-  final _telefonoFocus = FocusNode();
+  final FocusNode _telefonoFocus = FocusNode();
 
   bool _isLogin = true;
   bool _isLoading = false;
@@ -42,17 +42,8 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _resettaSelezioneTesto(TextEditingController controller) {
-    final text = controller.text;
-    controller.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-  }
-
   void _mostraDialogoRecuperoPassword() {
     _recuperoEmailController.text = _emailController.text.trim();
-    _resettaSelezioneTesto(_recuperoEmailController);
 
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
@@ -77,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
               controller: _recuperoEmailController,
               maxLength: 45,
               style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
-              onTap: () => _resettaSelezioneTesto(_recuperoEmailController),
+              textInputAction: TextInputAction.done,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 labelStyle: TextStyle(color: Colors.grey),
@@ -351,8 +342,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     focusNode: _nomeCognomeFocus,
                     maxLength: 45,
                     style: TextStyle(color: coloreTestoInput),
-                    onTap: () => _resettaSelezioneTesto(_nomeCognomeController),
-                    onTapOutside: (event) => _nomeCognomeFocus.unfocus(),
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) => FocusScope.of(context).requestFocus(_telefonoFocus),
                     decoration: InputDecoration(
                       labelText: 'Nome e Cognome',
                       labelStyle: const TextStyle(color: Colors.grey),
@@ -370,11 +361,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     focusNode: _telefonoFocus,
                     maxLength: 10,
                     style: TextStyle(color: coloreTestoInput),
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) => FocusScope.of(context).requestFocus(_emailFocus),
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
                     ],
-                    onTap: () => _resettaSelezioneTesto(_telefonoController),
-                    onTapOutside: (event) => _telefonoFocus.unfocus(),
                     decoration: InputDecoration(
                       labelText: 'Cellulare (Opzionale)',
                       labelStyle: const TextStyle(color: Colors.grey),
@@ -393,8 +384,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   focusNode: _emailFocus,
                   maxLength: 45,
                   style: TextStyle(color: coloreTestoInput),
-                  onTap: () => _resettaSelezioneTesto(_emailController),
-                  onTapOutside: (event) => _emailFocus.unfocus(),
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
                   decoration: InputDecoration(
                     labelText: 'Email',
                     labelStyle: const TextStyle(color: Colors.grey),
@@ -412,8 +403,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   focusNode: _passwordFocus,
                   maxLength: 45,
                   style: TextStyle(color: coloreTestoInput),
-                  onTap: () => _resettaSelezioneTesto(_passwordController),
-                  onTapOutside: (event) => _passwordFocus.unfocus(),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _inviaForm(),
                   decoration: InputDecoration(
                     labelText: 'Password',
                     labelStyle: const TextStyle(color: Colors.grey),

@@ -59,21 +59,31 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     final Color coloreSfondo = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final Color coloreTesto = isDarkMode ? Colors.white : Colors.black87;
 
+    final TextEditingController nomeOspiteController = TextEditingController();
+    final TextEditingController ricercaClienteController = TextEditingController();
+    final FocusNode ospiteFocusNode = FocusNode();
+    final FocusNode ricercaFocusNode = FocusNode();
+
+    String queryRicerca = "";
+    bool isClienteRegistrato = true;
+
+    // Standard corretto: richiede il focus dopo il primo rendering completo del modale
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ricercaFocusNode.canRequestFocus) {
+        ricercaFocusNode.requestFocus();
+      }
+    });
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       useSafeArea: true,
       builder: (bottomSheetContext) {
-        String queryRicerca = "";
-        bool isClienteRegistrato = true;
-        final TextEditingController nomeOspiteController = TextEditingController();
-        final FocusNode ospiteFocusNode = FocusNode();
-
         return StatefulBuilder(
           builder: (context, setModalState) {
             return FractionallySizedBox(
-              heightFactor: 0.9, // Copre la schermata fino in alto
+              heightFactor: 0.9,
               child: Container(
                 decoration: BoxDecoration(
                   color: coloreSfondo,
@@ -84,7 +94,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Intestazione con titolo e pulsante di chiusura
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -105,7 +114,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                       ),
                       const SizedBox(height: 8),
 
-                      // Scelta tra Cliente Registrato o Meno
                       Text(
                         'Cliente registrato:',
                         style: TextStyle(color: coloreTesto, fontSize: 13, fontWeight: FontWeight.bold),
@@ -131,10 +139,14 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                             setModalState(() {
                               isClienteRegistrato = newSelection.first;
                             });
-                            // Se si seleziona Ospite, sposta subito il focus sul campo di testo
-                            if (!isClienteRegistrato) {
-                              Future.microtask(() => ospiteFocusNode.requestFocus());
-                            }
+                            // Sposta correttamente il focus in base alla vista selezionata
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (isClienteRegistrato) {
+                                if (ricercaFocusNode.canRequestFocus) ricercaFocusNode.requestFocus();
+                              } else {
+                                if (ospiteFocusNode.canRequestFocus) ospiteFocusNode.requestFocus();
+                              }
+                            });
                           },
                           style: ButtonStyle(
                             backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
@@ -154,12 +166,12 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                       ),
                       const SizedBox(height: 16),
 
-                      // VISTA CLIENTE REGISTRATO
                       if (isClienteRegistrato) ...[
-                        // Campo di ricerca
                         TextField(
-                          autofocus: true,
+                          controller: ricercaClienteController,
+                          focusNode: ricercaFocusNode,
                           style: TextStyle(color: coloreTesto),
+                          textInputAction: TextInputAction.search,
                           onChanged: (val) {
                             setModalState(() {
                               queryRicerca = val.toLowerCase().trim();
@@ -178,11 +190,14 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: agOro, width: 2),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 12),
 
-                        // Lista clienti da Firestore
                         Expanded(
                           child: StreamBuilder<QuerySnapshot>(
                             stream: FirebaseFirestore.instance
@@ -251,13 +266,13 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                           ),
                         ),
                       ]
-                      // VISTA CLIENTE NON REGISTRATO (OSPITE)
                       else ...[
                         TextField(
                           controller: nomeOspiteController,
                           focusNode: ospiteFocusNode,
-                          autofocus: true,
                           style: TextStyle(color: coloreTesto),
+                          textInputAction: TextInputAction.done,
+                          textCapitalization: TextCapitalization.words,
                           onChanged: (_) => setModalState(() {}),
                           decoration: InputDecoration(
                             labelText: 'Nome e Cognome cliente non registrato',
@@ -318,7 +333,12 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
           },
         );
       },
-    );
+    ).whenComplete(() {
+      nomeOspiteController.dispose();
+      ricercaClienteController.dispose();
+      ospiteFocusNode.dispose();
+      ricercaFocusNode.dispose();
+    });
   }
 
   Future<void> _selezionaData(BuildContext context) async {
