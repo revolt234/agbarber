@@ -1,8 +1,63 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
-
 admin.initializeApp();
 
+// 0. PULIZIA AUTOMATICA PRENOTAZIONI VECCHIE (Eseguita ogni 9 giorni)
+exports.puliziaPrenotazioniVecchie = onSchedule(
+  {
+    schedule: "0 3 */9 * *", // Alle 03:00 del mattino, ogni 9 giorni
+    timeZone: "Europe/Rome",
+    region: "europe-west3",
+  },
+  async (event) => {
+    console.log("Starting automatic cleanup of appointments older than 7 days...");
+
+    const db = admin.firestore();
+    const adesso = new Date();
+
+    // Calcola la data e l'ora limite di 7 giorni fa
+    const limiteSetteGiorniFa = new Date(adesso.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    try {
+      const appointmentsSnap = await db.collection("appointments").get();
+
+      if (appointmentsSnap.empty) {
+        console.log("No appointments found in database.");
+        return;
+      }
+
+      const batch = db.batch();
+      let contatoreEliminati = 0;
+
+      appointmentsSnap.docs.forEach((doc) => {
+        const data = doc.data();
+        const dateStr = data.date; // Formato previsto: "YYYY-MM-DD"
+        const slotStr = data.slot; // Formato previsto: "HH:mm"
+
+        if (dateStr && slotStr) {
+          // Ricostruisce la data e l'orario completo dell'appuntamento
+          const orarioAppuntamento = new Date(`${dateStr}T${slotStr}:00`);
+
+          // Se l'appuntamento è avvenuto più di 7 giorni fa, viene accodato per l'eliminazione
+          if (orarioAppuntamento < limiteSetteGiorniFa) {
+            batch.delete(doc.ref);
+            contatoreEliminati++;
+          }
+        }
+      });
+
+      if (contatoreEliminati > 0) {
+        await batch.commit();
+        console.log(`Successfully deleted ${contatoreEliminati} old appointment(s).`);
+      } else {
+        console.log("No old appointments to delete.");
+      }
+    } catch (error) {
+      console.error("Error during automatic appointment cleanup:", error);
+    }
+  }
+);
 // 1. ELIMINA UTENTE
 exports.eliminaUtenteCompleto = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;

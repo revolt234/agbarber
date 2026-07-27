@@ -2,8 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario per richiamare la Cloud Function
-import '../services/notification_service.dart'; // Importato per cancellare la notifica abbinata
+import 'package:cloud_functions/cloud_functions.dart';
+import '../services/notification_service.dart';
 
 class StoricoPrenotazioniScreen extends StatelessWidget {
   const StoricoPrenotazioniScreen({super.key});
@@ -86,18 +86,9 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
 
               // Limite temporale per nascondere visivamente l'appuntamento (12 ore dopo)
               final DateTime limiteVisualizzazione = orarioAppuntamento.add(const Duration(hours: 12));
-              // Limite temporale per cancellare definitivamente da Firestore (1 settimana dopo)
-              final DateTime limiteRimozioneFirestore = orarioAppuntamento.add(const Duration(days: 7));
 
               if (adesso.isBefore(limiteVisualizzazione)) {
                 prenotazioniValide.add(doc);
-              } else if (adesso.isAfter(limiteRimozioneFirestore)) {
-                // MODIFICATO: Viene rimosso fisicamente da Firestore solo se è passata più di 1 settimana
-                FirebaseFirestore.instance
-                    .collection('appointments')
-                    .doc(doc.id)
-                    .delete()
-                    .catchError((e) => debugPrint("Errore pulizia database: $e"));
               }
             } catch (e) {
               prenotazioniValide.add(doc);
@@ -251,7 +242,7 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                               await callable.call(<String, dynamic>{
                                 'date': dataApp,
                                 'slot': ora,
-                                'barberName': barber, // AGGIUNTO: Nome dello specialista
+                                'barberName': barber,
                                 'serviceNome': servizi.join(", "),
                                 'clienteNome': nomeClienteReale,
                               });
