@@ -6,6 +6,7 @@ import 'package:flutter/services.dart'; // Richiesto per la gestione dell'orient
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Pacchetto ufficiale per i messaggi push
+import 'package:firebase_analytics/firebase_analytics.dart'; // AGGIUNTO: Pacchetto ufficiale per Google Analytics
 import 'screens/visualizzazione_prenotazioni_screen.dart';
 import 'firebase_options.dart';
 import 'screens/prenotazione_servizi_screen.dart';
@@ -43,6 +44,9 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  // AGGIUNTO: Istanza di FirebaseAnalytics per il tracciamento
+  static FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
   @override
   Widget build(BuildContext context) {
     // --- CONTROLLO ORIENTAMENTO DINAMICO (SOLO TABLET IN LANDSCAPE) ---
@@ -74,6 +78,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'AG Barber',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [
+        // AGGIUNTO: Traccia automaticamente la navigazione tra le pagine dell'app su Firebase
+        FirebaseAnalyticsObserver(analytics: analytics),
+      ],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
