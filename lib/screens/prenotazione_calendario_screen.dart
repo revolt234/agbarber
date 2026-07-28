@@ -304,7 +304,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       testoLegendaDinamico = 'Salone affollato';
     } else {
       coloreSfondoLegenda = isDarkMode ? Colors.black45 : Colors.grey.shade400;
-      testoLegendaDinamico = 'Nessun posto disponibile (Sold out)';
+      testoLegendaDinamico = 'Nessun posto disponibile';
     }
 
     return Scaffold(
@@ -541,7 +541,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                       children: [
                         Container(width: 20, height: 20, decoration: const BoxDecoration(color: Color(0xFFE55B5B), shape: BoxShape.circle)),
                         const SizedBox(width: 12),
-                        Text('Salone chiuso / Passato', style: TextStyle(color: coloreTestoSecondario, fontSize: 16)),
+                        Text('Salone chiuso', style: TextStyle(color: coloreTestoSecondario, fontSize: 16)),
                       ],
                     ),
                   ],
