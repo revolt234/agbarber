@@ -230,23 +230,20 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
   }
 });
 
-// Helper per estrarre tutti i token validi da un documento utente (retrocompatibile)
+// Helper per estrarre tutti i token validi da un documento utente (multi-dispositivo con fallback)
 function estraiTuttiIToken(datiUtente) {
   const tokens = new Set();
 
-  // Array multi-dispositivo (nuovo sistema)
+  // Array multi-dispositivo (sistema attuale)
   if (Array.isArray(datiUtente.fcmTokens)) {
     datiUtente.fcmTokens.forEach((t) => {
       if (t && typeof t === 'string' && t.trim().length > 0) tokens.add(t.trim());
     });
   }
 
-  // Fallback campo singolo (vecchio sistema)
+  // Fallback campo singolo (sistema precedente)
   if (datiUtente.fcmToken && typeof datiUtente.fcmToken === 'string') {
     tokens.add(datiUtente.fcmToken.trim());
-  }
-  if (datiUtente.pushToken && typeof datiUtente.pushToken === 'string') {
-    tokens.add(datiUtente.pushToken.trim());
   }
 
   return Array.from(tokens);
@@ -276,7 +273,6 @@ async function inviaNotificheEPulisciToken(tokens, messaggioBase, userDocRef) {
 
   await Promise.all(invii);
 }
-
 // 3. INVIA SOLLECITO CLIENTE (Multi-Dispositivo con Autopulizia Token)
 exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
