@@ -125,7 +125,7 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
     );
   }
 
-  const { date, slot, duration, barberId, barberName, serviceNome, servicePrezzo, targetUserId, targetUserName } = data;
+  const { date, slot, duration, barberId, barberName, serviceNome, servicePrezzo, targetUserId, targetUserName, nota } = data;
 
   if (!date || !slot || !duration || !barberId || !barberName || !serviceNome || !servicePrezzo) {
     throw new HttpsError(
@@ -196,7 +196,7 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
         }
       }
 
-      transaction.set(docBloccoRef, {
+      const appuntamentoData = {
         date: date,
         slot: slot,
         duration: parseInt(duration, 10),
@@ -208,7 +208,13 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
         services: [serviceNome],
         totalPrice: parseFloat(servicePrezzo),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      };
+
+      if (nota && typeof nota === 'string' && nota.trim().length > 0) {
+        appuntamentoData.nota = nota.trim();
+      }
+
+      transaction.set(docBloccoRef, appuntamentoData);
 
       return { success: true, appointmentId: bloccoSlotId };
     });

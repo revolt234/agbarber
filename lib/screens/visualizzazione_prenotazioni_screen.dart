@@ -411,6 +411,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
     final String? clienteId = data['userId'];
     final String dataApp = data['date'] ?? '';
+    final String? notaCliente = (data['nota'] ?? data['note'])?.toString().trim();
 
     bool mostraSelettorePresenza = false;
     try {
@@ -584,6 +585,80 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                             ),
                           ],
                         ),
+
+                        // NOTA CLIENTE (VISIBILE SOLO SE PRESENTE)
+                        if (notaCliente != null && notaCliente.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          InkWell(
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (dialogContext) {
+                                  return AlertDialog(
+                                    backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    title: Row(
+                                      children: [
+                                        Icon(Icons.sticky_note_2, color: agOro, size: 26),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Nota del Cliente',
+                                          style: TextStyle(
+                                            color: coloreTestoDettaglio,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    content: Text(
+                                      notaCliente,
+                                      style: TextStyle(
+                                        color: isDarkMode ? Colors.white70 : Colors.black87,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    actions: [
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: agVerde,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        ),
+                                        onPressed: () => Navigator.pop(dialogContext),
+                                        child: const Text('CHIUDI', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: agOro.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: agOro, width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.note_alt_outlined, color: agOro, size: 20),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Leggi Nota Cliente',
+                                    style: TextStyle(
+                                      color: agOro,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
 
                         // AGGIUNTO: VISUALIZZAZIONE SALDO CLIENTE CON LOGICA VERDE / ROSSA
                         if (clienteId != null) ...[
