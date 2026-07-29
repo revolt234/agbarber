@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario per invocare la funzione lato server
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 import '../services/notification_service.dart';
 
 class PrenotazioneDataScreen extends StatefulWidget {
@@ -481,8 +482,19 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     int minutiPreavvisoSelezionati = 30;
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Controller per la gestione del testo delle note
+    // Controller e FocusNode gestiti come nel Login
     final TextEditingController notaController = TextEditingController();
+    final FocusNode notaFocusNode = FocusNode();
+
+    // Helper per resettare la selezione del testo e forzare l'apertura della tastiera nativa
+    void resettaSelezioneTesto(TextEditingController controller) {
+      final text = controller.text;
+      controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+      SystemChannels.textInput.invokeMethod('TextInput.show');
+    }
 
     // Risoluzione cliente: usa direttamente i dati passati (cliente registrato o ospite),
     // altrimenti usa i dati dell'utente loggato (cliente autonomo).
@@ -555,7 +567,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
 
                         const SizedBox(height: 16),
 
-                        // Campo nota opzionale
+                        // Campo nota opzionale strutturato come nel LoginScreen
                         Text(
                           'Vuoi comunicare qualcosa?',
                           style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
@@ -563,20 +575,24 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                         const SizedBox(height: 8),
                         TextField(
                           controller: notaController,
+                          focusNode: notaFocusNode,
                           maxLength: 150,
                           maxLines: 2,
                           style: TextStyle(color: coloreTestoDettaglio, fontSize: 14),
+                          onTap: () => resettaSelezioneTesto(notaController),
+                          onTapOutside: (event) => notaFocusNode.unfocus(),
                           decoration: InputDecoration(
                             hintText: 'Es. Ho i capelli molto lunghi, ritardo di 5 min...',
                             hintStyle: TextStyle(
                               color: isDarkMode ? Colors.white38 : Colors.black38,
                               fontSize: 13,
                             ),
+                            counterText: "",
                             filled: true,
                             fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
-                            border: OutlineInputBorder(
+                            enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
+                              borderSide: BorderSide(color: isDarkMode ? Colors.grey : Colors.grey.shade400),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -600,7 +616,11 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                     foregroundColor: Colors.grey,
                                   ),
-                                  onPressed: () => Navigator.pop(bottomSheetContext),
+                                  onPressed: () {
+                                    notaController.dispose();
+                                    notaFocusNode.dispose();
+                                    Navigator.pop(bottomSheetContext);
+                                  },
                                   child: const Text('ANNULLA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                                 ),
                               ),
@@ -676,6 +696,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                         debugPrint("Errore notifiche flessibili: $e");
                                       }
 
+                                      notaController.dispose();
+                                      notaFocusNode.dispose();
+
                                       if (!bottomSheetContext.mounted) return;
                                       Navigator.pop(bottomSheetContext);
 
@@ -697,6 +720,10 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                         _isSaving = false;
                                         _orarioSelezionato = null;
                                       });
+
+                                      notaController.dispose();
+                                      notaFocusNode.dispose();
+
                                       Navigator.pop(bottomSheetContext);
                                       ScaffoldMessenger.of(context).clearSnackBars();
 

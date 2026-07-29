@@ -67,7 +67,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final TextEditingController telController = TextEditingController(
       text: haTelefono ? _telefonoCorrente : '',
     );
+    final FocusNode telFocus = FocusNode();
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    void resettaSelezioneTesto(TextEditingController controller) {
+      final text = controller.text;
+      controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+      SystemChannels.textInput.invokeMethod('TextInput.show');
+    }
+
+    // Resetta la selezione e apre la tastiera nativa all'apertura del dialogo
+    resettaSelezioneTesto(telController);
 
     showDialog(
       context: context,
@@ -92,9 +105,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: telController,
+                focusNode: telFocus,
+                autofocus: true, // Assegna automaticamente il focus all'apertura
                 maxLength: 10, // Blocca l'inserimento oltre la decima cifra
                 keyboardType: TextInputType.phone,
                 style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+                onTap: () => resettaSelezioneTesto(telController),
+                onTapOutside: (event) => telFocus.unfocus(),
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly, // Impedisce caratteri strani, spazi o simboli
                 ],
@@ -118,6 +135,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (haTelefono)
               TextButton(
                 onPressed: () async {
+                  telController.dispose();
+                  telFocus.dispose();
                   Navigator.pop(context);
                   await _aggiornaTelefonoSuFirestore('Nessun cellulare');
                 },
@@ -125,7 +144,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: const Text('Rimuovi', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                telController.dispose();
+                telFocus.dispose();
+                Navigator.pop(context);
+              },
               child: const Text('Annulla', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
@@ -144,6 +167,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   return;
                 }
 
+                telController.dispose();
+                telFocus.dispose();
                 Navigator.pop(context);
                 await _aggiornaTelefonoSuFirestore(nuovoTel);
               },
