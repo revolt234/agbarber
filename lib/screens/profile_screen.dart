@@ -239,72 +239,97 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // AGGIUNTO: Mostra il dialogo di conferma per la disconnessione dall'applicazione e cancella i token FCM
   void _mostraConfermaDisconnessione() {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    bool isDisconnessioneInCorso = false;
 
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          title: Text(
-            'Disconnetti',
-            style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Text(
-            'Sei sicuro di voler uscire dal tuo account?',
-            style: TextStyle(
-              color: isDarkMode ? Colors.white70 : Colors.black87,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Annulla',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade900),
-              onPressed: () async {
-                Navigator.pop(context);
-
-                // AGGIUNTO: Rimuove il token di questo dispositivo prima del logout
-                try {
-                  final user = FirebaseAuth.instance.currentUser;
-                  if (user != null) {
-                    final token = await FirebaseMessaging.instance.getToken();
-                    if (token != null && token.isNotEmpty) {
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(user.uid)
-                          .update({
-                        'fcmTokens': FieldValue.arrayRemove([token]),
-                        'fcmToken': FieldValue.delete(),
-                      });
-                    }
-                  }
-                  await FirebaseMessaging.instance.deleteToken();
-                } catch (e) {
-                  debugPrint("Errore nella rimozione del token FCM al logout cliente: $e");
-                }
-
-                await FirebaseAuth.instance.signOut();
-                if (mounted) {
-                  Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-                }
-              },
-              child: const Text(
-                'Esci',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return PopScope(
+              canPop: !isDisconnessioneInCorso,
+              child: AlertDialog(
+                backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                title: Text(
+                  'Disconnetti',
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
+                content: Text(
+                  'Sei sicuro di voler uscire dal tuo account?',
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isDisconnessioneInCorso ? null : () => Navigator.pop(dialogContext),
+                    child: const Text(
+                      'Annulla',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade900),
+                    onPressed: isDisconnessioneInCorso
+                        ? null
+                        : () async {
+                      setDialogState(() {
+                        isDisconnessioneInCorso = true;
+                      });
+
+                      // AGGIUNTO: Rimuove il token di questo dispositivo prima del logout
+                      try {
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user != null) {
+                          final token = await FirebaseMessaging.instance.getToken();
+                          if (token != null && token.isNotEmpty) {
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(user.uid)
+                                .update({
+                              'fcmTokens': FieldValue.arrayRemove([token]),
+                              'fcmToken': FieldValue.delete(),
+                            });
+                          }
+                        }
+                        await FirebaseMessaging.instance.deleteToken();
+                      } catch (e) {
+                        debugPrint("Errore nella rimozione del token FCM al logout cliente: $e");
+                      }
+
+                      await FirebaseAuth.instance.signOut();
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                      }
+                      if (mounted) {
+                        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                      }
+                    },
+                    child: isDisconnessioneInCorso
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                        : const Text(
+                      'Esci',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         );
       },
     );

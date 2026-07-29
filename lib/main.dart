@@ -450,71 +450,97 @@ class BarbiereHomePage extends StatelessWidget {
 
   void _mostraConfermaDisconnessione(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    bool isDisconnessioneInCorso = false;
 
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          title: Text(
-            'Disconnetti',
-            style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Text(
-            'Sei sicuro di voler uscire dal pannello admin?',
-            style: TextStyle(
-              color: isDarkMode ? Colors.white70 : Colors.black87,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Annulla',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade900),
-              onPressed: () async {
-                Navigator.pop(context);
-
-                try {
-                  final user = FirebaseAuth.instance.currentUser;
-                  if (user != null) {
-                    final token = await FirebaseMessaging.instance.getToken();
-                    if (token != null && token.isNotEmpty) {
-                      // 1. Rimuove il token dell'utente da Firestore
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(user.uid)
-                          .update({
-                        'fcmTokens': FieldValue.arrayRemove([token]),
-                        'fcmToken': FieldValue.delete(),
-                      });
-                    }
-                  }
-                  // 2. Cancellazione fisica del token FCM dal dispositivo hardware
-                  await FirebaseMessaging.instance.deleteToken();
-                } catch (e) {
-                  debugPrint("Errore nella rimozione del token FCM al logout: $e");
-                }
-
-                // 3. Disconnessione utente da Firebase Auth
-                await FirebaseAuth.instance.signOut();
-              },
-              child: const Text(
-                'Esci',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return PopScope(
+              canPop: !isDisconnessioneInCorso,
+              child: AlertDialog(
+                backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                title: Text(
+                  'Disconnetti',
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
+                content: Text(
+                  'Sei sicuro di voler uscire dal pannello admin?',
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isDisconnessioneInCorso ? null : () => Navigator.pop(dialogContext),
+                    child: const Text(
+                      'Annulla',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade900),
+                    onPressed: isDisconnessioneInCorso
+                        ? null
+                        : () async {
+                      setDialogState(() {
+                        isDisconnessioneInCorso = true;
+                      });
+
+                      try {
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user != null) {
+                          final token = await FirebaseMessaging.instance.getToken();
+                          if (token != null && token.isNotEmpty) {
+                            // 1. Rimuove il token dell'utente da Firestore
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(user.uid)
+                                .update({
+                              'fcmTokens': FieldValue.arrayRemove([token]),
+                              'fcmToken': FieldValue.delete(),
+                            });
+                          }
+                        }
+                        // 2. Cancellazione fisica del token FCM dal dispositivo hardware
+                        await FirebaseMessaging.instance.deleteToken();
+                      } catch (e) {
+                        debugPrint("Errore nella rimozione del token FCM al logout: $e");
+                      }
+
+                      // 3. Disconnessione utente da Firebase Auth
+                      await FirebaseAuth.instance.signOut();
+
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                      }
+                    },
+                    child: isDisconnessioneInCorso
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                        : const Text(
+                      'Esci',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         );
       },
     );
