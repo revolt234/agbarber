@@ -16,6 +16,11 @@
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
 
+        <!-- ICONA DI DEFAULT PER FIREBASE CLOUD MESSAGING (Sfondo/App chiusa) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_name" />
+
         <!-- Disabilita i segnali di personalizzazione annunci per Firebase Analytics -->
         <meta-data
             android:name="google_analytics_default_allow_ad_personalization_signals"
