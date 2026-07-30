@@ -195,89 +195,128 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                       onPressed: isGiaPassato
                           ? null
                           : () async {
-                        final bool? conferma = await showDialog<bool>(
+                        bool isAnnullamentoInCorso = false;
+
+                        await showDialog<void>(
                           context: context,
-                          builder: (context) => AlertDialog(
-                            backgroundColor: isDarkMode ? const Color(0xFF1C2824) : Colors.white,
-                            title: Text(
-                                'Annulla Appuntamento',
-                                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)
-                            ),
-                            content: Text(
-                                'Sei sicuro di voler cancellare questa prenotazione? L\'orario tornerà disponibile per gli altri clienti.',
-                                style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54)
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('No, mantieni', style: TextStyle(color: agOro)),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text('Sì, annulla', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                              ),
-                            ],
-                          ),
+                          barrierDismissible: false,
+                          builder: (dialogContext) {
+                            return StatefulBuilder(
+                              builder: (context, setDialogState) {
+                                return PopScope(
+                                  canPop: !isAnnullamentoInCorso,
+                                  child: AlertDialog(
+                                    backgroundColor: isDarkMode ? const Color(0xFF1C2824) : Colors.white,
+                                    title: Text(
+                                        'Annulla Appuntamento',
+                                        style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)
+                                    ),
+                                    content: Text(
+                                        'Sei sicuro di voler cancellare questa prenotazione? L\'orario tornerà disponibile per gli altri clienti.',
+                                        style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54)
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: isAnnullamentoInCorso
+                                            ? null
+                                            : () => Navigator.pop(dialogContext),
+                                        child: const Text('No, mantieni', style: TextStyle(color: agOro)),
+                                      ),
+                                      TextButton(
+                                        onPressed: isAnnullamentoInCorso
+                                            ? null
+                                            : () async {
+                                          setDialogState(() {
+                                            isAnnullamentoInCorso = true;
+                                          });
+
+                                          try {
+                                            // 1. Invia notifica di annullamento al barbiere tramite Cloud Function
+                                            try {
+                                              final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                                  .httpsCallable('inviaNotificaAnnullamentoAlBarbiere');
+
+                                              // Recupera il nome reale dell'utente se user.displayName è vuoto
+                                              String nomeClienteReale = user.displayName ?? '';
+                                              if (nomeClienteReale.isEmpty) {
+                                                final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                                                if (userDoc.exists && userDoc.data() != null) {
+                                                  nomeClienteReale = userDoc.data()!['name'] ?? userDoc.data()!['nome'] ?? '';
+                                                }
+                                              }
+                                              if (nomeClienteReale.isEmpty) {
+                                                nomeClienteReale = user.email ?? 'Un cliente';
+                                              }
+
+                                              await callable.call(<String, dynamic>{
+                                                'date': dataApp,
+                                                'slot': ora,
+                                                'barberName': barber,
+                                                'serviceNome': servizi.join(", "),
+                                                'clienteNome': nomeClienteReale,
+                                              });
+                                            } catch (e) {
+                                              debugPrint("Errore invio notifica annullamento al barbiere: $e");
+                                            }
+
+                                            // 2. Elimina il documento da Firestore
+                                            await FirebaseFirestore.instance
+                                                .collection('appointments')
+                                                .doc(idDocumento)
+                                                .delete();
+
+                                            // 3. Disdice la sveglia locale
+                                            await NotificationService().cancellaNotifica(idDocumento.hashCode);
+
+                                            if (dialogContext.mounted) {
+                                              Navigator.pop(dialogContext);
+                                            }
+
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text('Prenotazione annullata con successo.'),
+                                                  backgroundColor: Colors.green,
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            setDialogState(() {
+                                              isAnnullamentoInCorso = false;
+                                            });
+
+                                            if (dialogContext.mounted) {
+                                              Navigator.pop(dialogContext);
+                                            }
+
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('Errore durante la cancellazione: $e'),
+                                                  backgroundColor: Colors.redAccent,
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        },
+                                        child: isAnnullamentoInCorso
+                                            ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.redAccent,
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                            : const Text('Sì, annulla', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            );
+                          },
                         );
-
-                        if (conferma == true) {
-                          try {
-                            // 1. Invia notifica di annullamento al barbiere tramite Cloud Function
-                            try {
-                              final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-                                  .httpsCallable('inviaNotificaAnnullamentoAlBarbiere');
-
-                              // Recupera il nome reale dell'utente se user.displayName è vuoto
-                              String nomeClienteReale = user.displayName ?? '';
-                              if (nomeClienteReale.isEmpty) {
-                                final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                                if (userDoc.exists && userDoc.data() != null) {
-                                  nomeClienteReale = userDoc.data()!['name'] ?? userDoc.data()!['nome'] ?? '';
-                                }
-                              }
-                              if (nomeClienteReale.isEmpty) {
-                                nomeClienteReale = user.email ?? 'Un cliente';
-                              }
-
-                              await callable.call(<String, dynamic>{
-                                'date': dataApp,
-                                'slot': ora,
-                                'barberName': barber,
-                                'serviceNome': servizi.join(", "),
-                                'clienteNome': nomeClienteReale,
-                              });
-                            } catch (e) {
-                              debugPrint("Errore invio notifica annullamento al barbiere: $e");
-                            }
-
-                            // 2. Elimina il documento da Firestore
-                            await FirebaseFirestore.instance
-                                .collection('appointments')
-                                .doc(idDocumento)
-                                .delete();
-
-                            // 3. Disdice la sveglia locale
-                            await NotificationService().cancellaNotifica(idDocumento.hashCode);
-
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Prenotazione annullata con successo.'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Errore durante la cancellazione: $e'),
-                                  backgroundColor: Colors.redAccent,
-                                ),
-                              );
-                            }
-                          }
-                        }
                       },
                     ),
                   ),
