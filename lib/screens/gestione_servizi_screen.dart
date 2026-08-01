@@ -219,7 +219,7 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
 
           return SafeArea(
             child: ListView.builder(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.only(left: 16.0, top: 16.0, right: 16.0, bottom: 80.0),
               itemCount: servizi.length,
               itemBuilder: (context, index) {
                 final servizioDoc = servizi[index];
