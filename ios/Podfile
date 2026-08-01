@@ -23,27 +23,9 @@ target 'Runner' do
 end
 
 post_install do |installer|
-  # Regola per i Pod nativi di CocoaPods
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
-      current_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f
-      if current_target < 15.0
-        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
-      end
-    end
-  end
-
-  # Regola globale per i pacchetti Swift generati da Flutter (Swift Package Manager)
-  if installer.respond_to?(:generated_projects)
-    installer.generated_projects.each do |project|
-      project.targets.each do |target|
-        target.build_configurations.each do |config|
-          current_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f
-          if current_target < 15.0
-            config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
-          end
-        end
-      end
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
     end
   end
 end
