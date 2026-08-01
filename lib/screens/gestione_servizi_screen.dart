@@ -217,50 +217,52 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
 
           final servizi = snapshot.data!.docs;
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16.0),
-            itemCount: servizi.length,
-            itemBuilder: (context, index) {
-              final servizioDoc = servizi[index];
-              final dati = servizioDoc.data() as Map<String, dynamic>;
+          return SafeArea(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16.0),
+              itemCount: servizi.length,
+              itemBuilder: (context, index) {
+                final servizioDoc = servizi[index];
+                final dati = servizioDoc.data() as Map<String, dynamic>;
 
-              final String nome = dati['name'] ?? 'Senza nome';
-              final double prezzo = (dati['price'] ?? 0.0).toDouble();
-              final int durata = dati['duration'] ?? 0;
+                final String nome = dati['name'] ?? 'Senza nome';
+                final double prezzo = (dati['price'] ?? 0.0).toDouble();
+                final int durata = dati['duration'] ?? 0;
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                elevation: 2,
-                child: ListTile(
-                  leading: const Icon(Icons.content_cut, color: Color(0xFFE2B13C)),
-                  title: Text(nome, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  subtitle: Text(
-                    'Durata: $durata min',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('${prezzo.toStringAsFixed(2)} €', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _mostraDialogServizio(
-                          docId: servizioDoc.id,
-                          nomeIniziale: nome,
-                          prezzoIniziale: prezzo,
-                          durataIniziale: durata,
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  elevation: 2,
+                  child: ListTile(
+                    leading: const Icon(Icons.content_cut, color: Color(0xFFE2B13C)),
+                    title: Text(nome, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    subtitle: Text(
+                      'Durata: $durata min',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${prezzo.toStringAsFixed(2)} €', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.blue),
+                          onPressed: () => _mostraDialogServizio(
+                            docId: servizioDoc.id,
+                            nomeIniziale: nome,
+                            prezzoIniziale: prezzo,
+                            durataIniziale: durata,
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _mostraConfermaEliminazione(servizioDoc.id, nome),
-                      ),
-                    ],
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _mostraConfermaEliminazione(servizioDoc.id, nome),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           );
         },
       ),
