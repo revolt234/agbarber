@@ -63,64 +63,70 @@ class _LoginScreenState extends State<LoginScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        title: Text(
-          'Recupero Password',
-          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Inserisci la tua email. Ti invieremo un link sicuro per reimpostare la tua password.',
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _recuperoEmailController,
-              maxLength: 45,
-              style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
-              onTap: () => _resettaSelezioneTesto(_recuperoEmailController),
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                labelStyle: TextStyle(color: Colors.grey),
-                counterText: "",
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFF164638)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFFE2B13C)),
-                ),
-                prefixIcon: Icon(Icons.email, color: Color(0xFFE2B13C)),
+      builder: (context) {
+        final FocusNode recuperoEmailFocusNode = FocusNode();
+
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          title: Text(
+            'Recupero Password',
+            style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Inserisci la tua email. Ti invieremo un link sicuro per reimpostare la tua password.',
+                style: TextStyle(color: Colors.grey, fontSize: 14),
               ),
-              keyboardType: TextInputType.emailAddress,
+              const SizedBox(height: 16),
+              TextField(
+                controller: _recuperoEmailController,
+                focusNode: recuperoEmailFocusNode,
+                autofocus: true,
+                maxLength: 45,
+                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+                onTap: () => _resettaSelezioneTesto(_recuperoEmailController),
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  labelStyle: TextStyle(color: Colors.grey),
+                  counterText: "",
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF164638)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFFE2B13C)),
+                  ),
+                  prefixIcon: Icon(Icons.email, color: Color(0xFFE2B13C)),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF164638)),
+              onPressed: () async {
+                final email = _recuperoEmailController.text.trim();
+                if (email.isEmpty || !email.contains('@')) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Inserisci un'email valida."), backgroundColor: Colors.red),
+                  );
+                  return;
+                }
+                Navigator.pop(context);
+                _inviaEmailReset(email);
+              },
+              child: const Text('Invia Link', style: TextStyle(color: Colors.white)),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF164638)),
-            onPressed: () async {
-              final email = _recuperoEmailController.text.trim();
-              if (email.isEmpty || !email.contains('@')) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Inserisci un'email valida."), backgroundColor: Colors.red),
-                );
-                return;
-              }
-              Navigator.pop(context);
-              _inviaEmailReset(email);
-            },
-            child: const Text('Invia Link', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

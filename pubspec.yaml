@@ -2,7 +2,7 @@ name: prenotazionibarbiere
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.1.52+67
+version: 1.1.53+68
 
 environment:
   sdk: ^3.11.4
