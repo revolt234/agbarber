@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart'; // AGGIUNTO per SystemChannels
+import 'package:intl/intl.dart'; // AGGIUNTO per la gestione della data odierna
 
 class GestioneClientiScreen extends StatefulWidget {
   const GestioneClientiScreen({super.key});
@@ -15,7 +16,8 @@ enum FiltroOrdinamento {
   nome,
   appuntamentiSaltati,
   saldoDecrescente,
-  saldoCrescente
+  saldoCrescente,
+  compleanniOdierni // AGGIUNTO: Filtro per i compleanni di oggi
 }
 
 class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
@@ -971,6 +973,20 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                                   ],
                                 ),
                               ),
+                              // AGGIUNTO: Opzione di filtro per i compleanni odierni
+                              PopupMenuItem<FiltroOrdinamento>(
+                                value: FiltroOrdinamento.compleanniOdierni,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.cake,
+                                      color: _filtroAttivo == FiltroOrdinamento.compleanniOdierni ? const Color(0xFFE2B13C) : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Text('Compleanni Odierni'),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1010,6 +1026,9 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                             }
 
                             final tuttiIDocs = snapshot.data!.docs;
+                            final DateTime oggi = DateTime.now();
+                            final String giornoOggiStr = DateFormat('dd').format(oggi);
+                            final String meseOggiStr = DateFormat('MM').format(oggi);
 
                             final docsFiltrati = tuttiIDocs.where((doc) {
                               final dati = doc.data() as Map<String, dynamic>;
@@ -1020,7 +1039,28 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                               }
 
                               final String nomeCompleto = (dati['name'] ?? '').toString().toLowerCase();
-                              return nomeCompleto.contains(_searchQuery);
+                              if (!nomeCompleto.contains(_searchQuery)) {
+                                return false;
+                              }
+
+                              // AGGIUNTO: Filtro specifico per i compleanni odierni
+                              if (_filtroAttivo == FiltroOrdinamento.compleanniOdierni) {
+                                final String birthdate = (dati['birthdate'] ?? '').toString().trim();
+                                if (birthdate.isEmpty || birthdate == 'Non impostato') {
+                                  return false;
+                                }
+                                try {
+                                  final List<String> parti = birthdate.split('/');
+                                  if (parti.length >= 2) {
+                                    final String giorno = parti[0].padLeft(2, '0');
+                                    final String mese = parti[1].padLeft(2, '0');
+                                    return giorno == giornoOggiStr && mese == meseOggiStr;
+                                  }
+                                } catch (_) {}
+                                return false;
+                              }
+
+                              return true;
                             }).toList();
 
                             docsFiltrati.sort((a, b) {
@@ -1059,7 +1099,9 @@ class _GestioneClientiScreenState extends State<GestioneClientiScreen> {
                             if (docsFiltrati.isEmpty) {
                               return Center(
                                 child: Text(
-                                  'Nessun risultato corrispondente alla ricerca.',
+                                  _filtroAttivo == FiltroOrdinamento.compleanniOdierni
+                                      ? 'Nessun cliente festeggia il compleanno oggi.'
+                                      : 'Nessun risultato corrispondente alla ricerca.',
                                   style: TextStyle(
                                     color: isDarkMode ? Colors.white60 : Colors.black54,
                                   ),

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // AGGIUNTO: Necessario per leggere e aggiornare il telefono
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Necessario per gestire la cancellazione del token FCM
+import 'package:intl/intl.dart'; // AGGIUNTO: Per la formattazione della data di nascita
 import 'login_screen.dart'; // Importato per permettere il reindirizzamento al login
 
 class ProfileScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
   bool _isLoading = false;
   String _telefonoCorrente = "Caricamento..."; // AGGIUNTO: Stato locale per il numero di telefono
+  String _compleannoCorrente = "Non impostato"; // AGGIUNTO: Stato locale per la data di nascita
   int _appuntamentiSaltati = 0; // AGGIUNTO: Stato locale per gli appuntamenti saltati
   double _saldoTotale = 0.0; // MODIFICATO: Stato locale per il saldo del cliente
 
@@ -26,7 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _recuperaDatiIniziali(); // MODIFICATO: Cambiato nome per riflettere il recupero completo
   }
 
-  // MODIFICATO: Recupera il numero di telefono, gli appuntamenti saltati e il saldo corrente da Firestore
+  // MODIFICATO: Recupera il numero di telefono, la data di compleanno, gli appuntamenti saltati e il saldo corrente da Firestore
   Future<void> _recuperaDatiIniziali() async {
     if (_user == null) return;
     try {
@@ -39,12 +41,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final dati = doc.data() as Map<String, dynamic>;
         setState(() {
           _telefonoCorrente = dati['phone'] ?? 'Nessun cellulare';
+          _compleannoCorrente = dati['birthdate'] ?? 'Non impostato';
           _appuntamentiSaltati = dati['appuntamentisaltati'] ?? 0;
           _saldoTotale = (dati['saldo'] ?? 0).toDouble();
         });
       } else {
         setState(() {
           _telefonoCorrente = 'Nessun cellulare';
+          _compleannoCorrente = 'Non impostato';
           _appuntamentiSaltati = 0;
           _saldoTotale = 0.0;
         });
@@ -54,10 +58,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         setState(() {
           _telefonoCorrente = 'Nessun cellulare';
+          _compleannoCorrente = 'Non impostato';
           _appuntamentiSaltati = 0;
           _saldoTotale = 0.0;
         });
       }
+    }
+  }
+
+  // AGGIUNTO: Mostra il DatePicker nativo per selezionare la data di nascita
+  Future<void> _selezionaDataCompleanno() async {
+    DateTime dataIniziale = DateTime(2000, 1, 1);
+
+    if (_compleannoCorrente != 'Non impostato' && _compleannoCorrente.isNotEmpty) {
+      try {
+        dataIniziale = DateFormat('dd/MM/yyyy').parse(_compleannoCorrente);
+      } catch (_) {}
+    }
+
+    final DateTime? dataSelezionata = await showDatePicker(
+      context: context,
+      initialDate: dataIniziale,
+      firstDate: DateTime(1930),
+      lastDate: DateTime.now(),
+      locale: const Locale('it', 'IT'),
+      builder: (context, child) {
+        final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+        return Theme(
+          data: isDarkMode
+              ? ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFFE2B13C),
+              onPrimary: Colors.black,
+              surface: Color(0xFF1E1E1E),
+              onSurface: Colors.white,
+            ),
+          )
+              : ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF164638),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (dataSelezionata != null) {
+      final String dataFormattata = DateFormat('dd/MM/yyyy').format(dataSelezionata);
+      await _aggiornaCompleannoSuFirestore(dataFormattata);
+    }
+  }
+
+  // AGGIUNTO: Salva la data di nascita su Firestore
+  Future<void> _aggiornaCompleannoSuFirestore(String nuovaData) async {
+    if (_user == null) return;
+    setState(() => _isLoading = true);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(_user.uid).update({
+        'birthdate': nuovaData,
+      });
+      if (mounted) {
+        setState(() => _compleannoCorrente = nuovaData);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Data di nascita aggiornata con successo.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore durante l\'aggiornamento: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -572,6 +652,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             subtitle: Text(_telefonoCorrente, style: TextStyle(color: coloreTestoSecondario)),
             trailing: Icon(Icons.edit, color: coloreTestoSecondario),
             onTap: _mostraDialogoModificaTelefono,
+          ),
+
+          // AGGIUNTO: Voce di menu per visualizzare e modificare la data del compleanno
+          ListTile(
+            leading: const Icon(Icons.cake, color: agOro),
+            title: Text('Data di Nascita', style: TextStyle(color: coloreTestoPrimario)),
+            subtitle: Text(_compleannoCorrente, style: TextStyle(color: coloreTestoSecondario)),
+            trailing: Icon(Icons.edit, color: coloreTestoSecondario),
+            onTap: _selezionaDataCompleanno,
           ),
 
           // AGGIUNTO: Voce informativa per visualizzare gli appuntamenti saltati
