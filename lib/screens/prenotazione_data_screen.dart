@@ -513,6 +513,8 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: false, // <-- AGGIUNGI QUESTO: Blocca la chiusura cliccando fuori
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       useSafeArea: true,
       builder: (bottomSheetContext) {
@@ -522,247 +524,251 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
           builder: (BuildContext context, StateSetter setModalState) {
             return PopScope(
               canPop: !_isSaving,
-              child: Container(
-                padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-                decoration: BoxDecoration(
-                  color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'RIASSUNTO PRENOTAZIONE',
-                            style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5),
-                          ),
-                          Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
-
-                          Text('Cliente: $targetClienteNomeEffective', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 6),
-                          Text('Servizio: ${widget.servizioNome}', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
-                          const SizedBox(height: 6),
-                          Text('Data: $dataStr all\'orario $oraSelezionata', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
-                          const SizedBox(height: 6),
-                          Text('Operatore: $_barbiereSelezionatoNome', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
-
-                          Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
-
-                          Text(
-                            'Quando vuoi ricevere il promemoria?',
-                            style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              _costruisciChipPreavviso(context: context, label: '30 Min', minuti: 30, attivo: minutiPreavvisoSelezionati == 30, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
-                              _costruisciChipPreavviso(context: context, label: '1 Ora', minuti: 60, attivo: minutiPreavvisoSelezionati == 60, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
-                              _costruisciChipPreavviso(context: context, label: '2 Ore', minuti: 120, attivo: minutiPreavvisoSelezionati == 120, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
-                            ],
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // Campo nota opzionale strutturato come nel LoginScreen
-                          Text(
-                            'Vuoi comunicare qualcosa?',
-                            style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: notaController,
-                            focusNode: notaFocusNode,
-                            maxLength: 150,
-                            maxLines: 2,
-                            enabled: !_isSaving,
-                            style: TextStyle(color: coloreTestoDettaglio, fontSize: 14),
-                            onTap: () => resettaSelezioneTesto(notaController),
-                            onTapOutside: (event) => notaFocusNode.unfocus(),
-                            decoration: InputDecoration(
-                              hintText: 'Es. Ho i capelli molto lunghi, ritardo di 5 min...',
-                              hintStyle: TextStyle(
-                                color: isDarkMode ? Colors.white38 : Colors.black38,
-                                fontSize: 13,
-                              ),
-                              counterText: "",
-                              filled: true,
-                              fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: isDarkMode ? Colors.grey : Colors.grey.shade400),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE2B13C), width: 1.5),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => notaFocusNode.unfocus(),
+                child: Container(
+                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: SingleChildScrollView(
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'RIASSUNTO PRENOTAZIONE',
+                              style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5),
                             ),
-                          ),
+                            Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
 
-                          const SizedBox(height: 20),
+                            Text('Cliente: $targetClienteNomeEffective', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 6),
+                            Text('Servizio: ${widget.servizioNome}', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 6),
+                            Text('Data: $dataStr all\'orario $oraSelezionata', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 6),
+                            Text('Operatore: $_barbiereSelezionatoNome', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
 
-                          // Pulsanti affiancati: ANNULLA (sinistra) e CONFERMA (destra)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: SizedBox(
-                                  height: 50,
-                                  child: OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      side: const BorderSide(color: Colors.grey, width: 1.5),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      foregroundColor: Colors.grey,
+                            Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
+
+                            Text(
+                              'Quando vuoi ricevere il promemoria?',
+                              style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _costruisciChipPreavviso(context: context, label: '30 Min', minuti: 30, attivo: minutiPreavvisoSelezionati == 30, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
+                                _costruisciChipPreavviso(context: context, label: '1 Ora', minuti: 60, attivo: minutiPreavvisoSelezionati == 60, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
+                                _costruisciChipPreavviso(context: context, label: '2 Ore', minuti: 120, attivo: minutiPreavvisoSelezionati == 120, alCambio: (m) => setModalState(() => minutiPreavvisoSelezionati = m)),
+                              ],
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Campo nota opzionale strutturato come nel LoginScreen
+                            Text(
+                              'Vuoi comunicare qualcosa?',
+                              style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: notaController,
+                              focusNode: notaFocusNode,
+                              maxLength: 150,
+                              maxLines: 2,
+                              enabled: !_isSaving,
+                              style: TextStyle(color: coloreTestoDettaglio, fontSize: 14),
+                              onTap: () => resettaSelezioneTesto(notaController),
+                              decoration: InputDecoration(
+                                hintText: 'Es. Ho i capelli molto lunghi, ritardo di 5 min...',
+                                hintStyle: TextStyle(
+                                  color: isDarkMode ? Colors.white38 : Colors.black38,
+                                  fontSize: 13,
+                                ),
+                                counterText: "",
+                                filled: true,
+                                fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: isDarkMode ? Colors.grey : Colors.grey.shade400),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFFE2B13C), width: 1.5),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              ),
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // Pulsanti affiancati: ANNULLA (sinistra) e CONFERMA (destra)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 50,
+                                    child: OutlinedButton(
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(color: Colors.grey, width: 1.5),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        foregroundColor: Colors.grey,
+                                      ),
+                                      onPressed: _isSaving
+                                          ? null
+                                          : () {
+                                        notaController.dispose();
+                                        notaFocusNode.dispose();
+                                        Navigator.pop(bottomSheetContext);
+                                      },
+                                      child: const Text('ANNULLA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                                     ),
-                                    onPressed: _isSaving
-                                        ? null
-                                        : () {
-                                      notaController.dispose();
-                                      notaFocusNode.dispose();
-                                      Navigator.pop(bottomSheetContext);
-                                    },
-                                    child: const Text('ANNULLA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: SizedBox(
-                                  height: 50,
-                                  child: ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFE2B13C),
-                                      foregroundColor: const Color(0xFF121212),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    ),
-                                    onPressed: _isSaving
-                                        ? null
-                                        : () async {
-                                      setModalState(() => _isSaving = true);
-                                      setState(() => _isSaving = true);
-
-                                      try {
-                                        if (targetUserIdEffective.isEmpty) throw 'Utente non autenticato';
-
-                                        final String testoNota = notaController.text.trim();
-
-                                        final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-                                            .httpsCallable('creaPrenotazioneSicura');
-
-                                        final HttpsCallableResult response = await callable.call(<String, dynamic>{
-                                          'date': dataStr,
-                                          'slot': oraSelezionata,
-                                          'duration': widget.servizioDurata,
-                                          'barberId': _barbiereSelezionatoId,
-                                          'barberName': _barbiereSelezionatoNome,
-                                          'serviceNome': widget.servizioNome,
-                                          'servicePrezzo': widget.servizioPrezzo,
-                                          'targetUserId': targetUserIdEffective,
-                                          'targetUserName': targetClienteNomeEffective,
-                                          'nota': testoNota,
-                                        });
-
-                                        final Map<String, dynamic> datiRisposta = Map<String, dynamic>.from(response.data as Map);
-
-                                        if (datiRisposta['success'] != true) throw 'SLOT_OCCUPATO';
-
-                                        final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 50,
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFE2B13C),
+                                        foregroundColor: const Color(0xFF121212),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      ),
+                                      onPressed: _isSaving
+                                          ? null
+                                          : () async {
+                                        setModalState(() => _isSaving = true);
+                                        setState(() => _isSaving = true);
 
                                         try {
-                                          final HttpsCallable callableNotificaBarbiere = FirebaseFunctions.instanceFor(region: 'europe-west3')
-                                              .httpsCallable('inviaNotificaNuovaPrenotazioneAlBarbiere');
+                                          if (targetUserIdEffective.isEmpty) throw 'Utente non autenticato';
 
-                                          await callableNotificaBarbiere.call(<String, dynamic>{
+                                          final String testoNota = notaController.text.trim();
+
+                                          final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                              .httpsCallable('creaPrenotazioneSicura');
+
+                                          final HttpsCallableResult response = await callable.call(<String, dynamic>{
                                             'date': dataStr,
                                             'slot': oraSelezionata,
-                                            'barberName': _barbiereSelezionatoNome ?? 'lo staff',
+                                            'duration': widget.servizioDurata,
+                                            'barberId': _barbiereSelezionatoId,
+                                            'barberName': _barbiereSelezionatoNome,
                                             'serviceNome': widget.servizioNome,
-                                            'clienteNome': targetClienteNomeEffective,
+                                            'servicePrezzo': widget.servizioPrezzo,
+                                            'targetUserId': targetUserIdEffective,
+                                            'targetUserName': targetClienteNomeEffective,
                                             'nota': testoNota,
                                           });
-                                        } catch (e) {
-                                          debugPrint("Errore durante l'invio della notifica al barbiere: $e");
-                                        }
 
-                                        try {
-                                          await NotificationService().pianificaNotificaFlessibile(
-                                            idNotifica: idAppuntamentoGenerato.hashCode,
-                                            dataStr: dataStr,
-                                            slotStr: oraSelezionata,
-                                            servizi: widget.servizioNome,
-                                            minutiPreavviso: minutiPreavvisoSelezionati,
+                                          final Map<String, dynamic> datiRisposta = Map<String, dynamic>.from(response.data as Map);
+
+                                          if (datiRisposta['success'] != true) throw 'SLOT_OCCUPATO';
+
+                                          final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
+
+                                          try {
+                                            final HttpsCallable callableNotificaBarbiere = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                                .httpsCallable('inviaNotificaNuovaPrenotazioneAlBarbiere');
+
+                                            await callableNotificaBarbiere.call(<String, dynamic>{
+                                              'date': dataStr,
+                                              'slot': oraSelezionata,
+                                              'barberName': _barbiereSelezionatoNome ?? 'lo staff',
+                                              'serviceNome': widget.servizioNome,
+                                              'clienteNome': targetClienteNomeEffective,
+                                              'nota': testoNota,
+                                            });
+                                          } catch (e) {
+                                            debugPrint("Errore durante l'invio della notifica al barbiere: $e");
+                                          }
+
+                                          try {
+                                            await NotificationService().pianificaNotificaFlessibile(
+                                              idNotifica: idAppuntamentoGenerato.hashCode,
+                                              dataStr: dataStr,
+                                              slotStr: oraSelezionata,
+                                              servizi: widget.servizioNome,
+                                              minutiPreavviso: minutiPreavvisoSelezionati,
+                                            );
+                                          } catch (e) {
+                                            debugPrint("Errore notifiche flessibili: $e");
+                                          }
+
+                                          notaController.dispose();
+                                          notaFocusNode.dispose();
+
+                                          if (!bottomSheetContext.mounted) return;
+                                          Navigator.pop(bottomSheetContext);
+
+                                          if (!context.mounted) return;
+                                          ScaffoldMessenger.of(context).clearSnackBars();
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Prenotazione effettuata con successo!'),
+                                              backgroundColor: Colors.green,
+                                            ),
                                           );
+
+                                          Navigator.of(context).popUntil((route) => route.isFirst);
+
                                         } catch (e) {
-                                          debugPrint("Errore notifiche flessibili: $e");
+                                          setModalState(() => _isSaving = false);
+                                          if (!context.mounted) return;
+                                          setState(() {
+                                            _isSaving = false;
+                                            _orarioSelezionato = null;
+                                          });
+
+                                          notaController.dispose();
+                                          notaFocusNode.dispose();
+
+                                          Navigator.pop(bottomSheetContext);
+                                          ScaffoldMessenger.of(context).clearSnackBars();
+
+                                          String messaggioErrore = 'Errore di connessione. Impossibile salvare la prenotazione.';
+                                          Color coloreSfondo = Colors.red;
+
+                                          if (e == 'SLOT_OCCUPATO' || e.toString().contains('already-exists')) {
+                                            messaggioErrore = 'Spiacenti! Questo orario è stato appena prenotato da un altro cliente. Scegli un altro slot.';
+                                            coloreSfondo = Colors.orange.shade900;
+                                            _aggiornaSlotOrari();
+                                          }
+
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(messaggioErrore),
+                                              backgroundColor: coloreSfondo,
+                                              duration: const Duration(seconds: 5),
+                                            ),
+                                          );
                                         }
-
-                                        notaController.dispose();
-                                        notaFocusNode.dispose();
-
-                                        if (!bottomSheetContext.mounted) return;
-                                        Navigator.pop(bottomSheetContext);
-
-                                        if (!context.mounted) return;
-                                        ScaffoldMessenger.of(context).clearSnackBars();
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Prenotazione effettuata con successo!'),
-                                            backgroundColor: Colors.green,
-                                          ),
-                                        );
-
-                                        Navigator.of(context).popUntil((route) => route.isFirst);
-
-                                      } catch (e) {
-                                        setModalState(() => _isSaving = false);
-                                        if (!context.mounted) return;
-                                        setState(() {
-                                          _isSaving = false;
-                                          _orarioSelezionato = null;
-                                        });
-
-                                        notaController.dispose();
-                                        notaFocusNode.dispose();
-
-                                        Navigator.pop(bottomSheetContext);
-                                        ScaffoldMessenger.of(context).clearSnackBars();
-
-                                        String messaggioErrore = 'Errore di connessione. Impossibile salvare la prenotazione.';
-                                        Color coloreSfondo = Colors.red;
-
-                                        if (e == 'SLOT_OCCUPATO' || e.toString().contains('already-exists')) {
-                                          messaggioErrore = 'Spiacenti! Questo orario è stato appena prenotato da un altro cliente. Scegli un altro slot.';
-                                          coloreSfondo = Colors.orange.shade900;
-                                          _aggiornaSlotOrari();
-                                        }
-
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text(messaggioErrore),
-                                            backgroundColor: coloreSfondo,
-                                            duration: const Duration(seconds: 5),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: _isSaving
-                                        ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(color: Color(0xFF121212), strokeWidth: 2),
-                                    )
-                                        : const Text('CONFERMA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                      },
+                                      child: _isSaving
+                                          ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(color: Color(0xFF121212), strokeWidth: 2),
+                                      )
+                                          : const Text('CONFERMA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
