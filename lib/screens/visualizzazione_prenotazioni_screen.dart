@@ -404,10 +404,127 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     }
   }
 
+  // Conferma ed esecuzione dell'eliminazione appuntamento
+  void _confermaEDeliminaAppuntamento({
+    required BuildContext parentContext,
+    required String appointmentId,
+    required String date,
+    required String slot,
+    required String barberName,
+    required String serviceNome,
+    required String clienteNome,
+  }) {
+    final bool isDarkMode = Theme.of(parentContext).brightness == Brightness.dark;
+
+    showDialog(
+      context: parentContext,
+      builder: (dialogContext) {
+        bool isEliminazioneInCorso = false;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Elimina Prenotazione',
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ],
+              ),
+              content: Text(
+                'Sei sicuro di voler eliminare la prenotazione di $clienteNome per le $slot del $date?\n\nQuesta azione non può essere annullata.',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white70 : Colors.black87,
+                  fontSize: 14,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isEliminazioneInCorso ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('ANNULLA', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: isEliminazioneInCorso
+                      ? null
+                      : () async {
+                    setDialogState(() => isEliminazioneInCorso = true);
+
+                    try {
+                      // 1. Elimina il documento dell'appuntamento da Firestore
+                      await FirebaseFirestore.instance.collection('appointments').doc(appointmentId).delete();
+
+                      // 2. Invoca la Cloud Function per notificare l'annullamento
+                      try {
+                        final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                            .httpsCallable('inviaNotificaAnnullamentoAlBarbiere');
+
+                        await callable.call(<String, dynamic>{
+                          'date': date,
+                          'slot': slot,
+                          'barberName': barberName,
+                          'serviceNome': serviceNome,
+                          'clienteNome': clienteNome,
+                        });
+                      } catch (e) {
+                        debugPrint("Errore notifica annullamento: $e");
+                      }
+
+                      if (!dialogContext.mounted) return;
+                      Navigator.pop(dialogContext); // Chiude Dialog
+                      if (!parentContext.mounted) return;
+                      Navigator.pop(parentContext); // Chiude BottomSheet Dettagli
+
+                      ScaffoldMessenger.of(parentContext).showSnackBar(
+                        const SnackBar(
+                          content: Text('Prenotazione eliminata con successo.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    } catch (e) {
+                      setDialogState(() => isEliminazioneInCorso = false);
+                      ScaffoldMessenger.of(parentContext).showSnackBar(
+                        SnackBar(
+                          content: Text('Errore durante l\'eliminazione: $e'),
+                          backgroundColor: Colors.red.shade900,
+                        ),
+                      );
+                    }
+                  },
+                  child: isEliminazioneInCorso
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                      : const Text('ELIMINA', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _mostraDettagliAppuntamento(Map<String, dynamic> data, String oraInizioStr, String oraFineStr, int durata, String appointmentId) async {
     final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
     final String operatoreNome = data['barberName'] ?? 'Qualsiasi';
     final List servizi = data['services'] ?? [];
+    final String primoServizioNome = servizi.isNotEmpty ? servizi.join(", ") : "Servizio";
     final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
     final String? clienteId = data['userId'];
     final String dataApp = data['date'] ?? '';
@@ -579,7 +696,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Servizio: ${servizi.join(", ")}',
+                                'Servizio: $primoServizioNome',
                                 style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 14, fontStyle: FontStyle.italic),
                               ),
                             ),
@@ -660,7 +777,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                           ),
                         ],
 
-                        // AGGIUNTO: VISUALIZZAZIONE SALDO CLIENTE CON LOGICA VERDE / ROSSA
+                        // VISUALIZZAZIONE SALDO CLIENTE
                         if (clienteId != null) ...[
                           const SizedBox(height: 12),
                           StreamBuilder<DocumentSnapshot>(
@@ -817,6 +934,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
                         const SizedBox(height: 24),
 
+                        // SOLLECITA CLIENTE
                         SizedBox(
                           width: double.infinity,
                           height: 48,
@@ -884,8 +1002,39 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                             },
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
 
+                        // ELIMINA PRENOTAZIONE BARBIERE
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.red, width: 1.5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              foregroundColor: Colors.red,
+                            ),
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            label: const Text(
+                              'ELIMINA PRENOTAZIONE',
+                              style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                            ),
+                            onPressed: () {
+                              _confermaEDeliminaAppuntamento(
+                                parentContext: context,
+                                appointmentId: appointmentId,
+                                date: dataApp,
+                                slot: oraInizioStr,
+                                barberName: operatoreNome,
+                                serviceNome: primoServizioNome,
+                                clienteNome: clienteNome,
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+
+                        // CHIUDI
                         SizedBox(
                           width: double.infinity,
                           height: 48,

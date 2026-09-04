@@ -84,6 +84,31 @@ class _GestioneOperatoriScreenState extends State<GestioneOperatoriScreen> {
     }
   }
 
+  Future<void> _confermaEliminaOperatore(String docId, String nome) async {
+    final bool? conferma = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Conferma eliminazione'),
+        content: Text('Sei sicuro di voler eliminare l\'operatore "$nome"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annulla'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Elimina', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (conferma == true) {
+      await _eliminaOperatore(docId);
+    }
+  }
+
   Future<void> _eliminaOperatore(String docId) async {
     await FirebaseFirestore.instance.collection('barbers').doc(docId).delete();
   }
@@ -127,7 +152,7 @@ class _GestioneOperatoriScreenState extends State<GestioneOperatoriScreen> {
                   title: Text(nome, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () => _eliminaOperatore(operatoreDoc.id),
+                    onPressed: () => _confermaEliminaOperatore(operatoreDoc.id, nome),
                   ),
                 ),
               );

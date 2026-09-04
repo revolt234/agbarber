@@ -200,6 +200,31 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
     }
   }
 
+  Future<void> _confermaRimuoviEccezione(String docId, String data) async {
+    final bool? conferma = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Conferma eliminazione'),
+        content: Text('Sei sicuro di voler rimuovere l\'eccezione per il giorno $data?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annulla'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Elimina', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (conferma == true) {
+      await _rimuoviEccezione(docId);
+    }
+  }
+
   Future<void> _rimuoviEccezione(String docId) async {
     await FirebaseFirestore.instance.collection('calendar_exceptions').doc(docId).delete();
   }
@@ -267,7 +292,7 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
                   ),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.grey),
-                    onPressed: () => _rimuoviEccezione(doc.id),
+                    onPressed: () => _confermaRimuoviEccezione(doc.id, data),
                   ),
                 ),
               );
