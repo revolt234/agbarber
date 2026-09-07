@@ -3,9 +3,12 @@ import 'dart:io'; // Per verificare lo stato della rete reale
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario per richiamare eliminaUtenteCompleto
 import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Necessario per recuperare il token FCM aggiornato
+import 'package:firebase_remote_config/firebase_remote_config.dart'; // AGGIUNTO: Necessario per la lettura dinamica della versione Privacy
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:prenotazionibarbiere/screens/prenotazione_calendario_screen.dart';
+import 'package:url_launcher/url_launcher.dart'; // AGGIUNTO: Necessario per aprire il link alla Privacy Policy
 import 'login_screen.dart'; // Importato per permettere il reindirizzamento alla LoginScreen
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -24,10 +27,18 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   late Stream<QuerySnapshot> _servicesStream;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
 
+  // AGGIUNTO: ScrollController per la gestione e la visualizzazione permanente della Scrollbar
+  final ScrollController _scrollController = ScrollController();
+
+  // MODIFICATO: Versione dinamica letta da Firebase Remote Config (con fallback a "1.0")
+  String _versionePrivacyRichiesta = "1.0";
+  bool _dialogPrivacyMostrato = false;
+
   @override
   void initState() {
     super.initState();
     _inizializzaStream();
+    _inizializzaRemoteConfig(); // AGGIUNTO: Inizializza e recupera la versione da Remote Config
     _ascoltaNomeUtenteInTempoReale();
     _richiediPermessiNotifiche();
   }
@@ -35,7 +46,28 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   @override
   void dispose() {
     _userSubscription?.cancel();
+    _scrollController.dispose(); // AGGIUNTO: Rilascio delle risorse dello ScrollController
     super.dispose();
+  }
+
+  // AGGIUNTO: Recupera dinamicamente il parametro "privacy_required_version" da Firebase Remote Config
+  Future<void> _inizializzaRemoteConfig() async {
+    try {
+      final remoteConfig = FirebaseRemoteConfig.instance;
+      await remoteConfig.setConfigSettings(RemoteConfigSettings(
+        fetchTimeout: const Duration(seconds: 10),
+        minimumFetchInterval: Duration.zero, // Consente di recuperare immediatamente le modifiche
+      ));
+      await remoteConfig.setDefaults({'privacy_required_version': '1.0'});
+      await remoteConfig.fetchAndActivate();
+
+      final String versioneRemota = remoteConfig.getString('privacy_required_version');
+      if (versioneRemota.isNotEmpty) {
+        _versionePrivacyRichiesta = versioneRemota;
+      }
+    } catch (e) {
+      debugPrint("Errore durante il recupero da Remote Config: $e");
+    }
   }
 
   void _inizializzaStream() {
@@ -49,6 +81,217 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     await FlutterLocalNotificationsPlugin()
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
+  }
+
+  // AGGIUNTO: Funzione helper per aprire la Privacy Policy sul browser
+  Future<void> _apriPrivacyPolicy() async {
+    final Uri url = Uri.parse('https://agbarber-bc826.web.app/privacypolicy.html');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint("Errore durante l'apertura del link della Privacy Policy: $e");
+    }
+  }
+
+  // AGGIUNTO: Esegue la cancellazione completa dell'account se l'utente rifiuta le nuove condizioni della privacy
+  Future<void> _eliminaAccountEseguiLogout(String uid) async {
+    // Mostra indicatore di caricamento bloccante
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFFE2B13C)),
+      ),
+    );
+
+    try {
+      final FirebaseFunctions functions = FirebaseFunctions.instanceFor(region: 'europe-west3');
+      final HttpsCallable callable = functions.httpsCallable(
+        'eliminaUtenteCompleto',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
+
+      await callable.call(<String, dynamic>{'uid': uid});
+
+      // Cancella il token FCM hardware locale
+      try {
+        await FirebaseMessaging.instance.deleteToken();
+      } catch (e) {
+        debugPrint("Errore rimozione token FCM post eliminazione account: $e");
+      }
+
+      await FirebaseAuth.instance.signOut();
+
+      if (mounted) {
+        Navigator.pop(context); // Chiude il loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account e relative prenotazioni eliminati con successo per rifiuto privacy.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Chiude il loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Errore durante l\'eliminazione dell\'account: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // AGGIUNTO: Mostra il dialogo di accettazione obbligatoria con la versione letta da Remote Config e opzione di recesso
+  void _mostraDialogoAccettazionePrivacyObbligatoria(String uid) {
+    if (_dialogPrivacyMostrato) return;
+    _dialogPrivacyMostrato = true;
+
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Impedisce la chiusura toccando all'esterno
+      builder: (context) {
+        bool isSalvataggioInCorso = false;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return PopScope(
+              canPop: false, // Impedisce la chiusura con il tasto Indietro
+              child: AlertDialog(
+                backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                title: Text(
+                  "Informativa Privacy 📋",
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Abbiamo aggiornato le nostre norme sulla Privacy Policy per garantire una maggiore trasparenza e sicurezza dei tuoi dati personali.",
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.grey.shade300 : Colors.black87,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: _apriPrivacyPolicy,
+                      child: const Text(
+                        "Clicca qui per leggere l'Informativa sulla Privacy completa",
+                        style: TextStyle(
+                          color: Color(0xFFE2B13C),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Per continuare ad utilizzare l'applicazione ed effettuare prenotazioni è necessario prendere visione ed accettare i nuovi termini.",
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.grey.shade400 : Colors.black54,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  // Pulsante per Rifiutare e avviare la cancellazione dell'account o il logout
+                  TextButton(
+                    onPressed: isSalvataggioInCorso
+                        ? null
+                        : () async {
+                      // Mostra conferma di eliminazione/recesso
+                      final bool confermaEliminazione = await showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                          title: const Text("Rifiuta e Cancella Account"),
+                          content: const Text(
+                            "Rifiutando la Privacy Policy non potrai utilizzare i servizi di prenotazione. Vuoi eliminare definitivamente il tuo account e tutti i dati associati?",
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text("Annulla"),
+                            ),
+                            TextButton(
+                              style: TextButton.styleFrom(foregroundColor: Colors.red),
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text("Elimina Account"),
+                            ),
+                          ],
+                        ),
+                      ) ?? false;
+
+                      if (confermaEliminazione && context.mounted) {
+                        _dialogPrivacyMostrato = false;
+                        Navigator.pop(context); // Chiude il dialogo della privacy
+                        await _eliminaAccountEseguiLogout(uid); // Richiama la procedura di eliminazione
+                      }
+                    },
+                    child: const Text(
+                      'Rifiuta ed Elimina Account',
+                      style: TextStyle(color: Colors.red, fontSize: 13),
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF164638),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: isSalvataggioInCorso
+                        ? null
+                        : () async {
+                      setDialogState(() => isSalvataggioInCorso = true);
+                      try {
+                        await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(uid)
+                            .update({
+                          'privacyAccepted': true,
+                          'privacyAcceptedVersion': _versionePrivacyRichiesta,
+                          'privacyAcceptedAt': FieldValue.serverTimestamp(),
+                        });
+
+                        _dialogPrivacyMostrato = false;
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      } catch (e) {
+                        debugPrint("Errore aggiornamento accettazione privacy: $e");
+                        setDialogState(() => isSalvataggioInCorso = false);
+                      }
+                    },
+                    child: isSalvataggioInCorso
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                        : const Text(
+                      'ACCETTA E CONTINUA',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   // AGGIUNTO: Funzione asincrona di allineamento del token in background all'avvio dell'app per sessioni persistenti
@@ -131,6 +374,15 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
         if (userDoc.exists && userDoc.data() != null) {
           final data = userDoc.data() as Map<String, dynamic>;
+
+          // AGGIUNTO: Controllo dinamico rispetto alla versione letta da Remote Config
+          final String versioneAccettata = data['privacyAcceptedVersion']?.toString() ?? '';
+          if (versioneAccettata != _versionePrivacyRichiesta && mounted) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _mostraDialogoAccettazionePrivacyObbligatoria(user.uid);
+            });
+          }
+
           if (data.containsKey('name') && data['name']!.toString().trim().isNotEmpty) {
             if (mounted) {
               setState(() {
@@ -360,82 +612,91 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
                       final servizi = snapshot.data!.docs;
 
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                        itemCount: servizi.length,
-                        itemBuilder: (context, index) {
-                          final doc = servizi[index];
-                          final dati = doc.data() as Map<String, dynamic>;
+                      // AGGIUNTO: Scrollbar visibile e interattiva sul lato della schermata
+                      return Scrollbar(
+                        controller: _scrollController,
+                        thumbVisibility: true, // Rende la scrollbar sempre visibile per indicare lo scorrimento
+                        interactive: true,
+                        thickness: 6.0, // Spessore ben visibile della barra
+                        radius: const Radius.circular(8.0),
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          itemCount: servizi.length,
+                          itemBuilder: (context, index) {
+                            final doc = servizi[index];
+                            final dati = doc.data() as Map<String, dynamic>;
 
-                          final String id = doc.id;
-                          final String nome = dati['name'] ?? 'Servizio';
-                          final double prezzo = (dati['price'] ?? 0.0).toDouble();
-                          final int durata = dati['duration'] ?? 0;
+                            final String id = doc.id;
+                            final String nome = dati['name'] ?? 'Servizio';
+                            final double prezzo = (dati['price'] ?? 0.0).toDouble();
+                            final int durata = dati['duration'] ?? 0;
 
-                          final bool isSelezionato = _servizioSelezionatoId == id;
+                            final bool isSelezionato = _servizioSelezionatoId == id;
 
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _servizioSelezionatoId = id;
-                                _datiServizioSelezionato = dati;
-                              });
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              margin: const EdgeInsets.only(bottom: 14),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                              decoration: BoxDecoration(
-                                color: isSelezionato
-                                    ? (isDarkMode ? const Color(0xFFFFF1CC) : const Color(0xFFFFF6E0))
-                                    : coloreSfondoCardSpenta,
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color: isSelezionato ? const Color(0xFFE2B13C) : Colors.transparent,
-                                  width: 2.5,
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _servizioSelezionatoId = id;
+                                  _datiServizioSelezionato = dati;
+                                });
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                margin: const EdgeInsets.only(bottom: 14),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                decoration: BoxDecoration(
+                                  color: isSelezionato
+                                      ? (isDarkMode ? const Color(0xFFFFF1CC) : const Color(0xFFFFF6E0))
+                                      : coloreSfondoCardSpenta,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: isSelezionato ? const Color(0xFFE2B13C) : Colors.transparent,
+                                    width: 2.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      nome.toLowerCase().contains('barba') ? Icons.chair : Icons.content_cut,
+                                      color: isSelezionato ? const Color(0xFF164638) : coloreIconaCardSpenta,
+                                      size: 28,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            nome,
+                                            style: TextStyle(
+                                                color: isSelezionato ? Colors.black : coloreTestoCardSpenta,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '$durata min',
+                                            style: TextStyle(color: isSelezionato ? Colors.grey.shade700 : Colors.grey.shade500, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      '${prezzo.toStringAsFixed(2).replaceAll('.', ',')} €',
+                                      style: TextStyle(
+                                          color: isSelezionato ? Colors.black : coloreTestoCardSpenta,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    nome.toLowerCase().contains('barba') ? Icons.chair : Icons.content_cut,
-                                    color: isSelezionato ? const Color(0xFF164638) : coloreIconaCardSpenta,
-                                    size: 28,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          nome,
-                                          style: TextStyle(
-                                              color: isSelezionato ? Colors.black : coloreTestoCardSpenta,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          '$durata min',
-                                          style: TextStyle(color: isSelezionato ? Colors.grey.shade700 : Colors.grey.shade500, fontSize: 12),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(
-                                    '${prezzo.toStringAsFixed(2).replaceAll('.', ',')} €',
-                                    style: TextStyle(
-                                        color: isSelezionato ? Colors.black : coloreTestoCardSpenta,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       );
                     },
                   ),
@@ -520,7 +781,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Impossibile proseguire: connessione internet assente or instabile.'),
+                            content: Text('Impossibile proseguire: connessione internet assente o instabile.'),
                             backgroundColor: Colors.red,
                             duration: Duration(seconds: 3),
                           ),

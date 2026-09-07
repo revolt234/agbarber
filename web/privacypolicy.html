@@ -8,38 +8,116 @@
         body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
-            margin: 40px;
+            margin: 0;
+            padding: 20px;
             background-color: #121212;
             color: #ffffff;
         }
         .container {
-            max-width: 800px;
-            margin: auto;
+            max-width: 850px;
+            margin: 20px auto;
             background: #1c2824;
-            padding: 30px;
+            padding: 35px;
             border-radius: 12px;
             border: 1px solid #e2b13c;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
-        h1 { color: #e2b13c; }
-        h2 { color: #e2b13c; margin-top: 20px; }
+        h1 {
+            color: #e2b13c;
+            font-size: 26px;
+            border-bottom: 1px solid #e2b13c;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        h2 {
+            color: #e2b13c;
+            font-size: 18px;
+            margin-top: 25px;
+            margin-bottom: 10px;
+        }
+        p, li {
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+        ul {
+            padding-left: 20px;
+            margin-top: 5px;
+        }
+        li {
+            margin-bottom: 5px;
+        }
+        .update-date {
+            font-size: 12px;
+            color: #a0a0a0;
+            font-style: italic;
+            margin-bottom: 20px;
+        }
+        .highlight {
+            color: #e2b13c;
+            font-weight: bold;
+        }
+        a {
+            color: #e2b13c;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
+
 <div class="container">
-    <h1>Informativa sulla Privacy di AG Barber</h1>
-    <p>Ultimo aggiornamento: Agosto 2026</p>
+    <h1>Informativa sulla Privacy</h1>
+    <div class="update-date">Ai sensi degli artt. 12 e ss. del Regolamento (UE) 2016/679 (GDPR)<br>Ultimo aggiornamento: Settembre 2026</div>
 
-    <h2>1. Dati Raccolti</h2>
-    <p>La nostra applicazione raccoglie il nome e l'indirizzo email forniti obbligatoriamente in fase di registrazione per creare e identificare l'account dell'utente.</p>
-    <p>Inoltre, l'applicazione può raccogliere, in modo del tutto <strong>facoltativo</strong> e su esplicita volontà dell'utente, il numero di telefono cellulare e la data di nascita (compleanno) all'interno della sezione profilo.</p>
+    <h2>1. Titolare del Trattamento e Gestione Tecnica</h2>
+    <p>Il Titolare del Trattamento dei dati personali è <strong>Gerardo Abate</strong>, titolare dell'attività <strong>AG The gentleman barber</strong> (P.IVA: <code>06131190651</code>), con sede in <code>Via Giovanni Sacco, 18 - 84047 Capaccio Paestum (SA)</code>, che gestisce l'organizzazione dei servizi di barberia e la relazione con la clientela.</p>
+    <p>L'infrastruttura tecnologica, lo sviluppo e la manutenzione dell'applicazione mobile <strong>AG Barber</strong> sono forniti ed amministrati dal <strong>Dott. Lorenzo Scorzelli</strong> in qualità di responsabile tecnico dell'infrastruttura software per conto del salone.</p>
+    <p>Per qualsiasi chiarimento o per l'esercizio dei diritti previsti dal Regolamento UE 2016/679 (GDPR), è possibile contattare direttamente il Titolare presso la sede del salone o tramite email all'indirizzo: <code>lorescorze@gmail.com</code>.</p>
 
-    <h2>2. Finalità del Trattamento</h2>
-    <p>I dati personali vengono utilizzati esclusivamente per l'organizzazione, la gestione e la sicurezza delle prenotazioni dei servizi presso il salone, nonché per offrire iniziative promozionali dedicate (es. auguri o vantaggi dedicati al compleanno dell'utente).</p>
-    <p>L'applicazione utilizza inoltre i servizi di notifica push per inviare promemoria in tempo reale sugli appuntamenti e solleciti immediati inviati dal salone in caso di necessità.</p>
+    <h2>2. Ambito del Trattamento</h2>
+    <p>La presente informativa descrive le modalità di raccolta, utilizzo, conservazione e protezione dei dati personali forniti dagli utenti attraverso l'applicazione mobile <strong>AG Barber</strong> disponibile per dispositivi Android ed iOS, dedicata alla prenotazione e gestione online degli appuntamenti per i servizi offerti dal salone.</p>
 
-    <h2>3. Sicurezza e Trasmissione dei Dati</h2>
-    <p>Tutti i dati e i token di notifica sono memorizzati e protetti in modo sicuro tramite l'infrastruttura cloud di Google Firebase.</p>
-    <p>Per la corretta consegna delle notifiche push sui dispositivi iOS, i token di notifica criptati vengono trasmessi in modo sicuro tramite il servizio Apple Push Notification (APNs). Nessun dato personale viene in alcun caso ceduto o venduto a terze parti.</p>
+    <h2>3. Tipologia di Dati Raccolti</h2>
+    <p>L'applicazione raccoglie ed elabora le seguenti categorie di dati personali:</p>
+    <ul>
+        <li><strong>Dati di Registrazione ed Identificazione (Obbligatori):</strong> Nome e Cognome, Indirizzo Email e Password di accesso criptata.</li>
+        <li><strong>Dati di Contatto (Facoltativi):</strong> Numero di telefono cellulare (utilizzato per eventuali comunicazioni urgenti sullo stato della prenotazione).</li>
+        <li><strong>Dati di Prenotazione e Utilizzo:</strong> Storico dei servizi selezionati, operatore/barbiere scelto, data e orario dell'appuntamento, stato del pagamento/saldo e note opzionali inserite dall'utente per il barbiere.</li>
+        <li><strong>Dati Tecnici di Notifica Push:</strong> Token univoci del dispositivo (FCM Token) generati per consentire l'invio delle notifiche sullo stato della prenotazione e promemoria.</li>
+        <li><strong>Clienti Non Registrati (Ospiti):</strong> Per le prenotazioni effettuate direttamente dal personale per conto di clienti ospite, vengono memorizzati esclusivamente il nome ed il cognome forniti.</li>
+    </ul>
+
+    <h2>4. Finalità e Basi Legali del Trattamento</h2>
+    <p>I dati personali forniti sono trattati per le seguenti finalità:</p>
+    <ul>
+        <li><strong>Erogazione del Servizio (Esecuzione del Contratto - Art. 6.1.b GDPR):</strong> Creazione e gestione dell'account utente, organizzazione dell'agenda del salone, prenotazione e conferme degli appuntamenti.</li>
+        <li><strong>Invio Promemoria e Solleciti (Legittimo Interesse - Art. 6.1.f GDPR):</strong> Invio di notifiche push di promemoria degli appuntamenti prenotati e comunicazioni di servizio in tempo reale da parte del salone.</li>
+        <li><strong>Adempimento Obblighi di Legge (Art. 6.1.c GDPR):</strong> Adempimenti legali e gestionali legati all'erogazione dei servizi.</li>
+    </ul>
+
+    <h2>5. Conservazione e Infrastruttura di Sicurezza</h2>
+    <p>Tutti i dati personali e i token di notifica sono memorizzati e protetti tramite infrastrutture cloud avanzate fornite da <strong>Google Firebase</strong>, ospitate in data center localizzati all'interno dell'Unione Europea (Regione <code>europe-west3</code> - Francoforte), garantendo il rispetto dei più elevati standard di sicurezza (criptografia in transito TLS/HTTPS e a riposo).</p>
+    <p>Per la consegna tempestiva delle notifiche push sui dispositivi iOS (Apple), i token tecnici di notifica vengono trasmessi in modo sicuro tramite il servizio <strong>Apple Push Notification service (APNs)</strong>.</p>
+
+    <h2>6. Condivisione e Comunicazione dei Dati</h2>
+    <p>I dati raccolti vengono trattati esclusivamente dal personale autorizzato del salone AG Barber. <span class="highlight">Nessun dato personale viene in alcun caso ceduto, venduto o profilato per terze parti commerciali.</span></p>
+
+    <h2>7. Periodo di Conservazione dei Dati</h2>
+    <p>I dati personali dell'utente (nome, email, eventuale recapito telefonico e storico delle prenotazioni) vengono conservati ed elaborati all'interno dell'applicazione per l'intera durata dell'account, al solo fine di consentire la fruizione del servizio di prenotazione.</p>
+    <p>In caso di chiusura o richiesta di eliminazione dell'account da parte dell'utente, tutti i dati personali e i token di notifica associati verranno cancellati definitivamente dai nostri database cloud (Google Firebase), fatto salvo il tempo strettamente necessario all'esecuzione tecnica dell'operazione di pulizia.</p>
+
+    <h2>8. Diritti dell'Interessato (Art. 15-22 GDPR)</h2>
+    <p>Gli utenti hanno il diritto in qualsiasi momento di:</p>
+    <ul>
+        <li>Chiedere la conferma dell'esistenza o meno dei propri dati personali e accedervi;</li>
+        <li>Ottenere la rettifica o l'aggiornamento dei dati inesatti;</li>
+        <li>Richiedere la <strong>cancellazione definitiva (Diritto all'Oblio - Art. 17 GDPR)</strong> del proprio account e dei dati associati;</li>
+        <li>Revocare in qualsiasi momento il consenso all'invio delle notifiche push tramite le impostazioni del proprio dispositivo cellulare.</li>
+    </ul>
+
+    <h2>9. Esercizio dei Diritti e Cancellazione Account</h2>
+    <p>L'utente può consultare e modificare i propri dati direttamente all'interno della sezione Profilo dell'applicazione. Per richiedere l'eliminazione definitiva del proprio account e di tutti i dati ad esso collegati, l'utente può utilizzare la funzione di eliminazione presente nell'applicazione oppure contattare il salone direttamente presso la sede o tramite i canali di supporto.</p>
+    <p>Qualora l'utente ritenga che il trattamento dei dati avvenga in violazione del GDPR, ha il diritto di proporre reclamo all'Autorità Garante per la Protezione dei Dati Personali (<a href="https://www.garanteprivacy.it" target="_blank">garanteprivacy.it</a>).</p>
 </div>
+
 </body>
 </html>

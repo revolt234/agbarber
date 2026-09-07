@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart'; // AGGIUNTO: Necessario p
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Necessario per gestire la cancellazione del token FCM
 import 'package:intl/intl.dart'; // AGGIUNTO: Per la formattazione della data di nascita
+import 'package:url_launcher/url_launcher.dart'; // AGGIUNTO: Per l'apertura del link della Privacy Policy
 import 'login_screen.dart'; // Importato per permettere il reindirizzamento al login
 
 class ProfileScreen extends StatefulWidget {
@@ -63,6 +64,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _saldoTotale = 0.0;
         });
       }
+    }
+  }
+
+  // AGGIUNTO: Funzione helper per aprire la Privacy Policy nel browser
+  Future<void> _apriPrivacyPolicy() async {
+    final Uri url = Uri.parse('https://agbarber-bc826.web.app/privacypolicy.html');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint("Errore durante l'apertura della Privacy Policy: $e");
     }
   }
 
@@ -695,6 +706,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           Text('Opzioni Sicurezza', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: coloreTestoSecondario)),
           const Divider(color: agVerde),
+
+          // AGGIUNTO: Pulsante per consultare l'Informativa sulla Privacy sopra a Modifica Password
+          ListTile(
+            leading: const Icon(Icons.privacy_tip, color: agOro),
+            title: Text('Informativa sulla Privacy', style: TextStyle(color: coloreTestoPrimario)),
+            subtitle: Text('Leggi la privacy policy completa di AG Barber', style: TextStyle(color: coloreTestoSecondario)),
+            trailing: Icon(Icons.open_in_new, color: coloreTestoSecondario),
+            onTap: _apriPrivacyPolicy,
+          ),
 
           ListTile(
             leading: const Icon(Icons.lock_reset, color: agOro),

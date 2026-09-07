@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Necessario per recuperare il token del dispositivo
+import 'package:firebase_remote_config/firebase_remote_config.dart'; // AGGIUNTO: Necessario per registrare la versione corrente della Privacy Policy
 import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart'; // AGGIUNTO per aprire il link della Privacy Policy
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLogin = true;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _accettaPrivacyPolicy = false; // AGGIUNTO: Stato per la spunta obbligatoria Privacy Policy
 
   @override
   void dispose() {
@@ -156,6 +159,16 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // AGGIUNTO: Funzione helper per aprire la Privacy Policy sul browser
+  Future<void> _apriPrivacyPolicy() async {
+    final Uri url = Uri.parse('https://agbarber-bc826.web.app/privacypolicy.html');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint("Errore durante l'apertura del link della Privacy Policy: $e");
+    }
+  }
+
   Future<void> _inviaForm() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -186,6 +199,17 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           return;
         }
+      }
+
+      // AGGIUNTO: Verifica obbligatoria del consenso Privacy Policy in registrazione
+      if (!_accettaPrivacyPolicy) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("È necessario accettare la Privacy Policy per poter creare un account."),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
       }
     }
 
@@ -252,6 +276,16 @@ class _LoginScreenState extends State<LoginScreen> {
           final String telInserito = _telefonoController.text.trim();
           final String telefonoFinale = telInserito.isNotEmpty ? telInserito : 'Nessun cellulare';
 
+          // AGGIUNTO: Recupero dinamico della versione Privacy Policy richiesta da Remote Config
+          String versionePrivacyAttuale = "1.0";
+          try {
+            final remoteConfig = FirebaseRemoteConfig.instance;
+            versionePrivacyAttuale = remoteConfig.getString('privacy_required_version');
+            if (versionePrivacyAttuale.isEmpty) versionePrivacyAttuale = "1.0";
+          } catch (e) {
+            debugPrint("Errore lettura Remote Config in registrazione: $e");
+          }
+
           // MODIFICATO: Recupero preventivo dell'fcmToken del dispositivo in fase di registrazione
           String? token;
           if (!kIsWeb) {
@@ -266,6 +300,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           final List<String> listaTokenIniziale = (token != null && token.isNotEmpty) ? [token] : [];
 
+          // CORRETTO: Inserimento dei campi di tracciamento e accettazione della Privacy Policy per evitare il ri-check
           await FirebaseFirestore.instance
               .collection('users')
               .doc(userCredential.user!.uid)
@@ -276,6 +311,9 @@ class _LoginScreenState extends State<LoginScreen> {
             'phone': telefonoFinale,
             'fcmToken': token ?? '', // Campo legacy
             'fcmTokens': listaTokenIniziale, // MODIFICATO: Salvataggio multi-dispositivo nativo del token
+            'privacyAccepted': true, // AGGIUNTO: Registra l'accettazione del consenso
+            'privacyAcceptedVersion': versionePrivacyAttuale, // AGGIUNTO: Salva la versione corrente
+            'privacyAcceptedAt': FieldValue.serverTimestamp(), // AGGIUNTO: Registra la data e l'ora di accettazione
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
@@ -459,6 +497,48 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
+                // AGGIUNTO: Checkbox per accettazione Privacy Policy (visibile solo durante la Registrazione)
+                if (!_isLogin) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _accettaPrivacyPolicy,
+                        activeColor: const Color(0xFFE2B13C),
+                        checkColor: Colors.black,
+                        onChanged: (bool? newValue) {
+                          setState(() {
+                            _accettaPrivacyPolicy = newValue ?? false;
+                          });
+                        },
+                      ),
+                      Expanded(
+                        child: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              'Ho letto e accetto la ',
+                              style: TextStyle(color: coloreTestoInput, fontSize: 13),
+                            ),
+                            GestureDetector(
+                              onTap: _apriPrivacyPolicy,
+                              child: const Text(
+                                'Privacy Policy',
+                                style: TextStyle(
+                                  color: Color(0xFFE2B13C),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
                 const SizedBox(height: 16),
 
                 _isLoading
@@ -477,6 +557,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextButton(
                   onPressed: () => setState(() {
                     _isLogin = !_isLogin;
+                    _accettaPrivacyPolicy = false; // AGGIUNTO: Reset dello stato Privacy Policy al cambio vista
                     _nomeCognomeController.clear();
                     _emailController.clear();
                     _passwordController.clear();

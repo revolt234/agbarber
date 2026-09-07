@@ -105,12 +105,73 @@ class _GestioneTurniOperatoriScreenState
     }
   }
 
+  // AGGIUNTO: Mostra dialogo di conferma prima dell'eliminazione dell'eccezione
+  void _mostraConfermaEliminazione(String docId, String nomeOperatore, String data) {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          title: Text(
+            'Conferma Eliminazione',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Sei sicuro di voler rimuovere la modifica al turno per $nomeOperatore in data $data?',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Annulla',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              onPressed: () async {
+                Navigator.pop(context);
+                await _eliminaEccezione(docId);
+              },
+              child: const Text(
+                'Elimina',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _eliminaEccezione(String docId) async {
     try {
       await FirebaseFirestore.instance
           .collection('barber_exceptions')
           .doc(docId)
           .delete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Eccezione turno rimossa con successo.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -322,7 +383,7 @@ class _GestioneTurniOperatoriScreenState
                         ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.grey),
-                          onPressed: () => _eliminaEccezione(doc.id),
+                          onPressed: () => _mostraConfermaEliminazione(doc.id, nome, data), // MODIFICATO: Richiama la conferma di eliminazione
                         ),
                       ),
                     );
