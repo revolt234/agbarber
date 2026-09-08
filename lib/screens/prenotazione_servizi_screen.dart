@@ -7,6 +7,7 @@ import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario p
 import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Necessario per recuperare il token FCM aggiornato
 import 'package:firebase_remote_config/firebase_remote_config.dart'; // AGGIUNTO: Necessario per la lettura dinamica della versione Privacy
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart'; // AGGIUNTO: Per layout a incastro (Tetris/Masonry)
 import 'package:prenotazionibarbiere/screens/prenotazione_calendario_screen.dart';
 import 'package:url_launcher/url_launcher.dart'; // AGGIUNTO: Necessario per aprire il link alla Privacy Policy
 import 'login_screen.dart'; // Importato per permettere il reindirizzamento alla LoginScreen
@@ -33,6 +34,9 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   // MODIFICATO: Versione dinamica letta da Firebase Remote Config (con fallback a "1.0")
   String _versionePrivacyRichiesta = "1.0";
   bool _dialogPrivacyMostrato = false;
+
+  // Colore Oro per le selezioni
+  final Color _coloreOro = const Color(0xFFD4AF37);
 
   @override
   void initState() {
@@ -100,7 +104,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(
-        child: CircularProgressIndicator(color: Color(0xFFE2B13C)),
+        child: CircularProgressIndicator(color: Color(0xFFD4AF37)),
       ),
     );
 
@@ -188,7 +192,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                       child: const Text(
                         "Clicca qui per leggere l'Informativa sulla Privacy completa",
                         style: TextStyle(
-                          color: Color(0xFFE2B13C),
+                          color: Color(0xFFD4AF37),
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                           decoration: TextDecoration.underline,
@@ -485,7 +489,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
     final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final Color coloreTestoCardSpenta = isDarkMode ? Colors.white : Colors.black87;
-    final Color coloreIconaCardSpenta = isDarkMode ? const Color(0xFFE2B13C) : const Color(0xFF164638);
+    final Color coloreIconaCardSpenta = isDarkMode ? _coloreOro : const Color(0xFF164638);
 
     return Scaffold(
       backgroundColor: coloreSfondoSchermata,
@@ -513,7 +517,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                           child: SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(color: Color(0xFFE2B13C), strokeWidth: 2),
+                            child: CircularProgressIndicator(color: Color(0xFFD4AF37), strokeWidth: 2),
                           ),
                         ),
                       )
@@ -531,7 +535,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFF164638),
                               shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFFE2B13C), width: 2),
+                              border: Border.all(color: _coloreOro, width: 2),
                             ),
                             child: ClipOval(
                               child: Image.asset(
@@ -573,7 +577,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.wifi_off, color: Color(0xFFE2B13C), size: 48),
+                                const Icon(Icons.wifi_off, color: Color(0xFFD4AF37), size: 48),
                                 const SizedBox(height: 16),
                                 Text(
                                   'Connessione internet assente\no instabile.',
@@ -603,7 +607,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                       }
 
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)));
+                        return const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
                       }
 
                       if (!haDatiValidi) {
@@ -612,16 +616,19 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
                       final servizi = snapshot.data!.docs;
 
-                      // AGGIUNTO: Scrollbar visibile e interattiva sul lato della schermata
+                      // AGGIUNTO: Scrollbar visibile e MasonryGridView per incastro tipo Tetris
                       return Scrollbar(
                         controller: _scrollController,
-                        thumbVisibility: true, // Rende la scrollbar sempre visibile per indicare lo scorrimento
+                        thumbVisibility: true,
                         interactive: true,
-                        thickness: 6.0, // Spessore ben visibile della barra
+                        thickness: 6.0,
                         radius: const Radius.circular(8.0),
-                        child: ListView.builder(
+                        child: MasonryGridView.count(
                           controller: _scrollController,
-                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 14,
+                          mainAxisSpacing: 16,
                           itemCount: servizi.length,
                           itemBuilder: (context, index) {
                             final doc = servizi[index];
@@ -643,55 +650,103 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                               },
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
-                                margin: const EdgeInsets.only(bottom: 14),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                                 decoration: BoxDecoration(
                                   color: isSelezionato
-                                      ? (isDarkMode ? const Color(0xFFFFF1CC) : const Color(0xFFFFF6E0))
+                                      ? (isDarkMode ? const Color(0xFF2A261D) : const Color(0xFFFFFDF7))
                                       : coloreSfondoCardSpenta,
-                                  borderRadius: BorderRadius.circular(18),
+                                  borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
-                                    color: isSelezionato ? const Color(0xFFE2B13C) : Colors.transparent,
-                                    width: 2.5,
+                                    color: isSelezionato ? _coloreOro : (isDarkMode ? Colors.white12 : Colors.black12),
+                                    width: isSelezionato ? 2.5 : 1.0,
                                   ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      nome.toLowerCase().contains('barba') ? Icons.chair : Icons.content_cut,
-                                      color: isSelezionato ? const Color(0xFF164638) : coloreIconaCardSpenta,
-                                      size: 28,
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            nome,
-                                            style: TextStyle(
-                                                color: isSelezionato ? Colors.black : coloreTestoCardSpenta,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '$durata min',
-                                            style: TextStyle(color: isSelezionato ? Colors.grey.shade700 : Colors.grey.shade500, fontSize: 12),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Text(
-                                      '${prezzo.toStringAsFixed(2).replaceAll('.', ',')} €',
-                                      style: TextStyle(
-                                          color: isSelezionato ? Colors.black : coloreTestoCardSpenta,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold
-                                      ),
-                                    ),
+                                  boxShadow: isDarkMode ? null : [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 3),
+                                    )
                                   ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(15),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    mainAxisSize: MainAxisSize.min, // Si adatta verticalmente al contenuto
+                                    children: [
+                                      // Fascia superiore stilizzata del blocco note (con fori circolari)
+                                      Container(
+                                        height: 32,
+                                        color: isSelezionato
+                                            ? _coloreOro
+                                            : (isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFE0E0E0)),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                          children: [
+                                            Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      // Contenuto del foglio a sviluppo dinamico verticale
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              nome.toLowerCase().contains('barba') ? Icons.chair : Icons.content_cut,
+                                              color: isSelezionato ? _coloreOro : coloreIconaCardSpenta,
+                                              size: 30,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              nome,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: isSelezionato ? (isDarkMode ? Colors.white : Colors.black) : coloreTestoCardSpenta,
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              '$durata min',
+                                              style: TextStyle(
+                                                color: isSelezionato
+                                                    ? (isDarkMode ? Colors.white70 : Colors.grey.shade700)
+                                                    : Colors.grey.shade500,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${prezzo.toStringAsFixed(2).replaceAll('.', ',')} €',
+                                              style: TextStyle(
+                                                color: isSelezionato ? _coloreOro : coloreTestoCardSpenta,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             );
@@ -706,7 +761,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                   padding: const EdgeInsets.all(20.0),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE2B13C),
+                      backgroundColor: _coloreOro,
                       foregroundColor: const Color(0xFF121212),
                       disabledBackgroundColor: isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.08),
                       disabledForegroundColor: isDarkMode ? Colors.white.withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.25),
@@ -726,7 +781,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                         context: context,
                         barrierDismissible: false,
                         builder: (context) => const Center(
-                          child: CircularProgressIndicator(color: Color(0xFFE2B13C)),
+                          child: CircularProgressIndicator(color: Color(0xFFD4AF37)),
                         ),
                       );
 

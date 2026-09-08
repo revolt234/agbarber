@@ -31,6 +31,10 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   final List<DateTime> _mesiSelezionabili = [];
   int _indiceMeseSelezionato = 0;
 
+  late DateTime _giornoSelezionato;
+  late DateTime _dataInizialeAnchor;
+  late PageController _pageController;
+
   bool _isLoadingConfig = true;
   bool _isPreloadingGiorni = false;
 
@@ -46,11 +50,20 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   Timer? _timerLegenda;
   int _statoLegendaCorrente = 0;
 
+  // Colore Oro uniforme per tutte le selezioni
+  final Color _coloreOro = const Color(0xFFD4AF37);
+
   @override
   void initState() {
     super.initState();
     _preparaMesi();
     _meseCorrente = _mesiSelezionabili[_indiceMeseSelezionato];
+
+    // Ancoraggio per la gestione dell'indice del PageView
+    _dataInizialeAnchor = DateTime.now();
+    _giornoSelezionato = DateTime.now();
+    _pageController = PageController(initialPage: 1000, viewportFraction: 0.35);
+
     _inizializzaDati();
     _avviaTimerLegenda();
   }
@@ -58,6 +71,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   @override
   void dispose() {
     _timerLegenda?.cancel();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -276,6 +290,73 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   int _minutiDaStringa(String s) => int.parse(s.split(':')[0]) * 60 + int.parse(s.split(':')[1]);
   String _formattaData(DateTime d) => "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
+  void _sincronizzaMeseConGiorno(DateTime giorno) {
+    for (int i = 0; i < _mesiSelezionabili.length; i++) {
+      if (_mesiSelezionabili[i].year == giorno.year && _mesiSelezionabili[i].month == giorno.month) {
+        if (_indiceMeseSelezionato != i) {
+          _indiceMeseSelezionato = i;
+          _meseCorrente = _mesiSelezionabili[i];
+          _precaricaDisponibilitaMese();
+        }
+        break;
+      }
+    }
+  }
+
+  Future<void> _selezionaDataDaCalendario() async {
+    final DateTime? dataScelta = await showDatePicker(
+      context: context,
+      initialDate: _giornoSelezionato,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 90)),
+      locale: const Locale('it', 'IT'),
+    );
+
+    if (dataScelta != null) {
+      int differenzaGiorni = DateUtils.dateOnly(dataScelta).difference(DateUtils.dateOnly(_dataInizialeAnchor)).inDays;
+      int targetPage = 1000 + differenzaGiorni;
+
+      setState(() {
+        _giornoSelezionato = dataScelta;
+      });
+      _pageController.animateToPage(targetPage, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      _sincronizzaMeseConGiorno(dataScelta);
+    }
+  }
+
+  void _cambiaGiorno(int offset) {
+    _pageController.animateToPage(
+      _pageController.page!.round() + offset,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  Color _calcolaColoreGiorno(DateTime giorno, bool isDarkMode) {
+    String loopDataStr = _formattaData(giorno);
+    bool isPassato = giorno.isBefore(DateTime.now().subtract(const Duration(days: 1))) &&
+        _formattaData(giorno) != _formattaData(DateTime.now());
+    bool isChiusoGiorno = _isChiuso(giorno);
+    int slotDisponibili = _conteggioSlotPerGiorno[loopDataStr] ?? 0;
+    bool isSoldOut = !isChiusoGiorno && slotDisponibili == 0 && !isPassato;
+
+    if (isPassato) {
+      return isDarkMode ? Colors.white24 : Colors.black26;
+    } else if (isChiusoGiorno) {
+      return const Color(0xFFE55B5B);
+    } else if (isSoldOut) {
+      return isDarkMode ? Colors.white30 : Colors.grey;
+    } else {
+      if (slotDisponibili > 15) {
+        return const Color(0xFF52C47A);
+      } else if (slotDisponibili > 10) {
+        return _coloreOro;
+      } else {
+        return Colors.red;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -284,28 +365,32 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     final Color coloreSfondoContenitoreGiorni = isDarkMode ? const Color(0xFF1C1C1E) : Colors.white;
     final Color coloreTestoPrimario = isDarkMode ? Colors.white : Colors.black87;
     final Color coloreTestoSecondario = isDarkMode ? Colors.white70 : Colors.black54;
-    final Color coloreTestoSettimane = isDarkMode ? Colors.white60 : Colors.black45;
 
-    final int primoGiornoSettimana = DateTime(_meseCorrente.year, _meseCorrente.month, 1).weekday;
-    final int giorniNelMese = DateTime(_meseCorrente.year, _meseCorrente.month + 1, 0).day;
-
-    Color coloreBordoLegenda = Colors.transparent;
-    Color coloreSfondoLegenda = isDarkMode ? Colors.white : Colors.grey.shade300;
+    Color coloreNumeroLegenda = Colors.black;
     String testoLegendaDinamico = '';
 
     if (_statoLegendaCorrente == 0) {
-      coloreBordoLegenda = const Color(0xFF52C47A);
+      coloreNumeroLegenda = const Color(0xFF52C47A);
       testoLegendaDinamico = 'Salone libero';
     } else if (_statoLegendaCorrente == 1) {
-      coloreBordoLegenda = const Color(0xFFE2B13C);
+      coloreNumeroLegenda = _coloreOro;
       testoLegendaDinamico = 'Salone mediamente affollato';
     } else if (_statoLegendaCorrente == 2) {
-      coloreBordoLegenda = Colors.red;
+      coloreNumeroLegenda = Colors.red;
       testoLegendaDinamico = 'Salone affollato';
     } else {
-      coloreSfondoLegenda = isDarkMode ? Colors.black45 : Colors.grey.shade400;
+      coloreNumeroLegenda = isDarkMode ? Colors.white30 : Colors.grey;
       testoLegendaDinamico = 'Nessun posto disponibile';
     }
+
+    String loopDataStr = _formattaData(_giornoSelezionato);
+    bool isPassato = _giornoSelezionato.isBefore(DateTime.now().subtract(const Duration(days: 1))) &&
+        _formattaData(_giornoSelezionato) != _formattaData(DateTime.now());
+    bool isChiusoGiorno = _isChiuso(_giornoSelezionato);
+    int slotDisponibili = _conteggioSlotPerGiorno[loopDataStr] ?? 0;
+    bool isSoldOut = !isChiusoGiorno && slotDisponibili == 0 && !isPassato;
+
+    String nomeGiornoInItaliano = DateFormat('EEEE', 'it_IT').format(_giornoSelezionato);
 
     return Scaffold(
       backgroundColor: coloreSfondoPagina,
@@ -316,7 +401,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _isLoadingConfig
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)))
+          ? Center(child: CircularProgressIndicator(color: _coloreOro))
           : Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -344,19 +429,23 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
 
                       return GestureDetector(
                         onTap: () {
+                          DateTime primaDataMese = DateTime(m.year, m.month, 1);
+                          int diff = DateUtils.dateOnly(primaDataMese).difference(DateUtils.dateOnly(_dataInizialeAnchor)).inDays;
+
                           setState(() {
                             _indiceMeseSelezionato = idx;
                             _meseCorrente = _mesiSelezionabili[idx];
+                            _giornoSelezionato = primaDataMese;
                           });
+                          _pageController.jumpToPage(1000 + diff);
                           _precaricaDisponibilitaMese();
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
                           margin: const EdgeInsets.only(right: 10),
                           decoration: BoxDecoration(
-                            color: isSel ? const Color(0xFFE2B13C) : Colors.white,
-                            borderRadius: BorderRadius.circular(25),
-                            // CORRETTO: Sostituito withOpacity deprecato con withValues
+                            color: isSel ? _coloreOro : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
                             boxShadow: isDarkMode ? null : [
                               BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))
                             ],
@@ -391,127 +480,167 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                   topLeft: Radius.circular(32),
                   topRight: Radius.circular(32),
                 ),
-                // CORRETTO: Sostituito withOpacity deprecato con withValues
                 boxShadow: isDarkMode ? null : [
                   BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4))
                 ],
               ),
               child: _isPreloadingGiorni
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)))
+                  ? Center(child: CircularProgressIndicator(color: _coloreOro))
                   : SingleChildScrollView(
                 physics: const ClampingScrollPhysics(),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Text('LUN', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('MAR', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('MER', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('GIO', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('VEN', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('SAB', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('DOM', style: TextStyle(color: coloreTestoSettimane, fontWeight: FontWeight.bold, fontSize: 13)),
-                      ],
-                    ),
                     const SizedBox(height: 20),
 
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: giorniNelMese + (primoGiornoSettimana - 1),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 7,
-                        mainAxisSpacing: 8,
-                        crossAxisSpacing: 8,
+                    // Testo Giorno della settimana
+                    Text(
+                      nomeGiornoInItaliano.toUpperCase(),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: coloreTestoSecondario,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
                       ),
-                      itemBuilder: (context, index) {
-                        int offset = primoGiornoSettimana - 1;
-                        if (index < offset) return const SizedBox.shrink();
+                    ),
+                    const SizedBox(height: 8),
 
-                        int giornoNum = index - offset + 1;
-                        DateTime giornoDate = DateTime(_meseCorrente.year, _meseCorrente.month, giornoNum);
-                        String loopDataStr = _formattaData(giornoDate);
+                    // Carosello Scorrevole in diretta che segue il dito
+                    SizedBox(
+                      height: 100,
+                      child: Row(
+                        children: [
+                          IconButton(
+                            iconSize: 28,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: Icon(Icons.chevron_left, color: coloreTestoPrimario),
+                            onPressed: () => _cambiaGiorno(-1),
+                          ),
+                          Expanded(
+                            child: PageView.builder(
+                              controller: _pageController,
+                              onPageChanged: (index) {
+                                int offsetGiorni = index - 1000;
+                                DateTime nuovaData = _dataInizialeAnchor.add(Duration(days: offsetGiorni));
+                                setState(() {
+                                  _giornoSelezionato = nuovaData;
+                                });
+                                _sincronizzaMeseConGiorno(nuovaData);
+                              },
+                              itemBuilder: (context, index) {
+                                int offsetGiorni = index - 1000;
+                                DateTime dataCorrente = _dataInizialeAnchor.add(Duration(days: offsetGiorni));
+                                Color coloreGiorno = _calcolaColoreGiorno(dataCorrente, isDarkMode);
 
-                        bool isPassato = giornoDate.isBefore(DateTime.now().subtract(const Duration(days: 1))) &&
-                            _formattaData(giornoDate) != _formattaData(DateTime.now());
-                        bool isChiusoGiorno = _isChiuso(giornoDate);
-                        int slotDisponibili = _conteggioSlotPerGiorno[loopDataStr] ?? 0;
-                        bool isSoldOut = !isChiusoGiorno && slotDisponibili == 0 && !isPassato;
+                                return AnimatedBuilder(
+                                  animation: _pageController,
+                                  builder: (context, child) {
+                                    double val = 0.0;
+                                    if (_pageController.position.haveDimensions) {
+                                      val = _pageController.page! - index;
+                                    } else {
+                                      val = (_pageController.initialPage - index).toDouble();
+                                    }
 
-                        Color coloreBordo = Colors.transparent;
-                        Color coloreSfondoCerchio = isDarkMode ? Colors.white : Colors.grey.shade100;
-                        Color coloreTestoGiorno = Colors.black;
+                                    // Calcolo dinamico di opacità e dimensione mentre trascini
+                                    double opacity = (1 - (val.abs() * 0.7)).clamp(0.3, 1.0);
+                                    double fontSize = (85 - (val.abs() * 49)).clamp(36.0, 85.0);
 
-                        if (isPassato) {
-                          coloreSfondoCerchio = Colors.transparent;
-                          coloreTestoGiorno = isDarkMode ? Colors.white24 : Colors.black26;
-                        } else if (isChiusoGiorno) {
-                          coloreSfondoCerchio = const Color(0xFFE55B5B);
-                          coloreTestoGiorno = Colors.white;
-                        } else if (isSoldOut) {
-                          coloreSfondoCerchio = isDarkMode ? Colors.black45 : Colors.grey.shade400;
-                          coloreTestoGiorno = isDarkMode ? Colors.white30 : Colors.white70;
-                        } else {
-                          if (slotDisponibili > 15) {
-                            coloreBordo = const Color(0xFF52C47A);
-                          } else if (slotDisponibili > 10) {
-                            coloreBordo = const Color(0xFFE2B13C);
-                          } else {
-                            coloreBordo = Colors.red;
-                          }
-                        }
-
-                        return GestureDetector(
-                          onTap: isPassato || isChiusoGiorno || isSoldOut
-                              ? null
-                              : () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => PrenotazioneDataScreen(
-                                  servizioId: widget.servizioId,
-                                  servizioNome: widget.servizioNome,
-                                  servizioDurata: widget.servizioDurata,
-                                  servizioPrezzo: widget.servizioPrezzo,
-                                  dataInizialeSelezionata: giornoDate,
-                                  clienteId: widget.clienteId,     // PASSATO IL CLIENTE
-                                  clienteNome: widget.clienteNome, // PASSATO IL CLIENTE
-                                ),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: coloreSfondoCerchio,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: coloreBordo,
-                                width: coloreBordo != Colors.transparent ? 3.0 : 0,
-                              ),
-                              // CORRETTO: Sostituito withOpacity deprecato con withValues
-                              boxShadow: (isPassato || isDarkMode) ? null : [
-                                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 2, offset: const Offset(0, 1))
-                              ],
-                            ),
-                            child: Center(
-                              child: Text(
-                                '$giornoNum',
-                                style: TextStyle(
-                                  color: coloreTestoGiorno,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                              ),
+                                    return Center(
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          if (val.abs() < 0.2) {
+                                            _selezionaDataDaCalendario();
+                                          } else {
+                                            _pageController.animateToPage(
+                                              index,
+                                              duration: const Duration(milliseconds: 250),
+                                              curve: Curves.easeInOut,
+                                            );
+                                          }
+                                        },
+                                        child: Opacity(
+                                          opacity: opacity,
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              '${dataCorrente.day}',
+                                              textAlign: TextAlign.center,
+                                              textScaler: TextScaler.noScaling,
+                                              style: TextStyle(
+                                                color: coloreGiorno,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: fontSize,
+                                                height: 1.0,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
                             ),
                           ),
-                        );
-                      },
+                          IconButton(
+                            iconSize: 28,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: Icon(Icons.chevron_right, color: coloreTestoPrimario),
+                            onPressed: () => _cambiaGiorno(1),
+                          ),
+                        ],
+                      ),
                     ),
+
+                    const SizedBox(height: 20),
+
+                    // Bottone per procedere alla schermata orari se disponibile
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _coloreOro,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: isPassato || isChiusoGiorno || isSoldOut
+                            ? null
+                            : () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => PrenotazioneDataScreen(
+                                servizioId: widget.servizioId,
+                                servizioNome: widget.servizioNome,
+                                servizioDurata: widget.servizioDurata,
+                                servizioPrezzo: widget.servizioPrezzo,
+                                dataInizialeSelezionata: _giornoSelezionato,
+                                clienteId: widget.clienteId,
+                                clienteNome: widget.clienteNome,
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'Conferma Giorno',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+
                     const SizedBox(height: 40),
 
-                    Text('Legenda', style: TextStyle(color: coloreTestoPrimario, fontSize: 22, fontWeight: FontWeight.bold)),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Legenda', style: TextStyle(color: coloreTestoPrimario, fontSize: 22, fontWeight: FontWeight.bold)),
+                    ),
                     const SizedBox(height: 16),
 
                     AnimatedSwitcher(
@@ -520,16 +649,12 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                         key: ValueKey<int>(_statoLegendaCorrente),
                         children: [
                           Container(
-                              width: 20,
-                              height: 20,
-                              decoration: BoxDecoration(
-                                  color: coloreSfondoLegenda,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: coloreBordoLegenda,
-                                    width: coloreBordoLegenda != Colors.transparent ? 2.5 : 0,
-                                  )
-                              )
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: coloreNumeroLegenda,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Text(testoLegendaDinamico, style: TextStyle(color: coloreTestoSecondario, fontSize: 16)),
@@ -539,7 +664,14 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Container(width: 20, height: 20, decoration: const BoxDecoration(color: Color(0xFFE55B5B), shape: BoxShape.circle)),
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE55B5B),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
                         const SizedBox(width: 12),
                         Text('Salone chiuso', style: TextStyle(color: coloreTestoSecondario, fontSize: 16)),
                       ],
