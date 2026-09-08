@@ -70,18 +70,18 @@ class _LoginScreenState extends State<LoginScreen> {
         final FocusNode recuperoEmailFocusNode = FocusNode();
 
         return AlertDialog(
-          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
           title: Text(
             'Recupero Password',
-            style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+            style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87, fontWeight: FontWeight.bold),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Inserisci la tua email. Ti invieremo un link sicuro per reimpostare la tua password.',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
+                style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey, fontSize: 14),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -89,19 +89,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 focusNode: recuperoEmailFocusNode,
                 autofocus: true,
                 maxLength: 45,
-                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+                style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87),
                 onTap: () => _resettaSelezioneTesto(_recuperoEmailController),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Email',
-                  labelStyle: TextStyle(color: Colors.grey),
+                  labelStyle: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey),
                   counterText: "",
                   enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFF164638)),
+                    borderSide: BorderSide(color: isDarkMode ? const Color(0xFFE2DCD2) : const Color(0xFF164638)),
                   ),
-                  focusedBorder: OutlineInputBorder(
+                  focusedBorder: const OutlineInputBorder(
                     borderSide: BorderSide(color: Color(0xFFE2B13C)),
                   ),
-                  prefixIcon: Icon(Icons.email, color: Color(0xFFE2B13C)),
+                  prefixIcon: const Icon(Icons.email, color: Color(0xFFE2B13C)),
                 ),
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -110,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Annulla', style: TextStyle(color: Colors.grey)),
+              child: Text('Annulla', style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF164638)),
@@ -367,10 +367,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
-    final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
-    final Color coloreTestoInput = isDarkMode ? Colors.white : Colors.black87;
-    final Color coloreBordiInput = isDarkMode ? Colors.grey : Colors.grey.shade400;
+    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFFF5F2EB) : const Color(0xFFF4F6F5);
+    final Color coloreTestoTitoli = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
+    final Color coloreTestoInput = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
+    final Color coloreBordiInput = isDarkMode ? const Color(0xFFE2DCD2) : Colors.grey.shade400;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -404,7 +404,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onTapOutside: (event) => _nomeCognomeFocus.unfocus(),
                     decoration: InputDecoration(
                       labelText: 'Nome e Cognome',
-                      labelStyle: const TextStyle(color: Colors.grey),
+                      labelStyle: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey),
                       counterText: "",
                       enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
                       focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
@@ -426,7 +426,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onTapOutside: (event) => _telefonoFocus.unfocus(),
                     decoration: InputDecoration(
                       labelText: 'Cellulare (Opzionale)',
-                      labelStyle: const TextStyle(color: Colors.grey),
+                      labelStyle: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey),
                       counterText: "",
                       enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
                       focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
@@ -446,7 +446,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   onTapOutside: (event) => _emailFocus.unfocus(),
                   decoration: InputDecoration(
                     labelText: 'Email',
-                    labelStyle: const TextStyle(color: Colors.grey),
+                    labelStyle: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey),
                     counterText: "",
                     enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
                     focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
@@ -465,7 +465,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   onTapOutside: (event) => _passwordFocus.unfocus(),
                   decoration: InputDecoration(
                     labelText: 'Password',
-                    labelStyle: const TextStyle(color: Colors.grey),
+                    labelStyle: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey),
                     counterText: "",
                     enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: coloreBordiInput)),
                     focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE2B13C))),
@@ -473,7 +473,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.grey,
+                        color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey,
                       ),
                       onPressed: () {
                         setState(() {
@@ -490,9 +490,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: _mostraDialogoRecuperoPassword,
-                      child: const Text(
+                      child: Text(
                         'Hai dimenticato la password?',
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                        style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey, fontSize: 13),
                       ),
                     ),
                   ),

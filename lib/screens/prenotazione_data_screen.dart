@@ -467,9 +467,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       label: Text(label),
       selected: attivo,
       selectedColor: const Color(0xFFE2B13C),
-      backgroundColor: isDarkModeLocal ? const Color(0xFF2C2C2E) : Colors.grey.shade200,
+      backgroundColor: isDarkModeLocal ? const Color(0xFFE2DCD2) : Colors.grey.shade200,
       labelStyle: TextStyle(
-        color: attivo ? Colors.black : (isDarkModeLocal ? Colors.white : Colors.black87),
+        color: attivo ? Colors.black : (isDarkModeLocal ? const Color(0xFF211D1A) : Colors.black87),
         fontWeight: FontWeight.bold,
       ),
       onSelected: (bool selected) {
@@ -518,7 +518,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       backgroundColor: Colors.transparent,
       useSafeArea: true,
       builder: (bottomSheetContext) {
-        final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
+        final Color coloreTestoDettaglio = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
 
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
@@ -530,7 +530,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                 child: Container(
                   padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
                   decoration: BoxDecoration(
-                    color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                    color: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   child: SafeArea(
@@ -547,7 +547,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               'RIASSUNTO PRENOTAZIONE',
                               style: TextStyle(color: coloreTestoDettaglio, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5),
                             ),
-                            Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
+                            Divider(color: isDarkMode ? const Color(0xFFE2DCD2) : Colors.grey.shade300, height: 24),
 
                             Text('Cliente: $targetClienteNomeEffective', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 6),
@@ -557,7 +557,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                             const SizedBox(height: 6),
                             Text('Operatore: $_barbiereSelezionatoNome', style: TextStyle(color: coloreTestoDettaglio, fontSize: 15, fontWeight: FontWeight.w500)),
 
-                            Divider(color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300, height: 24),
+                            Divider(color: isDarkMode ? const Color(0xFFE2DCD2) : Colors.grey.shade300, height: 24),
 
                             Text(
                               'Quando vuoi ricevere il promemoria?',
@@ -592,15 +592,15 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                               decoration: InputDecoration(
                                 hintText: 'Es. Ho i capelli molto lunghi, ritardo di 5 min...',
                                 hintStyle: TextStyle(
-                                  color: isDarkMode ? Colors.white38 : Colors.black38,
+                                  color: isDarkMode ? const Color(0xFF6B635E) : Colors.black38,
                                   fontSize: 13,
                                 ),
                                 counterText: "",
                                 filled: true,
-                                fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
+                                fillColor: isDarkMode ? const Color(0xFFF5F2EB) : Colors.grey.shade100,
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: isDarkMode ? Colors.grey : Colors.grey.shade400),
+                                  borderSide: BorderSide(color: isDarkMode ? const Color(0xFFE2DCD2) : Colors.grey.shade400),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
@@ -620,9 +620,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                     height: 50,
                                     child: OutlinedButton(
                                       style: OutlinedButton.styleFrom(
-                                        side: const BorderSide(color: Colors.grey, width: 1.5),
+                                        side: BorderSide(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey, width: 1.5),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        foregroundColor: Colors.grey,
+                                        foregroundColor: isDarkMode ? const Color(0xFF6B635E) : Colors.grey,
                                       ),
                                       onPressed: _isSaving
                                           ? null
@@ -785,14 +785,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
-    final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
-    final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
-    final Color coloreTestoCardSpenta = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFFF5F2EB) : const Color(0xFFF4F6F5);
+    final Color coloreTestoTitoli = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
+    final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFFFDFBF7) : Colors.white;
+    final Color coloreTestoCardSpenta = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
 
-    final Color coloreSfondoButtonGiorno = isDarkMode ? const Color(0xFF1C1C1E) : Colors.white;
-    final Color coloreTestoPrimarioGiorno = isDarkMode ? Colors.white : Colors.black;
-    final Color coloreTestoSecondarioGiorno = isDarkMode ? Colors.white70 : Colors.black54;
+    final Color coloreSfondoButtonGiorno = isDarkMode ? const Color(0xFFFDFBF7) : Colors.white;
+    final Color coloreTestoPrimarioGiorno = isDarkMode ? const Color(0xFF211D1A) : Colors.black;
+    final Color coloreTestoSecondarioGiorno = isDarkMode ? const Color(0xFF6B635E) : Colors.black54;
 
     if (_isLoadingConfig || _isPreloadingGiorni) {
       return Scaffold(
@@ -857,8 +857,8 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                         color: coloreSfondoButtonGiorno,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: sel ? const Color(0xFFE2B13C) : Colors.transparent,
-                          width: sel ? 3.0 : 0,
+                          color: sel ? const Color(0xFFE2B13C) : (isDarkMode ? const Color(0xFFE2DCD2) : Colors.transparent),
+                          width: sel ? 3.0 : (isDarkMode ? 1.0 : 0),
                         ),
                         boxShadow: [
                           BoxShadow(color: Colors.black.withAlpha(20), blurRadius: 4, offset: const Offset(0, 2))
@@ -944,7 +944,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                             color: sel ? const Color(0xFFE2B13C).withAlpha(38) : coloreSfondoCardSpenta,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: sel ? const Color(0xFFE2B13C) : (isDarkMode ? Colors.transparent : Colors.grey.shade300),
+                              color: sel ? const Color(0xFFE2B13C) : (isDarkMode ? const Color(0xFFE2DCD2) : Colors.grey.shade300),
                               width: 2,
                             ),
                           ),
@@ -981,7 +981,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
             ),
             Expanded(
               child: _barbiereSelezionatoId == null
-                  ? Center(child: Text('Seleziona un operatore per vedere gli orari.', style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54)))
+                  ? Center(child: Text('Seleziona un operatore per vedere gli orari.', style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54)))
                   : (_isLoadingSlot
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)))
                   : (_slotOrariCalcolati.isEmpty
@@ -1011,7 +1011,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                         color: sel ? const Color(0xFFE2B13C) : coloreSfondoCardSpenta,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: sel ? Colors.white : (isDarkMode ? Colors.transparent : Colors.grey.shade300),
+                          color: sel ? Colors.white : (isDarkMode ? const Color(0xFFE2DCD2) : Colors.grey.shade300),
                           width: 1.5,
                         ),
                       ),

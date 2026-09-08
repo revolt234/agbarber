@@ -97,13 +97,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
         return Theme(
           data: isDarkMode
-              ? ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
+              ? ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
               primary: Color(0xFFE2B13C),
               onPrimary: Colors.black,
-              surface: Color(0xFF1E1E1E),
-              onSurface: Colors.white,
+              surface: Color(0xFFFDFBF7),
+              onSurface: Color(0xFF211D1A),
             ),
+            dialogBackgroundColor: const Color(0xFFFDFBF7),
           )
               : ThemeData.light().copyWith(
             colorScheme: const ColorScheme.light(
@@ -177,11 +178,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
           title: Text(
             'Modifica Cellulare',
             style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black87,
+              color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -189,9 +190,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Inserisci il tuo nuovo numero di cellulare (10 cifre) o rimuovilo usando il pulsante sotto.',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+                style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey, fontSize: 13),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -200,23 +201,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 autofocus: true, // Assegna automaticamente il focus all'apertura
                 maxLength: 10, // Blocca l'inserimento oltre la decima cifra
                 keyboardType: TextInputType.phone,
-                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+                style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87),
                 onTap: () => resettaSelezioneTesto(telController),
                 onTapOutside: (event) => telFocus.unfocus(),
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly, // Impedisce caratteri strani, spazi o simboli
                 ],
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Numero di cellulare',
-                  labelStyle: TextStyle(color: Colors.grey),
+                  labelStyle: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey),
                   counterText: "",
                   enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFF164638)),
+                    borderSide: BorderSide(color: isDarkMode ? const Color(0xFFE2DCD2) : const Color(0xFF164638)),
                   ),
-                  focusedBorder: OutlineInputBorder(
+                  focusedBorder: const OutlineInputBorder(
                     borderSide: BorderSide(color: Color(0xFFE2B13C)),
                   ),
-                  prefixIcon: Icon(Icons.phone, color: Color(0xFFE2B13C)),
+                  prefixIcon: const Icon(Icons.phone, color: Color(0xFFE2B13C)),
                 ),
               ),
             ],
@@ -240,7 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 telFocus.dispose();
                 Navigator.pop(context);
               },
-              child: const Text('Annulla', style: TextStyle(color: Colors.grey)),
+              child: Text('Annulla', style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF164638)),
@@ -341,26 +342,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
             return PopScope(
               canPop: !isDisconnessioneInCorso,
               child: AlertDialog(
-                backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
                 title: Text(
                   'Disconnetti',
                   style: TextStyle(
-                    color: isDarkMode ? Colors.white : Colors.black87,
+                    color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 content: Text(
                   'Sei sicuro di voler uscire dal tuo account?',
                   style: TextStyle(
-                    color: isDarkMode ? Colors.white70 : Colors.black87,
+                    color: isDarkMode ? const Color(0xFF3D3734) : Colors.black87,
                   ),
                 ),
                 actions: [
                   TextButton(
                     onPressed: isDisconnessioneInCorso ? null : () => Navigator.pop(dialogContext),
-                    child: const Text(
+                    child: Text(
                       'Annulla',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey),
                     ),
                   ),
                   ElevatedButton(
@@ -435,14 +436,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     bool confermato = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
         title: Text(
           'Elimina Account',
-          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+          style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87, fontWeight: FontWeight.bold),
         ),
         content: Text(
           'Sei sicuro? Questa azione è irreversibile e cancellerà permanentemente tutti i tuoi dati, incluse tutte le tue prenotazioni.',
-          style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54),
+          style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54),
         ),
         actions: [
           TextButton(
@@ -524,10 +525,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
-    final Color coloreSfondoCard = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
-    final Color coloreTestoPrimario = isDarkMode ? Colors.white : Colors.black87;
-    final Color coloreTestoSecondario = isDarkMode ? Colors.grey : Colors.black54;
+    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFFF5F2EB) : const Color(0xFFF4F6F5);
+    final Color coloreSfondoCard = isDarkMode ? const Color(0xFFFDFBF7) : Colors.white;
+    final Color coloreTestoPrimario = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
+    final Color coloreTestoSecondario = isDarkMode ? const Color(0xFF6B635E) : Colors.black54;
 
     final bool isPositivoOZero = _saldoTotale >= 0;
     final Color coloreSaldo = isPositivoOZero ? Colors.green : Colors.red;
@@ -616,10 +617,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Card(
             color: coloreSfondoCard,
-            elevation: isDarkMode ? 2 : 1,
+            elevation: isDarkMode ? 0 : 1,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              side: BorderSide(color: isDarkMode ? agVerde : Colors.grey.shade300, width: 1),
+              side: BorderSide(color: isDarkMode ? const Color(0xFFE2DCD2) : Colors.grey.shade300, width: 1),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16.0),

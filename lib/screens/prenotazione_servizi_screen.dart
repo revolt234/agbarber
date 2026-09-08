@@ -167,11 +167,11 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
             return PopScope(
               canPop: false, // Impedisce la chiusura con il tasto Indietro
               child: AlertDialog(
-                backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
                 title: Text(
                   "Informativa Privacy 📋",
                   style: TextStyle(
-                    color: isDarkMode ? Colors.white : Colors.black87,
+                    color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -182,7 +182,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                     Text(
                       "Abbiamo aggiornato le nostre norme sulla Privacy Policy per garantire una maggiore trasparenza e sicurezza dei tuoi dati personali.",
                       style: TextStyle(
-                        color: isDarkMode ? Colors.grey.shade300 : Colors.black87,
+                        color: isDarkMode ? const Color(0xFF3D3734) : Colors.black87,
                         fontSize: 14,
                       ),
                     ),
@@ -203,7 +203,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                     Text(
                       "Per continuare ad utilizzare l'applicazione ed effettuare prenotazioni è necessario prendere visione ed accettare i nuovi termini.",
                       style: TextStyle(
-                        color: isDarkMode ? Colors.grey.shade400 : Colors.black54,
+                        color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54,
                         fontSize: 13,
                       ),
                     ),
@@ -219,10 +219,14 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                       final bool confermaEliminazione = await showDialog(
                         context: context,
                         builder: (ctx) => AlertDialog(
-                          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-                          title: const Text("Rifiuta e Cancella Account"),
-                          content: const Text(
+                          backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
+                          title: Text(
+                            "Rifiuta e Cancella Account",
+                            style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87),
+                          ),
+                          content: Text(
                             "Rifiutando la Privacy Policy non potrai utilizzare i servizi di prenotazione. Vuoi eliminare definitivamente il tuo account e tutti i dati associati?",
+                            style: TextStyle(color: isDarkMode ? const Color(0xFF3D3734) : Colors.black87),
                           ),
                           actions: [
                             TextButton(
@@ -435,18 +439,18 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
           title: Text(
             "Accesso Richiesto 🔐",
             style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black87,
+              color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87,
               fontWeight: FontWeight.bold,
             ),
           ),
           content: Text(
             "Per poter completare la prenotazione dei servizi ed inserire il tuo appuntamento in agenda, è necessario creare un account o effettuare l'accesso.",
             style: TextStyle(
-              color: isDarkMode ? Colors.grey.shade400 : Colors.black54,
+              color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54,
             ),
           ),
           actions: [
@@ -485,10 +489,10 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
-    final Color coloreTestoTitoli = isDarkMode ? Colors.white : Colors.black87;
-    final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-    final Color coloreTestoCardSpenta = isDarkMode ? Colors.white : Colors.black87;
+    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFFF5F2EB) : const Color(0xFFF4F6F5);
+    final Color coloreTestoTitoli = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
+    final Color coloreSfondoCardSpenta = isDarkMode ? const Color(0xFFFDFBF7) : Colors.white;
+    final Color coloreTestoCardSpenta = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
     final Color coloreIconaCardSpenta = isDarkMode ? _coloreOro : const Color(0xFF164638);
 
     return Scaffold(
@@ -522,46 +526,27 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                         ),
                       )
                           : Text(
-                        'Ciao, $_nomeUtente!',
+                        'Cliente: $_nomeUtente',
                         style: TextStyle(color: coloreTestoTitoli, fontSize: 24, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Container(
-                            width: 60,
-                            height: 60,
-                            padding: const EdgeInsets.all(4.0),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF164638),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: _coloreOro, width: 2),
-                            ),
-                            child: ClipOval(
-                              child: Image.asset(
-                                'assets/A di barber.png',
-                                fit: BoxFit.contain,
-                              ),
+                      Center(
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          padding: const EdgeInsets.all(4.0),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF164638),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: _coloreOro, width: 2),
+                          ),
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/A di barber.png',
+                              fit: BoxFit.contain,
                             ),
                           ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'AG The gentleman\nBarber di Abate Gerardo',
-                                  style: TextStyle(color: coloreTestoTitoli, fontSize: 16, fontWeight: FontWeight.bold, height: 1.2),
-                                ),
-                                const SizedBox(height: 4),
-                                const Text(
-                                  'Via Sacco Giovanni, 18\nCapaccio Paestum',
-                                  style: TextStyle(color: Colors.grey, fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
@@ -652,11 +637,11 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                 duration: const Duration(milliseconds: 200),
                                 decoration: BoxDecoration(
                                   color: isSelezionato
-                                      ? (isDarkMode ? const Color(0xFF2A261D) : const Color(0xFFFFFDF7))
+                                      ? (isDarkMode ? const Color(0xFFFFFDF8) : const Color(0xFFFFFDF7))
                                       : coloreSfondoCardSpenta,
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
-                                    color: isSelezionato ? _coloreOro : (isDarkMode ? Colors.white12 : Colors.black12),
+                                    color: isSelezionato ? _coloreOro : (isDarkMode ? const Color(0xFFE2DCD2) : Colors.black12),
                                     width: isSelezionato ? 2.5 : 1.0,
                                   ),
                                   boxShadow: isDarkMode ? null : [
@@ -678,7 +663,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                         height: 32,
                                         color: isSelezionato
                                             ? _coloreOro
-                                            : (isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFE0E0E0)),
+                                            : (isDarkMode ? const Color(0xFFE2DCD2) : const Color(0xFFE0E0E0)),
                                         child: Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                           children: [
@@ -686,7 +671,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                               width: 8,
                                               height: 8,
                                               decoration: BoxDecoration(
-                                                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                                                color: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
@@ -694,7 +679,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                               width: 8,
                                               height: 8,
                                               decoration: BoxDecoration(
-                                                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                                                color: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
@@ -718,7 +703,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                               nome,
                                               textAlign: TextAlign.center,
                                               style: TextStyle(
-                                                color: isSelezionato ? (isDarkMode ? Colors.white : Colors.black) : coloreTestoCardSpenta,
+                                                color: isSelezionato ? (isDarkMode ? const Color(0xFF211D1A) : Colors.black) : coloreTestoCardSpenta,
                                                 fontSize: 15,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -728,8 +713,8 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                               '$durata min',
                                               style: TextStyle(
                                                 color: isSelezionato
-                                                    ? (isDarkMode ? Colors.white70 : Colors.grey.shade700)
-                                                    : Colors.grey.shade500,
+                                                    ? (isDarkMode ? const Color(0xFF6B635E) : Colors.grey.shade700)
+                                                    : Colors.grey.shade600,
                                                 fontSize: 12,
                                               ),
                                             ),
@@ -763,8 +748,8 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _coloreOro,
                       foregroundColor: const Color(0xFF121212),
-                      disabledBackgroundColor: isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.08),
-                      disabledForegroundColor: isDarkMode ? Colors.white.withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.25),
+                      disabledBackgroundColor: isDarkMode ? Colors.black.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.08),
+                      disabledForegroundColor: isDarkMode ? Colors.black.withValues(alpha: 0.25) : Colors.black.withValues(alpha: 0.25),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       elevation: 2,
@@ -845,7 +830,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                     }
                         : null,
                     child: const Text(
-                      'Prosegui',
+                      'Avanti',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),

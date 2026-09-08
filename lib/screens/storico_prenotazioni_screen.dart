@@ -17,12 +17,12 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
     // Rilevazione dinamica del tema attivo sul dispositivo
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Tavolozza di colori dinamici e adattivi
-    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF4F6F5);
-    final Color coloreTestoLogin = isDarkMode ? Colors.white : Colors.black87;
-    final Color coloreSfondoCard = isDarkMode ? const Color(0xFF1C2824) : Colors.white;
-    final Color coloreTestoPrimarioCard = isDarkMode ? Colors.white : Colors.black87;
-    final Color coloreTestoSecondarioCard = isDarkMode ? Colors.grey : Colors.black54;
+    // Tavolozza di colori dinamici e adattivi in tonalità Crema/Avorio/Off-White
+    final Color coloreSfondoSchermata = isDarkMode ? const Color(0xFFF5F2EB) : const Color(0xFFF4F6F5);
+    final Color coloreTestoLogin = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
+    final Color coloreSfondoCard = isDarkMode ? const Color(0xFFFDFBF7) : Colors.white;
+    final Color coloreTestoPrimarioCard = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
+    final Color coloreTestoSecondarioCard = isDarkMode ? const Color(0xFF6B635E) : Colors.black54;
 
     if (user == null) {
       return Scaffold(
@@ -135,7 +135,7 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                   side: BorderSide(
-                    color: isDarkMode ? agVerde : Colors.grey.shade300,
+                    color: isDarkMode ? const Color(0xFFE2DCD2) : Colors.grey.shade300,
                     width: 1,
                   ),
                 ),
@@ -206,14 +206,14 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
                                 return PopScope(
                                   canPop: !isAnnullamentoInCorso,
                                   child: AlertDialog(
-                                    backgroundColor: isDarkMode ? const Color(0xFF1C2824) : Colors.white,
+                                    backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
                                     title: Text(
                                         'Annulla Appuntamento',
-                                        style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)
+                                        style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87, fontWeight: FontWeight.bold)
                                     ),
                                     content: Text(
                                         'Sei sicuro di voler cancellare questa prenotazione? L\'orario tornerà disponibile per gli altri clienti.',
-                                        style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54)
+                                        style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54)
                                     ),
                                     actions: [
                                       TextButton(
@@ -346,7 +346,7 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
               'Nessun appuntamento attivo',
               style: TextStyle(
                 fontSize: 18,
-                color: isDarkMode ? Colors.white : Colors.black87,
+                color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87,
                 fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
@@ -354,7 +354,7 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'I tuoi prossimi appuntamenti compariranno qui.',
-              style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54, fontSize: 14),
+              style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54, fontSize: 14),
               textAlign: TextAlign.center,
             ),
           ],
