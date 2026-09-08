@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class GestioneTurniOperatoriScreen extends StatefulWidget {
   const GestioneTurniOperatoriScreen({super.key});
@@ -15,6 +17,17 @@ class _GestioneTurniOperatoriScreenState
   String? _barbiereSelezionatoNome;
   String _tipoEccezione = 'assente'; // assente o mezza_giornata
   String _fasciaOraria = 'mattina'; // mattina o pomeriggio
+
+  // Helper per verificare la presenza di una connessione Internet reale
+  Future<bool> _controllaConnessioneReale() async {
+    if (kIsWeb) return true;
+    try {
+      final risultato = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
+      return risultato.isNotEmpty && risultato[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
 
   // Apre il calendario per scegliere la data dell'eccezione
   Future<void> _selezionaDataEccezione() async {
@@ -108,80 +121,130 @@ class _GestioneTurniOperatoriScreenState
   // AGGIUNTO: Mostra dialogo di conferma prima dell'eliminazione dell'eccezione
   void _mostraConfermaEliminazione(String docId, String nomeOperatore, String data) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    bool isEliminazioneInCorso = false;
 
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          title: Text(
-            'Conferma Eliminazione',
-            style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Text(
-            'Sei sicuro di voler rimuovere la modifica al turno per $nomeOperatore in data $data?',
-            style: TextStyle(
-              color: isDarkMode ? Colors.white70 : Colors.black87,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Annulla',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
-              onPressed: () async {
-                Navigator.pop(context);
-                await _eliminaEccezione(docId);
-              },
-              child: const Text(
-                'Elimina',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return PopScope(
+              canPop: !isEliminazioneInCorso,
+              child: AlertDialog(
+                backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                title: Text(
+                  'Conferma Eliminazione',
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
+                content: Text(
+                  'Sei sicuro di voler rimuovere la modifica al turno per $nomeOperatore in data $data?',
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: isEliminazioneInCorso ? null : () => Navigator.pop(dialogContext),
+                    child: const Text(
+                      'Annulla',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                    ),
+                    onPressed: isEliminazioneInCorso
+                        ? null
+                        : () async {
+                      setDialogState(() {
+                        isEliminazioneInCorso = true;
+                      });
+
+                      // Controllo della connessione ad Internet reale
+                      final bool connessionePresente = await _controllaConnessioneReale();
+                      if (!connessionePresente) {
+                        setDialogState(() {
+                          isEliminazioneInCorso = false;
+                        });
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Impossibile eliminare: connessione internet assente o instabile.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                        return;
+                      }
+
+                      try {
+                        // Eliminazione bloccante che attende l'effettivo completamento sul server
+                        await FirebaseFirestore.instance
+                            .collection('barber_exceptions')
+                            .doc(docId)
+                            .delete();
+
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Eccezione turno rimossa con successo.'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          isEliminazioneInCorso = false;
+                        });
+
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Errore durante l\'eliminazione: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: isEliminazioneInCorso
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                        : const Text(
+                      'Elimina',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         );
       },
     );
-  }
-
-  Future<void> _eliminaEccezione(String docId) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('barber_exceptions')
-          .doc(docId)
-          .delete();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Eccezione turno rimossa con successo.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Errore durante l\'eliminazione: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
   @override

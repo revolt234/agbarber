@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart'; // AGGIUNTO
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class GestioneOperatoriScreen extends StatefulWidget {
   const GestioneOperatoriScreen({super.key});
@@ -18,6 +20,17 @@ class _GestioneOperatoriScreenState extends State<GestioneOperatoriScreen> {
     _nomeController.dispose();
     _nomeFocusNode.dispose(); // AGGIUNTO
     super.dispose();
+  }
+
+  // Helper per verificare la presenza di una connessione Internet reale
+  Future<bool> _controllaConnessioneReale() async {
+    if (kIsWeb) return true;
+    try {
+      final risultato = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
+      return risultato.isNotEmpty && risultato[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   // Metodo helper per resettare la selezione del testo (come in GestionePeriodicoScreen)
@@ -85,32 +98,107 @@ class _GestioneOperatoriScreenState extends State<GestioneOperatoriScreen> {
   }
 
   Future<void> _confermaEliminaOperatore(String docId, String nome) async {
-    final bool? conferma = await showDialog<bool>(
+    bool isEliminazioneInCorso = false;
+
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Conferma eliminazione'),
-        content: Text('Sei sicuro di voler eliminare l\'operatore "$nome"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annulla'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Elimina', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return PopScope(
+              canPop: !isEliminazioneInCorso,
+              child: AlertDialog(
+                title: const Text('Conferma eliminazione'),
+                content: Text('Sei sicuro di voler eliminare l\'operatore "$nome"?'),
+                actions: [
+                  TextButton(
+                    onPressed: isEliminazioneInCorso ? null : () => Navigator.pop(dialogContext),
+                    child: const Text('Annulla'),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    onPressed: isEliminazioneInCorso
+                        ? null
+                        : () async {
+                      setDialogState(() {
+                        isEliminazioneInCorso = true;
+                      });
+
+                      // Verifica connessione ad Internet reale
+                      final bool connessionePresente = await _controllaConnessioneReale();
+                      if (!connessionePresente) {
+                        setDialogState(() {
+                          isEliminazioneInCorso = false;
+                        });
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Impossibile eliminare: connessione internet assente o instabile.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                        return;
+                      }
+
+                      try {
+                        // Eliminazione bloccante che attende il completamento reale sul server
+                        await FirebaseFirestore.instance
+                            .collection('barbers')
+                            .doc(docId)
+                            .delete();
+
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Operatore eliminato con successo.'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          isEliminazioneInCorso = false;
+                        });
+
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Errore durante l\'eliminazione: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: isEliminazioneInCorso
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                        : const Text('Elimina', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
-
-    if (conferma == true) {
-      await _eliminaOperatore(docId);
-    }
-  }
-
-  Future<void> _eliminaOperatore(String docId) async {
-    await FirebaseFirestore.instance.collection('barbers').doc(docId).delete();
   }
 
   @override

@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart'; // AGGIUNTO per SystemChannels
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class GestioneCalendarioScreen extends StatefulWidget {
   const GestioneCalendarioScreen({super.key});
@@ -30,6 +32,17 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
     _notaController.dispose();
     _notaFocusNode.dispose(); // AGGIUNTO
     super.dispose();
+  }
+
+  // Helper per verificare la presenza di una connessione Internet reale
+  Future<bool> _controllaConnessioneReale() async {
+    if (kIsWeb) return true;
+    try {
+      final risultato = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
+      return risultato.isNotEmpty && risultato[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   // Metodo helper per resettare la selezione (come in GestionePeriodicoScreen)
@@ -201,32 +214,107 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
   }
 
   Future<void> _confermaRimuoviEccezione(String docId, String data) async {
-    final bool? conferma = await showDialog<bool>(
+    bool isEliminazioneInCorso = false;
+
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Conferma eliminazione'),
-        content: Text('Sei sicuro di voler rimuovere l\'eccezione per il giorno $data?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annulla'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Elimina', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return PopScope(
+              canPop: !isEliminazioneInCorso,
+              child: AlertDialog(
+                title: const Text('Conferma eliminazione'),
+                content: Text('Sei sicuro di voler rimuovere l\'eccezione per il giorno $data?'),
+                actions: [
+                  TextButton(
+                    onPressed: isEliminazioneInCorso ? null : () => Navigator.pop(dialogContext),
+                    child: const Text('Annulla'),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    onPressed: isEliminazioneInCorso
+                        ? null
+                        : () async {
+                      setDialogState(() {
+                        isEliminazioneInCorso = true;
+                      });
+
+                      // Verifica connessione ad Internet reale
+                      final bool connessionePresente = await _controllaConnessioneReale();
+                      if (!connessionePresente) {
+                        setDialogState(() {
+                          isEliminazioneInCorso = false;
+                        });
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Impossibile eliminare: connessione internet assente o instabile.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                        return;
+                      }
+
+                      try {
+                        // Eliminazione bloccante che attende il completamento reale sul server
+                        await FirebaseFirestore.instance
+                            .collection('calendar_exceptions')
+                            .doc(docId)
+                            .delete();
+
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Eccezione rimossa con successo.'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          isEliminazioneInCorso = false;
+                        });
+
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Errore durante la rimozione: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: isEliminazioneInCorso
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                        : const Text('Elimina', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
-
-    if (conferma == true) {
-      await _rimuoviEccezione(docId);
-    }
-  }
-
-  Future<void> _rimuoviEccezione(String docId) async {
-    await FirebaseFirestore.instance.collection('calendar_exceptions').doc(docId).delete();
   }
 
   @override
