@@ -36,6 +36,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   late PageController _pageController;
 
   bool _isLoadingConfig = true;
+  bool _isChangingMonthManually = false; // Flag per bloccare loop tra PageView e freccette
 
   Map<String, dynamic> _orariNegozioBase = {};
   Map<String, dynamic> _eccezioniCalendario = {};
@@ -61,8 +62,9 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     _meseCorrente = _mesiSelezionabili[_indiceMeseSelezionato];
 
     // Ancoraggio per la gestione dell'indice del PageView (Oggi corrisponde alla pagina 1000)
-    _dataInizialeAnchor = DateTime.now();
-    _giornoSelezionato = DateTime.now();
+    DateTime oggi = DateTime.now();
+    _dataInizialeAnchor = DateTime(oggi.year, oggi.month, oggi.day);
+    _giornoSelezionato = _dataInizialeAnchor;
     _pageController = PageController(initialPage: 1000, viewportFraction: 0.35);
 
     _inizializzaDati();
@@ -120,7 +122,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
 
       await _precaricaDisponibilitaMeseSilenzioso(_meseCorrente);
     } catch (e) {
-      debugPrint("Errore inizializzazione calendario: $e");
+      // Gestione silenziosa o errore generico
     } finally {
       setState(() => _isLoadingConfig = false);
     }
@@ -222,7 +224,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       await Future.wait(compitiDiCaricamento);
       if (mounted) setState(() {}); // Aggiorna graficamente solo i conteggi slot
     } catch (e) {
-      debugPrint("Errore nel calcolo degli slot mensili: $e");
+      // Gestione silenziosa
     }
   }
 
@@ -293,6 +295,8 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   String _formattaData(DateTime d) => "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
   void _sincronizzaMeseConGiorno(DateTime giorno) {
+    if (_isChangingMonthManually) return; // Se stiamo cambiando mese da freccia, non interferire!
+
     for (int i = 0; i < _mesiSelezionabili.length; i++) {
       if (_mesiSelezionabili[i].year == giorno.year && _mesiSelezionabili[i].month == giorno.month) {
         if (_indiceMeseSelezionato != i) {
@@ -307,27 +311,45 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     }
   }
 
+  // Funzione ausiliaria per calcolare l'indice esatto nel PageController usando UTC puro
+  int _calcolaPaginaPerData(DateTime target) {
+    DateTime anchorUtc = DateTime.utc(_dataInizialeAnchor.year, _dataInizialeAnchor.month, _dataInizialeAnchor.day);
+    DateTime targetUtc = DateTime.utc(target.year, target.month, target.day);
+    int diffGiorni = targetUtc.difference(anchorUtc).inDays;
+    return 1000 + diffGiorni;
+  }
+
   void _cambiaMeseManuale(int offset) {
     int nuovoIndice = _indiceMeseSelezionato + offset;
     if (nuovoIndice >= 0 && nuovoIndice < _mesiSelezionabili.length) {
-      DateTime nuovoMese = _mesiSelezionabili[nuovoIndice];
-      DateTime primaDataMese = DateTime(nuovoMese.year, nuovoMese.month, 1);
+      _isChangingMonthManually = true; // Attiva il blocco di sicurezza
 
-      // Se il primo giorno del mese è già passato, usiamo la data odierna
-      if (primaDataMese.isBefore(DateTime.now())) {
-        primaDataMese = DateTime.now();
+      DateTime nuovoMese = _mesiSelezionabili[nuovoIndice];
+
+      // Target di destinazione tassativo: sempre il 1° giorno del nuovo mese
+      DateTime targetData = DateTime(nuovoMese.year, nuovoMese.month, 1);
+
+      // Se il 1° del mese è antecedente ad oggi (es. se fossimo a metà del primo mese), usa oggi
+      DateTime oggiDateOnly = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      if (targetData.isBefore(oggiDateOnly)) {
+        targetData = oggiDateOnly;
       }
 
-      int diff = DateUtils.dateOnly(primaDataMese).difference(DateUtils.dateOnly(_dataInizialeAnchor)).inDays;
+      int targetPage = _calcolaPaginaPerData(targetData);
 
       setState(() {
         _indiceMeseSelezionato = nuovoIndice;
         _meseCorrente = nuovoMese;
-        _giornoSelezionato = primaDataMese;
+        _giornoSelezionato = targetData;
       });
 
-      _pageController.jumpToPage(1000 + diff);
+      _pageController.jumpToPage(targetPage);
       _precaricaDisponibilitaMeseSilenzioso(nuovoMese);
+
+      // Sblocca il listener dopo che la transizione sul PageController si è stabilizzata
+      Future.delayed(const Duration(milliseconds: 150), () {
+        _isChangingMonthManually = false;
+      });
     }
   }
 
@@ -364,11 +386,10 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     );
 
     if (dataScelta != null) {
-      int differenzaGiorni = DateUtils.dateOnly(dataScelta).difference(DateUtils.dateOnly(_dataInizialeAnchor)).inDays;
-      int targetPage = 1000 + differenzaGiorni;
+      int targetPage = _calcolaPaginaPerData(dataScelta);
 
       setState(() {
-        _giornoSelezionato = dataScelta;
+        _giornoSelezionato = DateTime(dataScelta.year, dataScelta.month, dataScelta.day);
       });
       _pageController.animateToPage(targetPage, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
       _sincronizzaMeseConGiorno(dataScelta);
@@ -425,7 +446,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     Color coloreNumeroLegenda;
     String testoLegendaDinamico;
 
-    // MODIFICATO: Controllo rigoroso dei 3 stati per evitare ripetizioni
+    // Controllo dei 3 stati per la legenda
     if (_statoLegendaCorrente == 0) {
       coloreNumeroLegenda = const Color(0xFF52C47A);
       testoLegendaDinamico = 'Salone libero';
@@ -541,13 +562,20 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                       child: PageView.builder(
                         controller: _pageController,
                         onPageChanged: (index) {
+                          if (_isChangingMonthManually) return; // Salta aggiornamenti se attivata la freccia manuale
+
                           // Se lo scorrimento manuale prova ad andare a una data passata, forza la pagina odierna
                           if (index < 1000) {
                             _pageController.jumpToPage(1000);
                             return;
                           }
                           int offsetGiorni = index - 1000;
-                          DateTime nuovaData = DateUtils.dateOnly(_dataInizialeAnchor).add(Duration(days: offsetGiorni));
+
+                          DateTime nuovaData = DateTime(
+                            _dataInizialeAnchor.year,
+                            _dataInizialeAnchor.month,
+                            _dataInizialeAnchor.day + offsetGiorni,
+                          );
 
                           setState(() {
                             _giornoSelezionato = nuovaData;
@@ -558,7 +586,13 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                         },
                         itemBuilder: (context, index) {
                           int offsetGiorni = index - 1000;
-                          DateTime dataCorrente = DateUtils.dateOnly(_dataInizialeAnchor).add(Duration(days: offsetGiorni));
+
+                          DateTime dataCorrente = DateTime(
+                            _dataInizialeAnchor.year,
+                            _dataInizialeAnchor.month,
+                            _dataInizialeAnchor.day + offsetGiorni,
+                          );
+
                           Color coloreGiorno = _calcolaColoreGiorno(dataCorrente, isDarkMode);
                           bool isChiuso = _isChiuso(dataCorrente);
 
