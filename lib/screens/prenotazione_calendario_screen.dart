@@ -36,22 +36,23 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   late PageController _pageController;
 
   bool _isLoadingConfig = true;
-  bool _isPreloadingGiorni = false;
 
   Map<String, dynamic> _orariNegozioBase = {};
   Map<String, dynamic> _eccezioniCalendario = {};
   final Map<String, int> _conteggioSlotPerGiorno = {};
+  final Set<String> _mesiGiaCaricati = {}; // Registra i mesi già elaborati per evitare ricaricamenti
 
   final List<String> _giorniSettimanaNome = [
     'domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'
   ];
 
-  // Variabili per la gestione del carosello dinamico nella legenda
+  // Variabili per la gestione del carosello dinamico nella legenda (3 stati)
   Timer? _timerLegenda;
   int _statoLegendaCorrente = 0;
 
-  // Colore Oro uniforme per tutte le selezioni
+  // Colore Oro e Verde Foresta
   final Color _coloreOro = const Color(0xFFD4AF37);
+  final Color _coloreVerdeForesta = const Color(0xFF164638);
 
   @override
   void initState() {
@@ -79,7 +80,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     _timerLegenda = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (mounted) {
         setState(() {
-          _statoLegendaCorrente = (_statoLegendaCorrente + 1) % 4;
+          _statoLegendaCorrente = (_statoLegendaCorrente + 1) % 3; // Alterna strettamente tra 0, 1 e 2
         });
       }
     });
@@ -117,7 +118,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
         _eccezioniCalendario[doc.id] = doc.data();
       }
 
-      await _precaricaDisponibilitaMese();
+      await _precaricaDisponibilitaMeseSilenzioso(_meseCorrente);
     } catch (e) {
       debugPrint("Errore inizializzazione calendario: $e");
     } finally {
@@ -125,16 +126,18 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     }
   }
 
-  Future<void> _precaricaDisponibilitaMese() async {
-    setState(() => _isPreloadingGiorni = true);
-    _conteggioSlotPerGiorno.clear();
+  // Precarica i dati del mese in background SENZA azzerare la vista o mostrare il loader a tutto schermo
+  Future<void> _precaricaDisponibilitaMeseSilenzioso(DateTime meseTarget) async {
+    String chiaveMese = "${meseTarget.year}_${meseTarget.month}";
+    if (_mesiGiaCaricati.contains(chiaveMese)) return; // Evita di ricaricare se già presente
+    _mesiGiaCaricati.add(chiaveMese);
 
     try {
       final barbersSnap = await FirebaseFirestore.instance.collection('barbers').get();
       final barbieri = barbersSnap.docs;
 
-      int anno = _meseCorrente.year;
-      int mese = _meseCorrente.month;
+      int anno = meseTarget.year;
+      int mese = meseTarget.month;
       int giorniNelMese = DateTime(anno, mese + 1, 0).day;
 
       List<Future<void>> compitiDiCaricamento = [];
@@ -217,10 +220,9 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       }
 
       await Future.wait(compitiDiCaricamento);
+      if (mounted) setState(() {}); // Aggiorna graficamente solo i conteggi slot
     } catch (e) {
       debugPrint("Errore nel calcolo degli slot mensili: $e");
-    } finally {
-      setState(() => _isPreloadingGiorni = false);
     }
   }
 
@@ -294,9 +296,11 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     for (int i = 0; i < _mesiSelezionabili.length; i++) {
       if (_mesiSelezionabili[i].year == giorno.year && _mesiSelezionabili[i].month == giorno.month) {
         if (_indiceMeseSelezionato != i) {
-          _indiceMeseSelezionato = i;
-          _meseCorrente = _mesiSelezionabili[i];
-          _precaricaDisponibilitaMese();
+          setState(() {
+            _indiceMeseSelezionato = i;
+            _meseCorrente = _mesiSelezionabili[i];
+          });
+          _precaricaDisponibilitaMeseSilenzioso(_mesiSelezionabili[i]);
         }
         break;
       }
@@ -323,7 +327,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       });
 
       _pageController.jumpToPage(1000 + diff);
-      _precaricaDisponibilitaMese();
+      _precaricaDisponibilitaMeseSilenzioso(nuovoMese);
     }
   }
 
@@ -344,8 +348,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
               onPrimary: Colors.black,
               surface: Color(0xFFFDFBF7),
               onSurface: Color(0xFF211D1A),
-            ),
-            dialogBackgroundColor: const Color(0xFFFDFBF7),
+            ), dialogTheme: DialogThemeData(backgroundColor: const Color(0xFFFDFBF7)),
           )
               : ThemeData.light().copyWith(
             colorScheme: const ColorScheme.light(
@@ -419,9 +422,10 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     final Color coloreTestoPrimario = isDarkMode ? const Color(0xFF211D1A) : Colors.black87;
     final Color coloreTestoSecondario = isDarkMode ? const Color(0xFF6B635E) : Colors.black54;
 
-    Color coloreNumeroLegenda = Colors.black;
-    String testoLegendaDinamico = '';
+    Color coloreNumeroLegenda;
+    String testoLegendaDinamico;
 
+    // MODIFICATO: Controllo rigoroso dei 3 stati per evitare ripetizioni
     if (_statoLegendaCorrente == 0) {
       coloreNumeroLegenda = const Color(0xFF52C47A);
       testoLegendaDinamico = 'Salone libero';
@@ -432,8 +436,8 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       coloreNumeroLegenda = Colors.red;
       testoLegendaDinamico = 'Salone affollato';
     } else {
-      coloreNumeroLegenda = isDarkMode ? const Color(0xFF6B635E) : Colors.grey;
-      testoLegendaDinamico = 'Nessun posto disponibile';
+      coloreNumeroLegenda = const Color(0xFF52C47A);
+      testoLegendaDinamico = 'Salone libero';
     }
 
     String loopDataStr = _formattaData(_giornoSelezionato);
@@ -457,7 +461,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: _isLoadingConfig || _isPreloadingGiorni
+      body: _isLoadingConfig
           ? Center(child: CircularProgressIndicator(color: _coloreOro))
           : SingleChildScrollView(
         physics: const ClampingScrollPhysics(),
@@ -543,16 +547,26 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                             return;
                           }
                           int offsetGiorni = index - 1000;
-                          DateTime nuovaData = _dataInizialeAnchor.add(Duration(days: offsetGiorni));
+                          DateTime nuovaData = DateUtils.dateOnly(_dataInizialeAnchor).add(Duration(days: offsetGiorni));
+
                           setState(() {
                             _giornoSelezionato = nuovaData;
                           });
+
+                          // Sincronizza dinamicamente il mese man mano che si scorre in maniera fluida
                           _sincronizzaMeseConGiorno(nuovaData);
                         },
                         itemBuilder: (context, index) {
                           int offsetGiorni = index - 1000;
-                          DateTime dataCorrente = _dataInizialeAnchor.add(Duration(days: offsetGiorni));
+                          DateTime dataCorrente = DateUtils.dateOnly(_dataInizialeAnchor).add(Duration(days: offsetGiorni));
                           Color coloreGiorno = _calcolaColoreGiorno(dataCorrente, isDarkMode);
+                          bool isChiuso = _isChiuso(dataCorrente);
+
+                          String dataCurrStr = _formattaData(dataCorrente);
+                          bool isPassatoLoop = dataCorrente.isBefore(DateTime.now().subtract(const Duration(days: 1))) &&
+                              dataCurrStr != _formattaData(DateTime.now());
+                          int slotDispLoop = _conteggioSlotPerGiorno[dataCurrStr] ?? 0;
+                          bool isSoldOutLoop = !isChiuso && slotDispLoop == 0 && !isPassatoLoop;
 
                           return AnimatedBuilder(
                             animation: _pageController,
@@ -587,16 +601,120 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                                     opacity: opacity,
                                     child: FittedBox(
                                       fit: BoxFit.scaleDown,
-                                      child: Text(
-                                        '${dataCorrente.day}',
-                                        textAlign: TextAlign.center,
-                                        textScaler: TextScaler.noScaling,
-                                        style: TextStyle(
-                                          color: coloreGiorno,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: fontSize,
-                                          height: 1.0,
-                                        ),
+                                      child: isChiuso
+                                          ? Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          // Numero del giorno chiuso (colore primario del testo)
+                                          Text(
+                                            '${dataCorrente.day}',
+                                            textAlign: TextAlign.center,
+                                            textScaler: TextScaler.noScaling,
+                                            style: TextStyle(
+                                              color: coloreTestoPrimario,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: fontSize,
+                                              height: 1.0,
+                                            ),
+                                          ),
+                                          // Timbro "CLOSED" in diagonale
+                                          Transform.rotate(
+                                            angle: -0.2,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withValues(alpha: 0.65),
+                                                border: Border.all(
+                                                  color: const Color(0xFFE55B5B),
+                                                  width: 2.0,
+                                                ),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: const Text(
+                                                'CLOSED',
+                                                style: TextStyle(
+                                                  color: Color(0xFFE55B5B),
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 14,
+                                                  letterSpacing: 1.5,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                          : isSoldOutLoop
+                                          ? Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          // Numero del giorno per sold out pulito (senza bordo scuro)
+                                          Text(
+                                            '${dataCorrente.day}',
+                                            textAlign: TextAlign.center,
+                                            textScaler: TextScaler.noScaling,
+                                            style: TextStyle(
+                                              fontSize: fontSize,
+                                              height: 1.0,
+                                              fontWeight: FontWeight.bold,
+                                              color: coloreTestoPrimario,
+                                            ),
+                                          ),
+                                          // Timbro "SOLD OUT" color oro con testo verde foresta
+                                          Transform.rotate(
+                                            angle: -0.2,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: _coloreOro,
+                                                border: Border.all(
+                                                  color: _coloreVerdeForesta,
+                                                  width: 2.0,
+                                                ),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                'SOLD OUT',
+                                                style: TextStyle(
+                                                  color: _coloreVerdeForesta,
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 13,
+                                                  letterSpacing: 1.2,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                          : Stack(
+                                        children: [
+                                          // Testo di sfondo per lo stroke (solo contorno colorato)
+                                          Text(
+                                            '${dataCorrente.day}',
+                                            textAlign: TextAlign.center,
+                                            textScaler: TextScaler.noScaling,
+                                            style: TextStyle(
+                                              fontSize: fontSize,
+                                              height: 1.0,
+                                              fontWeight: FontWeight.bold,
+                                              foreground: Paint()
+                                                ..style = PaintingStyle.stroke
+                                                ..strokeWidth = 3.5
+                                                ..color = coloreGiorno,
+                                            ),
+                                          ),
+                                          // Testo di primo piano (riempimento colore primario testo)
+                                          Text(
+                                            '${dataCorrente.day}',
+                                            textAlign: TextAlign.center,
+                                            textScaler: TextScaler.noScaling,
+                                            style: TextStyle(
+                                              fontSize: fontSize,
+                                              height: 1.0,
+                                              fontWeight: FontWeight.bold,
+                                              color: coloreTestoPrimario,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -665,6 +783,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
               ),
               const SizedBox(height: 16),
 
+              // 1ª Riga Legenda: Carosello dinamico disponibilità (libero, medio, affollato)
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 400),
                 child: Row(
@@ -674,8 +793,12 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                       width: 20,
                       height: 20,
                       decoration: BoxDecoration(
-                        color: coloreNumeroLegenda,
+                        color: Colors.black, // Interno nero
                         borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: coloreNumeroLegenda, // Solo contorno colorato
+                          width: 2.5,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -684,14 +807,67 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                 ),
               ),
               const SizedBox(height: 12),
+
+              // 2ª Riga Legenda: Timbro SOLD OUT fissa con larghezza uniforme
               Row(
                 children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE55B5B),
-                      borderRadius: BorderRadius.circular(4),
+                  Transform.rotate(
+                    angle: -0.15,
+                    child: Container(
+                      width: 58,
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: _coloreOro,
+                        border: Border.all(
+                          color: _coloreVerdeForesta,
+                          width: 1.5,
+                        ),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Text(
+                        'SOLD OUT',
+                        style: TextStyle(
+                          color: _coloreVerdeForesta,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 8.5,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text('Nessun posto disponibile', style: TextStyle(color: coloreTestoSecondario, fontSize: 16)),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // 3ª Riga Legenda: Timbro CLOSED fissa con larghezza uniforme
+              Row(
+                children: [
+                  Transform.rotate(
+                    angle: -0.15,
+                    child: Container(
+                      width: 58,
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        border: Border.all(
+                          color: const Color(0xFFE55B5B),
+                          width: 1.5,
+                        ),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: const Text(
+                        'CLOSED',
+                        style: TextStyle(
+                          color: Color(0xFFE55B5B),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 8.5,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
