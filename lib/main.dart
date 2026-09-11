@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io'; // AGGIUNTO: Necessario per verificare la piattaforma (Platform.isIOS)
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Richiesto per la gestione dell'orientamento
@@ -24,7 +23,7 @@ import 'services/notification_service.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'; // Importa kIsWeb e defaultTargetPlatform per sostituire dart:io
 import 'screens/gestione_clienti_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // AGGIUNTO: Necessario per resettare il badge nativo su iOS
 
@@ -36,7 +35,9 @@ void main() async {
   );
 
   // Accensione del sistema notifiche all'avvio (Inizializzazione Unica e Centralizzata)
-  await NotificationService().init();
+  if (!kIsWeb) {
+    await NotificationService().init();
+  }
 
   runApp(const MyApp());
 }
@@ -138,11 +139,13 @@ class _AuthGateState extends State<AuthGate> {
     });
 
     // Inizializza l'ascolto globale del cambio token (onTokenRefresh)
-    _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-      if (_currentUid != null) {
-        await _salvaTokenSuFirestore(_currentUid!, newToken);
-      }
-    });
+    if (!kIsWeb) {
+      _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+        if (_currentUid != null) {
+          await _salvaTokenSuFirestore(_currentUid!, newToken);
+        }
+      });
+    }
   }
 
   @override
@@ -154,7 +157,7 @@ class _AuthGateState extends State<AuthGate> {
   // MODIFICATO: Pulisce le notifiche nel centro notifiche e resetta a zero il badge (pallino rosso) dell'icona su iOS
   Future<void> _pulisciNotificheEBadge() async {
     try {
-      if (Platform.isIOS) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
         final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
         await flutterLocalNotificationsPlugin
             .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
@@ -181,6 +184,8 @@ class _AuthGateState extends State<AuthGate> {
 
   // Implementata la logica di Bounded Retry (max 5 secondi) per evitare la Race Condition nativa su iOS
   Future<void> _configuraNotifichePushRemote(String uid) async {
+    if (kIsWeb) return; // Salta su Web per evitare eccezioni nativi
+
     _currentUid = uid; // Memorizza l'uid corrente per l'onTokenRefresh
     try {
       FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -196,7 +201,7 @@ class _AuthGateState extends State<AuthGate> {
       );
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        if (Platform.isIOS) {
+        if (defaultTargetPlatform == TargetPlatform.iOS) {
           // Soluzione dell'articolo: 10 tentativi da 500ms ciascuno per attendere l'APNs nativo
           String? apnsToken;
           for (int i = 0; i < 10; i++) {
@@ -225,6 +230,8 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _controllaAggiornamentoObbligatorio() async {
+    if (kIsWeb) return; // Salta il controllo store per le versioni Web
+
     try {
       final remoteConfig = FirebaseRemoteConfig.instance;
 
@@ -290,7 +297,7 @@ class _AuthGateState extends State<AuthGate> {
               TextButton(
                 onPressed: () async {
                   // Rileva la piattaforma per reindirizzare allo store corretto
-                  final String urlString = Platform.isIOS
+                  final String urlString = (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)
                       ? "https://apps.apple.com/it/app/ag-barber/id6784350580"
                       : "https://play.google.com/store/apps/details?id=com.LoSco.agbarber.prenotazionibarbiere&hl=it";
 
@@ -494,7 +501,7 @@ class BarbiereHomePage extends StatelessWidget {
 
                       try {
                         final user = FirebaseAuth.instance.currentUser;
-                        if (user != null) {
+                        if (user != null && !kIsWeb) {
                           final token = await FirebaseMessaging.instance.getToken();
                           if (token != null && token.isNotEmpty) {
                             // 1. Rimuove il token dell'utente da Firestore
@@ -506,9 +513,9 @@ class BarbiereHomePage extends StatelessWidget {
                               'fcmToken': FieldValue.delete(),
                             });
                           }
+                          // 2. Cancellazione fisica del token FCM dal dispositivo hardware
+                          await FirebaseMessaging.instance.deleteToken();
                         }
-                        // 2. Cancellazione fisica del token FCM dal dispositivo hardware
-                        await FirebaseMessaging.instance.deleteToken();
                       } catch (e) {
                         debugPrint("Errore nella rimozione del token FCM al logout: $e");
                       }
