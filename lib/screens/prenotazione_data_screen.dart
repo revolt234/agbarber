@@ -103,7 +103,27 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       setState(() => _isLoadingConfig = false);
     }
   }
+  Map<String, dynamic>? _getEccezionePerData(DateTime d) {
+    String dataStr = _formattaData(d);
 
+    // 1. Controllo per giorno singolo (chiave diretta)
+    if (_eccezioniCalendario.containsKey(dataStr)) {
+      return _eccezioniCalendario[dataStr];
+    }
+
+    // 2. Controllo per periodo (range tra startDate e endDate)
+    for (var entry in _eccezioniCalendario.values) {
+      final mappa = entry as Map<String, dynamic>;
+      if (mappa['startDate'] != null && mappa['endDate'] != null) {
+        String startStr = mappa['startDate'];
+        String endStr = mappa['endDate'];
+        if (dataStr.compareTo(startStr) >= 0 && dataStr.compareTo(endStr) <= 0) {
+          return mappa;
+        }
+      }
+    }
+    return null;
+  }
   void _centraGiornoSelezionato({bool animato = true}) {
     if (!_scrollControllerGiorni.hasClients || _giorniFiltratiVisibili.isEmpty) return;
 
@@ -208,12 +228,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
             String nomeGiorno = _giorniSettimana[giorno.weekday % 7];
             var orariGiorno = _orariNegozioBase[nomeGiorno];
 
-            final bool haAperturaStraordinaria = _eccezioniCalendario[dataStr]?['status'] == 'aperto';
+            // NUOVO CODICE:
+            final Map<String, dynamic>? eccezione = _getEccezionePerData(giorno);
+            final bool haAperturaStraordinaria = eccezione?['status'] == 'aperto';
             if (haAperturaStraordinaria) {
               orariGiorno = {
                 'isAperto': true,
-                'mattina': _eccezioniCalendario[dataStr]?['mattina'],
-                'pomeriggio': _eccezioniCalendario[dataStr]?['pomeriggio'],
+                'mattina': eccezione?['mattina'],
+                'pomeriggio': eccezione?['pomeriggio'],
               };
             }
 
@@ -363,12 +385,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       String nomeGiorno = _giorniSettimana[_dataSelezionata.weekday % 7];
       var orariGiorno = _orariNegozioBase[nomeGiorno];
 
-      final bool haAperturaStraordinaria = _eccezioniCalendario[dataStr]?['status'] == 'aperto';
+      // NUOVO CODICE:
+      final Map<String, dynamic>? eccezione = _getEccezionePerData(_dataSelezionata);
+      final bool haAperturaStraordinaria = eccezione?['status'] == 'aperto';
       if (haAperturaStraordinaria) {
         orariGiorno = {
           'isAperto': true,
-          'mattina': _eccezioniCalendario[dataStr]?['mattina'],
-          'pomeriggio': _eccezioniCalendario[dataStr]?['pomeriggio'],
+          'mattina': eccezione?['mattina'],
+          'pomeriggio': eccezione?['pomeriggio'],
         };
       }
 
@@ -444,9 +468,9 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
   }
 
   bool _isChiuso(DateTime d) {
-    final stringaGiorno = _formattaData(d);
-    if (_eccezioniCalendario.containsKey(stringaGiorno)) {
-      return _eccezioniCalendario[stringaGiorno]?['status'] == 'chiuso';
+    final Map<String, dynamic>? eccezione = _getEccezionePerData(d);
+    if (eccezione != null) {
+      return eccezione['status'] == 'chiuso';
     }
     return _orariNegozioBase[_giorniSettimana[d.weekday % 7]]?['isAperto'] == false;
   }

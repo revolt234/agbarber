@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:async';
+// Rimosso import 'dart:io'; per garantire la compatibilità Web
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,7 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final FocusNode _nomeCognomeFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
-  final _telefonoFocus = FocusNode();
+  final FocusNode _telefonoFocus = FocusNode();
 
   bool _isLogin = true;
   bool _isLoading = false;
@@ -52,10 +53,10 @@ class _LoginScreenState extends State<LoginScreen> {
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
     );
-    // SOLUZIONE: Forza l'apertura della tastiera. Risolve il bug in cui
-    // la tastiera non si riapre dopo aver usato il tasto back di Android,
-    // poiché il TextField mantiene il focus ma la tastiera risulta chiusa.
-    SystemChannels.textInput.invokeMethod('TextInput.show');
+    // Esegue il comando tastiera solo su mobile, evitando di bloccare la digitazione da mouse/tastiera nel browser Web
+    if (!kIsWeb) {
+      SystemChannels.textInput.invokeMethod('TextInput.show');
+    }
   }
 
   void _mostraDialogoRecuperoPassword() {
@@ -350,9 +351,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       String erroreGenerico = "Si è verificato un errore di rete.";
-      if (e is SocketException) {
-        erroreGenerico = "Internet non disponibile. Verifica la tua connessione.";
-      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(erroreGenerico), backgroundColor: Colors.red),

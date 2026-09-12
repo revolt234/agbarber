@@ -2,15 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'prenotazione_data_screen.dart'; // Importa il tuo screen originale aggiornato
+import 'prenotazione_data_screen.dart';
 
 class PrenotazioneCalendarioScreen extends StatefulWidget {
   final String servizioId;
   final String servizioNome;
   final int servizioDurata;
   final double servizioPrezzo;
-  final String? clienteId;   // Opzionale: ID del cliente selezionato
-  final String? clienteNome; // Opzionale: Nome del cliente selezionato
+  final String? clienteId;
+  final String? clienteNome;
 
   const PrenotazioneCalendarioScreen({
     super.key,
@@ -36,22 +36,20 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   late PageController _pageController;
 
   bool _isLoadingConfig = true;
-  bool _isChangingMonthManually = false; // Flag per bloccare loop tra PageView e freccette
+  bool _isChangingMonthManually = false;
 
   Map<String, dynamic> _orariNegozioBase = {};
   Map<String, dynamic> _eccezioniCalendario = {};
   final Map<String, int> _conteggioSlotPerGiorno = {};
-  final Set<String> _mesiGiaCaricati = {}; // Registra i mesi già elaborati per evitare ricaricamenti
+  final Set<String> _mesiGiaCaricati = {};
 
   final List<String> _giorniSettimanaNome = [
     'domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'
   ];
 
-  // Variabili per la gestione del carosello dinamico nella legenda (3 stati)
   Timer? _timerLegenda;
   int _statoLegendaCorrente = 0;
 
-  // Colore Oro e Verde Foresta
   final Color _coloreOro = const Color(0xFFD4AF37);
   final Color _coloreVerdeForesta = const Color(0xFF164638);
 
@@ -61,7 +59,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     _preparaMesi();
     _meseCorrente = _mesiSelezionabili[_indiceMeseSelezionato];
 
-    // Ancoraggio per la gestione dell'indice del PageView (Oggi corrisponde alla pagina 1000)
     DateTime oggi = DateTime.now();
     _dataInizialeAnchor = DateTime(oggi.year, oggi.month, oggi.day);
     _giornoSelezionato = _dataInizialeAnchor;
@@ -82,7 +79,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     _timerLegenda = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (mounted) {
         setState(() {
-          _statoLegendaCorrente = (_statoLegendaCorrente + 1) % 3; // Alterna strettamente tra 0, 1 e 2
+          _statoLegendaCorrente = (_statoLegendaCorrente + 1) % 3;
         });
       }
     });
@@ -100,6 +97,12 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       }
       _mesiSelezionabili.add(DateTime(annoVariato, meseVariato, 1));
     }
+  }
+
+  // Helper per ricavare l'ultimo giorno selezionabile (ultimo giorno del terzo mese)
+  DateTime get _maxDataConsentita {
+    DateTime ultimoMese = _mesiSelezionabili.last;
+    return DateTime(ultimoMese.year, ultimoMese.month + 1, 0);
   }
 
   Future<void> _inizializzaDati() async {
@@ -122,16 +125,35 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
 
       await _precaricaDisponibilitaMeseSilenzioso(_meseCorrente);
     } catch (e) {
-      // Gestione silenziosa o errore generico
+      // Gestione silenziosa
     } finally {
       setState(() => _isLoadingConfig = false);
     }
   }
 
-  // Precarica i dati del mese in background SENZA azzerare la vista o mostrare il loader a tutto schermo
+  Map<String, dynamic>? _getEccezionePerData(DateTime d) {
+    String dataStr = _formattaData(d);
+
+    if (_eccezioniCalendario.containsKey(dataStr)) {
+      return _eccezioniCalendario[dataStr];
+    }
+
+    for (var entry in _eccezioniCalendario.values) {
+      final mappa = entry as Map<String, dynamic>;
+      if (mappa['startDate'] != null && mappa['endDate'] != null) {
+        String startStr = mappa['startDate'];
+        String endStr = mappa['endDate'];
+        if (dataStr.compareTo(startStr) >= 0 && dataStr.compareTo(endStr) <= 0) {
+          return mappa;
+        }
+      }
+    }
+    return null;
+  }
+
   Future<void> _precaricaDisponibilitaMeseSilenzioso(DateTime meseTarget) async {
     String chiaveMese = "${meseTarget.year}_${meseTarget.month}";
-    if (_mesiGiaCaricati.contains(chiaveMese)) return; // Evita di ricaricare se già presente
+    if (_mesiGiaCaricati.contains(chiaveMese)) return;
     _mesiGiaCaricati.add(chiaveMese);
 
     try {
@@ -198,12 +220,14 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
             String nomeGiorno = _giorniSettimanaNome[giorno.weekday % 7];
             var orariGiorno = _orariNegozioBase[nomeGiorno];
 
-            final bool haAperturaStraordinaria = _eccezioniCalendario[dataStr]?['status'] == 'aperto';
+            final Map<String, dynamic>? eccezione = _getEccezionePerData(giorno);
+            final bool haAperturaStraordinaria = eccezione?['status'] == 'aperto';
+
             if (haAperturaStraordinaria) {
               orariGiorno = {
                 'isAperto': true,
-                'mattina': _eccezioniCalendario[dataStr]?['mattina'],
-                'pomeriggio': _eccezioniCalendario[dataStr]?['pomeriggio'],
+                'mattina': eccezione?['mattina'],
+                'pomeriggio': eccezione?['pomeriggio'],
               };
             }
 
@@ -222,7 +246,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       }
 
       await Future.wait(compitiDiCaricamento);
-      if (mounted) setState(() {}); // Aggiorna graficamente solo i conteggi slot
+      if (mounted) setState(() {});
     } catch (e) {
       // Gestione silenziosa
     }
@@ -284,9 +308,9 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   }
 
   bool _isChiuso(DateTime d) {
-    final stringaGiorno = _formattaData(d);
-    if (_eccezioniCalendario.containsKey(stringaGiorno)) {
-      return _eccezioniCalendario[stringaGiorno]?['status'] == 'chiuso';
+    final Map<String, dynamic>? eccezione = _getEccezionePerData(d);
+    if (eccezione != null) {
+      return eccezione['status'] == 'chiuso';
     }
     return _orariNegozioBase[_giorniSettimanaNome[d.weekday % 7]]?['isAperto'] == false;
   }
@@ -295,7 +319,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   String _formattaData(DateTime d) => "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
   void _sincronizzaMeseConGiorno(DateTime giorno) {
-    if (_isChangingMonthManually) return; // Se stiamo cambiando mese da freccia, non interferire!
+    if (_isChangingMonthManually) return;
 
     for (int i = 0; i < _mesiSelezionabili.length; i++) {
       if (_mesiSelezionabili[i].year == giorno.year && _mesiSelezionabili[i].month == giorno.month) {
@@ -311,7 +335,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     }
   }
 
-  // Funzione ausiliaria per calcolare l'indice esatto nel PageController usando UTC puro
   int _calcolaPaginaPerData(DateTime target) {
     DateTime anchorUtc = DateTime.utc(_dataInizialeAnchor.year, _dataInizialeAnchor.month, _dataInizialeAnchor.day);
     DateTime targetUtc = DateTime.utc(target.year, target.month, target.day);
@@ -322,14 +345,12 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   void _cambiaMeseManuale(int offset) {
     int nuovoIndice = _indiceMeseSelezionato + offset;
     if (nuovoIndice >= 0 && nuovoIndice < _mesiSelezionabili.length) {
-      _isChangingMonthManually = true; // Attiva il blocco di sicurezza
+      _isChangingMonthManually = true;
 
       DateTime nuovoMese = _mesiSelezionabili[nuovoIndice];
 
-      // Target di destinazione tassativo: sempre il 1° giorno del nuovo mese
       DateTime targetData = DateTime(nuovoMese.year, nuovoMese.month, 1);
 
-      // Se il 1° del mese è antecedente ad oggi (es. se fossimo a metà del primo mese), usa oggi
       DateTime oggiDateOnly = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
       if (targetData.isBefore(oggiDateOnly)) {
         targetData = oggiDateOnly;
@@ -346,7 +367,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       _pageController.jumpToPage(targetPage);
       _precaricaDisponibilitaMeseSilenzioso(nuovoMese);
 
-      // Sblocca il listener dopo che la transizione sul PageController si è stabilizzata
       Future.delayed(const Duration(milliseconds: 150), () {
         _isChangingMonthManually = false;
       });
@@ -358,7 +378,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       context: context,
       initialDate: _giornoSelezionato,
       firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
+      lastDate: _maxDataConsentita, // Modificato per rispettare il limite reale del terzo mese
       locale: const Locale('it', 'IT'),
       builder: (context, child) {
         final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -399,9 +419,10 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   void _cambiaGiorno(int offset) {
     int paginaAttuale = _pageController.page!.round();
     int nuovaPagina = paginaAttuale + offset;
+    int maxPagina = _calcolaPaginaPerData(_maxDataConsentita);
 
-    // Impedisce di navigare oltre la data odierna (pagina 1000) andando all'indietro
-    if (nuovaPagina < 1000) return;
+    // Blocca se cerchiamo di andare nel passato o oltre il 3° mese
+    if (nuovaPagina < 1000 || nuovaPagina > maxPagina) return;
 
     _pageController.animateToPage(
       nuovaPagina,
@@ -446,7 +467,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     Color coloreNumeroLegenda;
     String testoLegendaDinamico;
 
-    // Controllo dei 3 stati per la legenda
     if (_statoLegendaCorrente == 0) {
       coloreNumeroLegenda = const Color(0xFF52C47A);
       testoLegendaDinamico = 'Salone libero';
@@ -471,8 +491,10 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     String nomeGiornoInItaliano = DateFormat('EEEE', 'it_IT').format(_giornoSelezionato);
     String nomeMeseInItaliano = DateFormat('MMMM', 'it_IT').format(_giornoSelezionato);
 
-    // Blocco per verificare se siamo al giorno odierno
     bool eOggi = DateUtils.isSameDay(_giornoSelezionato, DateTime.now());
+    bool eUltimoGiorno = DateUtils.isSameDay(_giornoSelezionato, _maxDataConsentita);
+
+    int maxPaginaAssoluta = _calcolaPaginaPerData(_maxDataConsentita);
 
     return Scaffold(
       backgroundColor: coloreSfondoPagina,
@@ -493,7 +515,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
             children: [
               const SizedBox(height: 10),
 
-              // Selector Mese Scorribile con Freccette
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -530,7 +551,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
               ),
               const SizedBox(height: 4),
 
-              // Testo Giorno della settimana
               Text(
                 nomeGiornoInItaliano.toUpperCase(),
                 textAlign: TextAlign.center,
@@ -543,7 +563,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
               ),
               const SizedBox(height: 8),
 
-              // Carosello Scorrevole in diretta che segue il dito
               SizedBox(
                 height: 100,
                 child: Row(
@@ -561,14 +580,18 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                     Expanded(
                       child: PageView.builder(
                         controller: _pageController,
+                        itemCount: maxPaginaAssoluta + 1, // Blocca lo scroll fisico alle pagine consentite
                         onPageChanged: (index) {
-                          if (_isChangingMonthManually) return; // Salta aggiornamenti se attivata la freccia manuale
+                          if (_isChangingMonthManually) return;
 
-                          // Se lo scorrimento manuale prova ad andare a una data passata, forza la pagina odierna
                           if (index < 1000) {
                             _pageController.jumpToPage(1000);
                             return;
+                          } else if (index > maxPaginaAssoluta) {
+                            _pageController.jumpToPage(maxPaginaAssoluta);
+                            return;
                           }
+
                           int offsetGiorni = index - 1000;
 
                           DateTime nuovaData = DateTime(
@@ -581,7 +604,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                             _giornoSelezionato = nuovaData;
                           });
 
-                          // Sincronizza dinamicamente il mese man mano che si scorre in maniera fluida
                           _sincronizzaMeseConGiorno(nuovaData);
                         },
                         itemBuilder: (context, index) {
@@ -612,7 +634,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                                 val = (_pageController.initialPage - index).toDouble();
                               }
 
-                              // Calcolo dinamico di opacità e dimensione mentre trascini
                               double opacity = (1 - (val.abs() * 0.7)).clamp(0.3, 1.0);
                               double fontSize = (85 - (val.abs() * 49)).clamp(36.0, 85.0);
 
@@ -639,7 +660,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                                           ? Stack(
                                         alignment: Alignment.center,
                                         children: [
-                                          // Numero del giorno chiuso (colore primario del testo)
                                           Text(
                                             '${dataCorrente.day}',
                                             textAlign: TextAlign.center,
@@ -651,7 +671,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                                               height: 1.0,
                                             ),
                                           ),
-                                          // Timbro "CLOSED" in diagonale
                                           Transform.rotate(
                                             angle: -0.2,
                                             child: Container(
@@ -681,7 +700,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                                           ? Stack(
                                         alignment: Alignment.center,
                                         children: [
-                                          // Numero del giorno per sold out pulito (senza bordo scuro)
                                           Text(
                                             '${dataCorrente.day}',
                                             textAlign: TextAlign.center,
@@ -693,7 +711,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                                               color: coloreTestoPrimario,
                                             ),
                                           ),
-                                          // Timbro "SOLD OUT" color oro con testo verde foresta
                                           Transform.rotate(
                                             angle: -0.2,
                                             child: Container(
@@ -721,7 +738,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                                       )
                                           : Stack(
                                         children: [
-                                          // Testo di sfondo per lo stroke (solo contorno colorato)
                                           Text(
                                             '${dataCorrente.day}',
                                             textAlign: TextAlign.center,
@@ -736,7 +752,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                                                 ..color = coloreGiorno,
                                             ),
                                           ),
-                                          // Testo di primo piano (riempimento colore primario testo)
                                           Text(
                                             '${dataCorrente.day}',
                                             textAlign: TextAlign.center,
@@ -763,8 +778,11 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                       iconSize: 28,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      icon: Icon(Icons.chevron_right, color: coloreTestoPrimario),
-                      onPressed: () => _cambiaGiorno(1),
+                      icon: Icon(
+                          Icons.chevron_right,
+                          color: eUltimoGiorno ? Colors.grey.withAlpha(76) : coloreTestoPrimario
+                      ),
+                      onPressed: eUltimoGiorno ? null : () => _cambiaGiorno(1),
                     ),
                   ],
                 ),
@@ -772,7 +790,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
 
               const SizedBox(height: 20),
 
-              // Bottone per procedere alla schermata orari se disponibile
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -817,7 +834,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
               ),
               const SizedBox(height: 16),
 
-              // 1ª Riga Legenda: Carosello dinamico disponibilità (libero, medio, affollato)
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 400),
                 child: Row(
@@ -827,10 +843,10 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                       width: 20,
                       height: 20,
                       decoration: BoxDecoration(
-                        color: Colors.black, // Interno nero
+                        color: Colors.black,
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(
-                          color: coloreNumeroLegenda, // Solo contorno colorato
+                          color: coloreNumeroLegenda,
                           width: 2.5,
                         ),
                       ),
@@ -842,7 +858,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
               ),
               const SizedBox(height: 12),
 
-              // 2ª Riga Legenda: Timbro SOLD OUT fissa con larghezza uniforme
               Row(
                 children: [
                   Transform.rotate(
@@ -876,7 +891,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
               ),
               const SizedBox(height: 12),
 
-              // 3ª Riga Legenda: Timbro CLOSED fissa con larghezza uniforme
               Row(
                 children: [
                   Transform.rotate(

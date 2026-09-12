@@ -1060,38 +1060,61 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   }
 
   Stream<Map<String, dynamic>> _ascoltaConfigurazioneOrariEDati() {
-    final String docIdEccezione = _dataString;
+    final String dataSelezionataStr = _dataString;
     final String giornoSettimana = _giorniSettimanaDb[_dataSelezionata.weekday % 7];
 
-    final snapEccezioni = FirebaseFirestore.instance.collection('calendar_exceptions').doc(docIdEccezione).snapshots();
+    // 1. ASCOLTO IN TEMPO REALE DELL'INTERA COLLEZIONE DELLE ECCEZIONI (GESTISCE SIA GIORNI SINGOLI CHE PERIODI)
+    final snapEccezioni = FirebaseFirestore.instance.collection('calendar_exceptions').snapshots();
     final snapOrariBase = FirebaseFirestore.instance.collection('settings').doc('orari_negozio').snapshots();
 
-    return StreamZip([snapEccezioni, snapOrariBase]).map((List<DocumentSnapshot> snapshotList) {
-      final docEx = snapshotList[0];
-      final docBase = snapshotList[1];
+    return StreamZip([snapEccezioni, snapOrariBase]).map((List<dynamic> snapshotList) {
+      final QuerySnapshot eccezioniQuerySnap = snapshotList[0] as QuerySnapshot;
+      final DocumentSnapshot docBase = snapshotList[1] as DocumentSnapshot;
 
       bool isNegozioAperto = true;
       String mAp = "09:00", mCh = "13:00", pAp = "14:30", pCh = "19:30";
       String stringaNota = "";
 
-      if (docEx.exists && docEx.data() != null) {
-        final datiEx = docEx.data() as Map<String, dynamic>;
-        stringaNota = datiEx['nota'] ?? "";
-        if (datiEx['status'] == 'chiuso') {
-          isNegozioAperto = false;
-        } else if (datiEx['status'] == 'aperto') {
-          isNegozioAperto = true;
-          if (datiEx.containsKey('mattina') && datiEx['mattina'] != null) {
-            mAp = datiEx['mattina']['apertura'] ?? mAp;
-            mCh = datiEx['mattina']['chiusura'] ?? mCh;
-          }
-          if (datiEx.containsKey('pomeriggio') && datiEx['pomeriggio'] != null) {
-            pAp = datiEx['pomeriggio']['apertura'] ?? pAp;
-            pCh = datiEx['pomeriggio']['chiusura'] ?? pCh;
+      // 2. SEARCH ENGINE ECCEZIONE PER LA DATA SELEZIONATA (CERCA CORRISPONDENZA DIRETTA O RANGE START-END)
+      Map<String, dynamic>? eccezioneTrovata;
+
+      for (var doc in eccezioniQuerySnap.docs) {
+        final dataDoc = doc.data() as Map<String, dynamic>;
+
+        // Controllo 1: Corrispondenza diretta per ID o campo 'date'
+        if (doc.id == dataSelezionataStr || dataDoc['date'] == dataSelezionataStr) {
+          eccezioneTrovata = dataDoc;
+          break;
+        }
+
+        // Controllo 2: Verifica se la data ricade nel periodo (startDate e endDate)
+        if (dataDoc.containsKey('startDate') && dataDoc.containsKey('endDate')) {
+          String startStr = dataDoc['startDate'];
+          String endStr = dataDoc['endDate'];
+          if (dataSelezionataStr.compareTo(startStr) >= 0 && dataSelezionataStr.compareTo(endStr) <= 0) {
+            eccezioneTrovata = dataDoc;
+            break;
           }
         }
       }
-      else if (docBase.exists && docBase.data() != null) {
+
+      // 3. APPLICAZIONE LOGICA ORARI/CHIUSURA IN BASE ALL'ECCEZIONE O AGLI ORARI BASE
+      if (eccezioneTrovata != null) {
+        stringaNota = eccezioneTrovata['nota'] ?? "";
+        if (eccezioneTrovata['status'] == 'chiuso') {
+          isNegozioAperto = false;
+        } else if (eccezioneTrovata['status'] == 'aperto') {
+          isNegozioAperto = true;
+          if (eccezioneTrovata.containsKey('mattina') && eccezioneTrovata['mattina'] != null) {
+            mAp = eccezioneTrovata['mattina']['apertura'] ?? mAp;
+            mCh = eccezioneTrovata['mattina']['chiusura'] ?? mCh;
+          }
+          if (eccezioneTrovata.containsKey('pomeriggio') && eccezioneTrovata['pomeriggio'] != null) {
+            pAp = eccezioneTrovata['pomeriggio']['apertura'] ?? pAp;
+            pCh = eccezioneTrovata['pomeriggio']['chiusura'] ?? pCh;
+          }
+        }
+      } else if (docBase.exists && docBase.data() != null) {
         final datiBase = docBase.data() as Map<String, dynamic>;
         if (datiBase.containsKey(giornoSettimana)) {
           final infoGiorno = datiBase[giornoSettimana] as Map<String, dynamic>;
