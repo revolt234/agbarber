@@ -186,28 +186,64 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
               isOccupato: true,
               motivo: "Orario già passato"
           ));
-          giornoCorrente = giornoCorrente.add(Duration(days: _cadenzaSettimane * 7));
+          giornoCorrente = DateTime(giornoCorrente.year, giornoCorrente.month, giornoCorrente.day + (_cadenzaSettimane * 7));
           continue;
         }
 
-        // 1. CONTROLLO ECCEZIONI CALENDARIO (Aperture/Chiusure straordinarie)
+        // 1. CONTROLLO ECCEZIONI CALENDARIO (Singolo Giorno e Periodi Straordinari)
         final eccezioneDoc = await db.collection('calendar_exceptions').doc(dataStr).get();
         bool haAperturaStraordinaria = false;
         Map<String, dynamic>? orariGiorno;
+        bool gestitoDaEccezione = false;
 
         if (eccezioneDoc.exists) {
           final dataExCal = eccezioneDoc.data();
           if (dataExCal != null && dataExCal['status'] == 'chiuso') {
             tempRisultati.add(_EsitoPrenotazione(data: giornoCorrente, slot: slotStr, isChiuso: true, motivo: "Salone chiuso"));
-            giornoCorrente = giornoCorrente.add(Duration(days: _cadenzaSettimane * 7));
+            giornoCorrente = DateTime(giornoCorrente.year, giornoCorrente.month, giornoCorrente.day + (_cadenzaSettimane * 7));
             continue;
           } else if (dataExCal != null && dataExCal['status'] == 'aperto') {
             haAperturaStraordinaria = true;
+            gestitoDaEccezione = true;
             orariGiorno = {
               'isAperto': true,
               'mattina': dataExCal['mattina'],
               'pomeriggio': dataExCal['pomeriggio'],
             };
+          }
+        }
+
+        // Se non c'è un'eccezione puntuale sul singolo giorno, verifica se esiste un'eccezione basata su un PERIODO
+        if (!gestitoDaEccezione) {
+          final periodiQuery = await db.collection('calendar_exceptions')
+              .where('isPeriod', isEqualTo: true)
+              .where('startDate', isLessThanOrEqualTo: dataStr)
+              .get();
+
+          for (var pDoc in periodiQuery.docs) {
+            final pData = pDoc.data();
+            final String endDateStr = pData['endDate'] ?? '';
+            if (dataStr.compareTo(endDateStr) <= 0) {
+              if (pData['status'] == 'chiuso') {
+                tempRisultati.add(_EsitoPrenotazione(data: giornoCorrente, slot: slotStr, isChiuso: true, motivo: "Salone chiuso"));
+                gestitoDaEccezione = true;
+                break;
+              } else if (pData['status'] == 'aperto') {
+                haAperturaStraordinaria = true;
+                gestitoDaEccezione = true;
+                orariGiorno = {
+                  'isAperto': true,
+                  'mattina': pData['mattina'],
+                  'pomeriggio': pData['pomeriggio'],
+                };
+                break;
+              }
+            }
+          }
+
+          if (gestitoDaEccezione && !haAperturaStraordinaria) {
+            giornoCorrente = DateTime(giornoCorrente.year, giornoCorrente.month, giornoCorrente.day + (_cadenzaSettimane * 7));
+            continue;
           }
         }
 
@@ -218,7 +254,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
 
           if (orariGiorno == null || orariGiorno['isAperto'] == false) {
             tempRisultati.add(_EsitoPrenotazione(data: giornoCorrente, slot: slotStr, isChiuso: true, motivo: "Salone chiuso"));
-            giornoCorrente = giornoCorrente.add(Duration(days: _cadenzaSettimane * 7));
+            giornoCorrente = DateTime(giornoCorrente.year, giornoCorrente.month, giornoCorrente.day + (_cadenzaSettimane * 7));
             continue;
           }
         }
@@ -246,7 +282,7 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
 
         if (!orarioNeiLimitiDiApertura) {
           tempRisultati.add(_EsitoPrenotazione(data: giornoCorrente, slot: slotStr, isChiuso: true, motivo: "Salone chiuso a quest'ora"));
-          giornoCorrente = giornoCorrente.add(Duration(days: _cadenzaSettimane * 7));
+          giornoCorrente = DateTime(giornoCorrente.year, giornoCorrente.month, giornoCorrente.day + (_cadenzaSettimane * 7));
           continue;
         }
 
@@ -257,18 +293,18 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
         if (dataExBarber != null) {
           if (dataExBarber['type'] == 'assente') {
             tempRisultati.add(_EsitoPrenotazione(data: giornoCorrente, slot: slotStr, isChiuso: true, motivo: "Operatore assente"));
-            giornoCorrente = giornoCorrente.add(Duration(days: _cadenzaSettimane * 7));
+            giornoCorrente = DateTime(giornoCorrente.year, giornoCorrente.month, giornoCorrente.day + (_cadenzaSettimane * 7));
             continue;
           } else if (dataExBarber['type'] == 'mezza_giornata') {
             int ora = inizioNuovoMinuti ~/ 60;
             if (dataExBarber['fascia'] == 'mattina' && ora >= 13) {
               tempRisultati.add(_EsitoPrenotazione(data: giornoCorrente, slot: slotStr, isChiuso: true, motivo: "Operatore non di turno"));
-              giornoCorrente = giornoCorrente.add(Duration(days: _cadenzaSettimane * 7));
+              giornoCorrente = DateTime(giornoCorrente.year, giornoCorrente.month, giornoCorrente.day + (_cadenzaSettimane * 7));
               continue;
             }
             if (dataExBarber['fascia'] == 'pomeriggio' && ora < 13) {
               tempRisultati.add(_EsitoPrenotazione(data: giornoCorrente, slot: slotStr, isChiuso: true, motivo: "Operatore non di turno"));
-              giornoCorrente = giornoCorrente.add(Duration(days: _cadenzaSettimane * 7));
+              giornoCorrente = DateTime(giornoCorrente.year, giornoCorrente.month, giornoCorrente.day + (_cadenzaSettimane * 7));
               continue;
             }
           }
@@ -301,8 +337,8 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
           tempRisultati.add(_EsitoPrenotazione(data: giornoCorrente, slot: slotStr));
         }
 
-        // Avanza della cadenza selezionata (es. + 1, 2, 3 o 4 settimane)
-        giornoCorrente = giornoCorrente.add(Duration(days: _cadenzaSettimane * 7));
+        // Avanza della cadenza selezionata usando il calendario reale ed evitando disallineamenti di ora legale/solare
+        giornoCorrente = DateTime(giornoCorrente.year, giornoCorrente.month, giornoCorrente.day + (_cadenzaSettimane * 7));
       }
 
       setState(() {
@@ -798,7 +834,6 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
                                 });
                               }
                             },
-
                           ),
                           const Divider(height: 1),
                           ListTile(
@@ -834,8 +869,6 @@ class _GestionePeriodicoScreenState extends State<GestionePeriodicoScreen> {
                                 });
                               }
                             },
-
-
                           ),
                           const Divider(height: 1),
                           ListTile(

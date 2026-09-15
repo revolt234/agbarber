@@ -231,7 +231,7 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
                     contentPadding: EdgeInsets.zero,
                     title: const Text("Turno Mattina", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                     value: _turnoMattinaAttivo,
-                    activeColor: const Color(0xFF164638),
+                    activeThumbColor: const Color(0xFF164638),
                     onChanged: (val) {
                       setDialogState(() {
                         if (!val && !_turnoPomeriggioAttivo) {
@@ -263,7 +263,7 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
                     contentPadding: EdgeInsets.zero,
                     title: const Text("Turno Pomeriggio", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                     value: _turnoPomeriggioAttivo,
-                    activeColor: const Color(0xFF164638),
+                    activeThumbColor: const Color(0xFF164638),
                     onChanged: (val) {
                       setDialogState(() {
                         if (!val && !_turnoMattinaAttivo) {
@@ -618,7 +618,7 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
 
               Expanded(
                 child: ListView.builder(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.only(left: 16.0, top: 16.0, right: 16.0, bottom: 80.0),
                   itemCount: eccezioni.length,
                   itemBuilder: (context, index) {
                     final doc = eccezioni[index];

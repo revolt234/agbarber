@@ -150,7 +150,7 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Orari updated con successo!'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Orari aggiornati con successo!'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
