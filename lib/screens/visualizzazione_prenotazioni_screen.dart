@@ -1176,7 +1176,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
-      // FloatingActionButton '+' in basso a destra per selezionare un cliente
+      // Posizione dinamica reattiva all'altezza dello schermo (es. 50% dell'altezza)
+      floatingActionButtonLocation: const DynamicPercentageFloatingActionButtonLocation(topRatio: 0.60),
       floatingActionButton: FloatingActionButton(
         backgroundColor: agOro,
         foregroundColor: Colors.black,
@@ -1196,7 +1197,13 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   IconButton(
                     icon: Icon(Icons.chevron_left, color: isDarkMode ? Colors.white : agVerde, size: 28),
                     onPressed: () {
-                      setState(() => _dataSelezionata = _dataSelezionata.subtract(const Duration(days: 1)));
+                      setState(() {
+                        _dataSelezionata = DateTime(
+                          _dataSelezionata.year,
+                          _dataSelezionata.month,
+                          _dataSelezionata.day - 1,
+                        );
+                      });
                     },
                   ),
                   Expanded(
@@ -1215,7 +1222,13 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   IconButton(
                     icon: Icon(Icons.chevron_right, color: isDarkMode ? Colors.white : agVerde, size: 28),
                     onPressed: () {
-                      setState(() => _dataSelezionata = _dataSelezionata.add(const Duration(days: 1)));
+                      setState(() {
+                        _dataSelezionata = DateTime(
+                          _dataSelezionata.year,
+                          _dataSelezionata.month,
+                          _dataSelezionata.day + 1,
+                        );
+                      });
                     },
                   ),
                 ],
@@ -1579,5 +1592,23 @@ class StreamZip<T> extends StreamView<List<T>> {
     });
 
     return mainController.stream;
+  }
+}
+class DynamicPercentageFloatingActionButtonLocation extends FloatingActionButtonLocation {
+  final double topRatio; // Es: 0.50 per il 50% dall'alto
+
+  const DynamicPercentageFloatingActionButtonLocation({this.topRatio = 0.50});
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
+    // Calcola X: ancorato a destra con il margine standard di 16px
+    final double fabX = scaffoldGeometry.scaffoldSize.width -
+        scaffoldGeometry.floatingActionButtonSize.width - 16.0;
+
+    // Calcola Y: percentuale esatta dell'altezza dello Scaffold
+    final double fabY = (scaffoldGeometry.scaffoldSize.height * topRatio) -
+        (scaffoldGeometry.floatingActionButtonSize.height / 2);
+
+    return Offset(fabX, fabY);
   }
 }
