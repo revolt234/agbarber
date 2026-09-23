@@ -18,6 +18,26 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
   final _prezzoFocusNode = FocusNode();
 
   int? _durataSelezionata;
+  String _coloreSelezionatoHex = '164638'; // Colore default (Verde AG)
+
+  // Palette di 15 colori ben distinti per i differenti servizi
+  final List<String> _paletteColoriHex = const [
+    '164638', // Verde AG Barber
+    '1E88E5', // Blu Brillante
+    'D81B60', // Rosa Ciclame
+    '8E24AA', // Viola Chiaro
+    'F57C00', // Arancione
+    '004D40', // Verde Smeraldo
+    '00ACC1', // Turchese
+    '3949AB', // Indaco
+    'C0392B', // Rosso Scuro
+    '2E7D32', // Verde Bosco
+    '6D4C41', // Marrone
+    '00838F', // Otterraneo
+    'AD1457', // Magenta
+    '283593', // Blu Notte
+    '558B2F', // Verde Oliva
+  ];
 
   final List<int> _opzioniDurata = List<int>.generate(
     ((120 - 30) ~/ 10) + 1,
@@ -43,15 +63,19 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
     SystemChannels.textInput.invokeMethod('TextInput.show');
   }
 
-  void _mostraDialogServizio({String? docId, String? nomeIniziale, double? prezzoIniziale, int? durataIniziale}) {
+  void _mostraDialogServizio({String? docId, String? nomeIniziale, double? prezzoIniziale, int? durataIniziale, String? coloreInizialeHex}) {
     if (docId != null) {
       _nomeController.text = nomeIniziale ?? '';
       _prezzoController.text = prezzoIniziale?.toStringAsFixed(2) ?? '';
       _durataSelezionata = _opzioniDurata.contains(durataIniziale) ? durataIniziale : 30;
+      _coloreSelezionatoHex = (coloreInizialeHex != null && coloreInizialeHex.isNotEmpty)
+          ? coloreInizialeHex
+          : _paletteColoriHex.first;
     } else {
       _nomeController.clear();
       _prezzoController.clear();
       _durataSelezionata = 30;
+      _coloreSelezionatoHex = _paletteColoriHex.first;
     }
 
     showDialog(
@@ -63,6 +87,7 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     TextField(
                       controller: _nomeController,
@@ -105,6 +130,45 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
                         });
                       },
                     ),
+                    const SizedBox(height: 16),
+
+                    // SELEZIONE COLORE ASSOCIATO AL SERVIZIO
+                    const Text(
+                      'Colore Badge Servizio:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _paletteColoriHex.map((hexColor) {
+                        final color = Color(int.parse('FF$hexColor', radix: 16));
+                        final bool isSelected = _coloreSelezionatoHex == hexColor;
+
+                        return GestureDetector(
+                          onTap: () {
+                            setDialogState(() {
+                              _coloreSelezionatoHex = hexColor;
+                            });
+                          },
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected ? Colors.black : Colors.transparent,
+                                width: isSelected ? 3 : 1,
+                              ),
+                            ),
+                            child: isSelected
+                                ? const Icon(Icons.check, size: 18, color: Colors.white)
+                                : null,
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ],
                 ),
               ),
@@ -142,6 +206,7 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
         'name': nome,
         'price': prezzoSetted,
         'duration': durataSetted,
+        'colorHex': _coloreSelezionatoHex, // SALVATAGGIO COLORE SU FIRESTORE
       };
 
       if (docId == null) {
@@ -228,12 +293,18 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
                 final String nome = dati['name'] ?? 'Senza nome';
                 final double prezzo = (dati['price'] ?? 0.0).toDouble();
                 final int durata = dati['duration'] ?? 0;
+                final String colorHex = dati['colorHex'] ?? '164638';
+                final Color coloreBadge = Color(int.parse('FF$colorHex', radix: 16));
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: 2,
                   child: ListTile(
-                    leading: const Icon(Icons.content_cut, color: Color(0xFFE2B13C)),
+                    leading: CircleAvatar(
+                      backgroundColor: coloreBadge,
+                      radius: 18,
+                      child: const Icon(Icons.content_cut, color: Colors.white, size: 20),
+                    ),
                     title: Text(nome, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     subtitle: Text(
                       'Durata: $durata min',
@@ -251,6 +322,7 @@ class _GestioneServiziScreenState extends State<GestioneServiziScreen> {
                             nomeIniziale: nome,
                             prezzoIniziale: prezzo,
                             durataIniziale: durata,
+                            coloreInizialeHex: colorHex,
                           ),
                         ),
                         IconButton(

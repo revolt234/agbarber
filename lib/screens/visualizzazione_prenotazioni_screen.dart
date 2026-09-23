@@ -30,27 +30,20 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   final double altezzaPerMinuto = 2.5;
   final double larghezzaColonnaOra = 65.0;
 
-  // Palette di 15 colori ben distinti per i differenti servizi
-  final List<Color> _paletteColoriServizi = const [
-    Color(0xFF164638), // Verde AG Barber
-    Color(0xFF1E88E5), // Blu Brillante
-    Color(0xFFD81B60), // Rosa Ciclame
-    Color(0xFF8E24AA), // Viola Chiaro
-    Color(0xFFF57C00), // Arancione
-    Color(0xFF004D40), // Verde Smeraldo
-    Color(0xFF00ACC1), // Turchese
-    Color(0xFF3949AB), // Indaco
-    Color(0xFFC0392B), // Rosso Scuro
-    Color(0xFF2E7D32), // Verde Bosco
-    Color(0xFF6D4C41), // Marrone
-    Color(0xFF00838F), // Otterraneo
-    Color(0xFFAD1457), // Magenta
-    Color(0xFF283593), // Blu Notte
-    Color(0xFF558B2F), // Verde Oliva
-  ];
+  Color _getColoreDaHex(String? hexString) {
+    if (hexString == null || hexString.isEmpty) {
+      return const Color(0xFF164638); // Verde AG Barber di default
+    }
+    try {
+      final pulito = hexString.replaceAll('#', '');
+      return Color(int.parse('FF$pulito', radix: 16));
+    } catch (_) {
+      return const Color(0xFF164638);
+    }
+  }
 
   // Mappa per assegnare in modo deterministico e univoco un colore a ciascun servizio
-  final Map<String, Color> _mappaColoriServizi = {};
+
   @override
   void initState() {
     super.initState();
@@ -68,13 +61,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     _connectivitySubscription.cancel();
     super.dispose();
   }
-  Color _getColorePerServizio(String nomeServizio) {
-    if (!_mappaColoriServizi.containsKey(nomeServizio)) {
-      final int indiceColore = _mappaColoriServizi.length % _paletteColoriServizi.length;
-      _mappaColoriServizi[nomeServizio] = _paletteColoriServizi[indiceColore];
-    }
-    return _mappaColoriServizi[nomeServizio]!;
-  }
+
 
   // Colori del brand AG Barber
   final Color agVerde = const Color(0xFF164638);
@@ -1581,337 +1568,357 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                           .where((doc) => _operatoriSelezionati.contains(doc.id))
                           .toList();
 
+                      // STREAM IN TEMPO REALE PER RECUPERARE I COLORI UNIVOCHI DEI SERVIZI SALVATI SU FIRESTORE
                       return StreamBuilder<QuerySnapshot>(
-                        stream: _costruisciStreamPrenotazioni(),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasError) {
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.wifi_off, size: 64, color: Colors.orange),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'NESSUNA CONNESSIONE INTERNET',
-                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : agVerde),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Controlla la tua connessione per sincronizzare gli appuntamenti.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 14, color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
-
-                          final prenotazioniDocs = snapshot.data?.docs ?? [];
-
-                          // Organizzazione delle prenotazioni separate per ciascun operatore
-                          Map<String, List<Map<String, dynamic>>> elementiPerBarbiere = {};
-                          for (var barber in listaBarbieriSelezionatiDocs) {
-                            elementiPerBarbiere[barber.id] = [];
-                          }
-
-                          for (var doc in prenotazioniDocs) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            final String barberId = data['barberId'] ?? '';
-                            if (!elementiPerBarbiere.containsKey(barberId)) continue;
-
-                            final String oraInizio = data['slot'] ?? '08:00';
-                            final int inizioMinuti = _minutiDaStringa(oraInizio);
-                            final int durata = _estraiDurata(data);
-                            final int fineMinuti = inizioMinuti + durata;
-
-                            int colonnaInterna = 0;
-                            while (true) {
-                              bool collisione = elementiPerBarbiere[barberId]!.any((e) =>
-                              e['colonna'] == colonnaInterna &&
-                                  ((inizioMinuti >= e['inizio'] && inizioMinuti < e['fine']) ||
-                                      (fineMinuti > e['inizio'] && fineMinuti <= e['fine']) ||
-                                      (inizioMinuti <= e['inizio'] && fineMinuti >= e['fine'])));
-                              if (!collisione) break;
-                              colonnaInterna++;
+                        stream: FirebaseFirestore.instance.collection('services').snapshots(),
+                        builder: (context, serviziSnapshot) {
+                          // Mappa nomeServizio -> coloreHex
+                          final Map<String, String> mappaColoriServiziDb = {};
+                          if (serviziSnapshot.hasData) {
+                            for (var sDoc in serviziSnapshot.data!.docs) {
+                              final sData = sDoc.data() as Map<String, dynamic>;
+                              final sNome = (sData['name'] ?? '').toString().trim();
+                              final sColorHex = (sData['colorHex'] ?? '').toString().trim();
+                              if (sNome.isNotEmpty && sColorHex.isNotEmpty) {
+                                mappaColoriServiziDb[sNome] = sColorHex;
+                              }
                             }
-
-                            elementiPerBarbiere[barberId]!.add({
-                              'id': doc.id,
-                              'data': data,
-                              'inizio': inizioMinuti,
-                              'fine': fineMinuti,
-                              'durata': durata,
-                              'colonna': colonnaInterna,
-                            });
                           }
 
-                          return Column(
-                            children: [
-                              // INTESTAZIONE PER LE COLONNE DEGLI OPERATORI
-                              Container(
-                                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
-                                child: Row(
-                                  children: [
-                                    SizedBox(width: larghezzaColonnaOra),
-                                    for (int bIdx = 0; bIdx < listaBarbieriSelezionatiDocs.length; bIdx++)
-                                      Expanded(
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
-                                          decoration: BoxDecoration(
-                                            border: Border(
-                                              left: BorderSide(color: coloreLineeDivisione, width: 1),
-                                            ),
-                                          ),
-                                          child: Text(
-                                            (listaBarbieriSelezionatiDocs[bIdx]['name'] ?? 'Operatore').toString().toUpperCase(),
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13,
-                                              color: isDarkMode ? agOro : agVerde,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
+                          return StreamBuilder<QuerySnapshot>(
+                            stream: _costruisciStreamPrenotazioni(),
+                            builder: (context, snapshot) {
+                              if (snapshot.hasError) {
+                                return Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.wifi_off, size: 64, color: Colors.orange),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'NESSUNA CONNESSIONE INTERNET',
+                                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : agVerde),
                                       ),
-                                  ],
-                                ),
-                              ),
-                              Divider(height: 1, color: coloreLineeDivisione),
+                                      const SizedBox(height: 8),
+                                      const Text(
+                                        'Controlla la tua connessione per sincronizzare gli appuntamenti.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
 
-                              // GRIGLIA CALENDARIO CON GLI APPUNTAMENTI SMISTATI PER COLONNA OPERATORE
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  child: SizedBox(
-                                    height: altezzaTotaleGriglia,
-                                    child: Stack(
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(child: CircularProgressIndicator());
+                              }
+
+                              final prenotazioniDocs = snapshot.data?.docs ?? [];
+
+                              // Organizzazione delle prenotazioni separate per ciascun operatore
+                              Map<String, List<Map<String, dynamic>>> elementiPerBarbiere = {};
+                              for (var barber in listaBarbieriSelezionatiDocs) {
+                                elementiPerBarbiere[barber.id] = [];
+                              }
+
+                              for (var doc in prenotazioniDocs) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final String barberId = data['barberId'] ?? '';
+                                if (!elementiPerBarbiere.containsKey(barberId)) continue;
+
+                                final String oraInizio = data['slot'] ?? '08:00';
+                                final int inizioMinuti = _minutiDaStringa(oraInizio);
+                                final int durata = _estraiDurata(data);
+                                final int fineMinuti = inizioMinuti + durata;
+
+                                int colonnaInterna = 0;
+                                while (true) {
+                                  bool collisione = elementiPerBarbiere[barberId]!.any((e) =>
+                                  e['colonna'] == colonnaInterna &&
+                                      ((inizioMinuti >= e['inizio'] && inizioMinuti < e['fine']) ||
+                                          (fineMinuti > e['inizio'] && fineMinuti <= e['fine']) ||
+                                          (inizioMinuti <= e['inizio'] && fineMinuti >= e['fine'])));
+                                  if (!collisione) break;
+                                  colonnaInterna++;
+                                }
+
+                                elementiPerBarbiere[barberId]!.add({
+                                  'id': doc.id,
+                                  'data': data,
+                                  'inizio': inizioMinuti,
+                                  'fine': fineMinuti,
+                                  'durata': durata,
+                                  'colonna': colonnaInterna,
+                                });
+                              }
+
+                              return Column(
+                                children: [
+                                  // INTESTAZIONE PER LE COLONNE DEGLI OPERATORI
+                                  Container(
+                                    color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
+                                    child: Row(
                                       children: [
-                                        // Linee della griglia oraria
-                                        for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
-                                          Positioned(
-                                            top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
-                                            left: 0,
-                                            right: 0,
+                                        SizedBox(width: larghezzaColonnaOra),
+                                        for (int bIdx = 0; bIdx < listaBarbieriSelezionatiDocs.length; bIdx++)
+                                          Expanded(
                                             child: Container(
-                                              height: 30 * altezzaPerMinuto,
+                                              padding: const EdgeInsets.symmetric(vertical: 8),
                                               decoration: BoxDecoration(
                                                 border: Border(
-                                                  top: BorderSide(color: coloreLineeDivisione, width: 1.2),
+                                                  left: BorderSide(color: coloreLineeDivisione, width: 1),
                                                 ),
                                               ),
-                                              child: Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Container(
-                                                    width: larghezzaColonnaOra,
-                                                    padding: const EdgeInsets.only(top: 4, left: 8),
-                                                    child: Text(
-                                                      "${i.toString().padLeft(2, '0')}:00",
-                                                      style: TextStyle(color: coloreTestoSecondario, fontSize: 12, fontWeight: FontWeight.bold),
-                                                    ),
-                                                  ),
-                                                  const Expanded(child: SizedBox.shrink()),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                          Positioned(
-                                            top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
-                                            left: 0,
-                                            right: 0,
-                                            child: Container(
-                                              height: 30 * altezzaPerMinuto,
-                                              decoration: BoxDecoration(
-                                                border: Border(
-                                                  top: BorderSide(color: coloreLineeMezzora, width: 1, style: BorderStyle.solid),
+                                              child: Text(
+                                                (listaBarbieriSelezionatiDocs[bIdx]['name'] ?? 'Operatore').toString().toUpperCase(),
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13,
+                                                  color: isDarkMode ? agOro : agVerde,
                                                 ),
-                                              ),
-                                              child: Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Container(
-                                                    width: larghezzaColonnaOra,
-                                                    padding: const EdgeInsets.only(top: 2, left: 8),
-                                                    child: Text(
-                                                      "${i.toString().padLeft(2, '0')}:30",
-                                                      style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w500),
-                                                    ),
-                                                  ),
-                                                  const Expanded(child: SizedBox.shrink()),
-                                                ],
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                           ),
-                                        ],
-                                        Positioned(
-                                          top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
-                                          left: 0,
-                                          right: 0,
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              border: Border(
-                                                top: BorderSide(color: coloreLineeDivisione, width: 1.2),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-
-                                        // Linee divisorie verticali tra le colonne degli operatori
-                                        LayoutBuilder(
-                                          builder: (context, constraints) {
-                                            final double larghezzaDisponibile = constraints.maxWidth - larghezzaColonnaOra;
-                                            final int numeroOperatori = listaBarbieriSelezionatiDocs.length > 0 ? listaBarbieriSelezionatiDocs.length : 1;
-                                            final double larghezzaCorsia = larghezzaDisponibile / numeroOperatori;
-
-                                            return Stack(
-                                              children: [
-                                                for (int bIdx = 0; bIdx < numeroOperatori; bIdx++) ...[
-                                                  Positioned(
-                                                    left: larghezzaColonnaOra + (bIdx * larghezzaCorsia),
-                                                    top: 0,
-                                                    bottom: 0,
-                                                    child: Container(
-                                                      width: 1,
-                                                      color: coloreLineeDivisione,
-                                                    ),
-                                                  ),
-
-                                                  // Rendering degli appuntamenti dell'operatore specifico
-                                                  if (bIdx < listaBarbieriSelezionatiDocs.length) ...[
-                                                    (() {
-                                                      final barberDoc = listaBarbieriSelezionatiDocs[bIdx];
-                                                      final elementiBarber = elementiPerBarbiere[barberDoc.id] ?? [];
-
-                                                      return Stack(
-                                                        children: [
-                                                          for (var elem in elementiBarber) ...[
-                                                            (() {
-                                                              final data = elem['data'];
-                                                              final String appointmentId = elem['id'];
-                                                              final int inizioMinuti = elem['inizio'];
-                                                              final int durata = elem['durata'];
-                                                              final int colonnaInterna = elem['colonna'];
-
-                                                              final double topPos = (inizioMinuti - inizioMinutiTotali) * altezzaPerMinuto;
-                                                              final double altezzaBlocco = durata * altezzaPerMinuto;
-
-                                                              final int maxCollisioniSuQuestoSlot = elementiBarber
-                                                                  .where((e) => (inizioMinuti < e['fine'] && elem['fine'] > e['inizio']))
-                                                                  .map((e) => e['colonna'] as int)
-                                                                  .fold(0, (max, col) => col > max ? col : max) + 1;
-
-                                                              final double larghezzaCardInterna = larghezzaCorsia / maxCollisioniSuQuestoSlot;
-                                                              final double leftPos = larghezzaColonnaOra + (bIdx * larghezzaCorsia) + (colonnaInterna * larghezzaCardInterna) + 2;
-
-                                                              final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
-                                                              final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
-                                                              final String oraInizioStr = data['slot'] ?? '--:--';
-                                                              final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
-
-                                                              final List servizi = data['services'] ?? [];
-                                                              final String nomeServizioPrincipale = servizi.isNotEmpty
-                                                                  ? servizi.first.toString()
-                                                                  : "Generale";
-
-                                                              final bool isPeriodico = data['isPeriodico'] == true;
-
-                                                              // Colore dinamico distintivo basato sul nome del servizio
-                                                              final Color coloreBaseServizio = _getColorePerServizio(nomeServizioPrincipale);
-
-                                                              final Color coloreSfondoCard = isPeriodico
-                                                                  ? agOro.withValues(alpha: 0.95)
-                                                                  : coloreBaseServizio.withValues(alpha: 0.95);
-                                                              final Color coloreTestoCard = isPeriodico
-                                                                  ? Colors.black
-                                                                  : Colors.white;
-                                                              final Color colorePrezzoCard = isPeriodico
-                                                                  ? const Color(0xFF164638)
-                                                                  : agOro;
-                                                              final Color coloreBordoCard = isPeriodico
-                                                                  ? agVerde
-                                                                  : agOro;
-
-                                                              return Positioned(
-                                                                top: topPos + 2,
-                                                                left: leftPos,
-                                                                width: larghezzaCardInterna - 4,
-                                                                height: altezzaBlocco - 4,
-                                                                child: GestureDetector(
-                                                                  onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata, appointmentId),
-                                                                  child: Container(
-                                                                    decoration: BoxDecoration(
-                                                                      color: coloreSfondoCard,
-                                                                      borderRadius: BorderRadius.circular(8),
-                                                                      border: Border.all(color: coloreBordoCard, width: 1.2),
-                                                                      boxShadow: [
-                                                                        BoxShadow(
-                                                                          color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.15),
-                                                                          blurRadius: 4,
-                                                                          offset: const Offset(0, 2),
-                                                                        )
-                                                                      ],
-                                                                    ),
-                                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                                                    child: Column(
-                                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                                      mainAxisAlignment: MainAxisAlignment.center,
-                                                                      children: [
-                                                                        Row(
-                                                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                                          children: [
-                                                                            Expanded(
-                                                                              child: Text(
-                                                                                clienteNome,
-                                                                                style: TextStyle(color: coloreTestoCard, fontWeight: FontWeight.bold, fontSize: 12),
-                                                                                overflow: TextOverflow.ellipsis,
-                                                                              ),
-                                                                            ),
-                                                                            const SizedBox(width: 2),
-                                                                            Text(
-                                                                              '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
-                                                                              style: TextStyle(color: colorePrezzoCard, fontWeight: FontWeight.bold, fontSize: 12),
-                                                                            ),
-                                                                          ],
-                                                                        ),
-                                                                        if (servizi.isNotEmpty) ...[
-                                                                          const SizedBox(height: 2),
-                                                                          Text(
-                                                                            servizi.join(", "),
-                                                                            style: TextStyle(
-                                                                              color: coloreTestoCard.withValues(alpha: 0.85),
-                                                                              fontSize: 10,
-                                                                              fontStyle: FontStyle.italic,
-                                                                            ),
-                                                                            overflow: TextOverflow.ellipsis,
-                                                                            maxLines: 1,
-                                                                          ),
-                                                                        ],
-                                                                      ],
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            }()),
-                                                          ],
-                                                        ],
-                                                      );
-                                                    }()),
-                                                  ],
-                                                ],
-                                              ],
-                                            );
-                                          },
-                                        ),
                                       ],
                                     ),
                                   ),
-                                ),
-                              ),
-                            ],
+                                  Divider(height: 1, color: coloreLineeDivisione),
+
+                                  // GRIGLIA CALENDARIO CON GLI APPUNTAMENTI SMISTATI PER COLONNA OPERATORE
+                                  Expanded(
+                                    child: SingleChildScrollView(
+                                      child: SizedBox(
+                                        height: altezzaTotaleGriglia,
+                                        child: Stack(
+                                          children: [
+                                            // Linee della griglia oraria
+                                            for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
+                                              Positioned(
+                                                top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
+                                                left: 0,
+                                                right: 0,
+                                                child: Container(
+                                                  height: 30 * altezzaPerMinuto,
+                                                  decoration: BoxDecoration(
+                                                    border: Border(
+                                                      top: BorderSide(color: coloreLineeDivisione, width: 1.2),
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Container(
+                                                        width: larghezzaColonnaOra,
+                                                        padding: const EdgeInsets.only(top: 4, left: 8),
+                                                        child: Text(
+                                                          "${i.toString().padLeft(2, '0')}:00",
+                                                          style: TextStyle(color: coloreTestoSecondario, fontSize: 12, fontWeight: FontWeight.bold),
+                                                        ),
+                                                      ),
+                                                      const Expanded(child: SizedBox.shrink()),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
+                                                left: 0,
+                                                right: 0,
+                                                child: Container(
+                                                  height: 30 * altezzaPerMinuto,
+                                                  decoration: BoxDecoration(
+                                                    border: Border(
+                                                      top: BorderSide(color: coloreLineeMezzora, width: 1, style: BorderStyle.solid),
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Container(
+                                                        width: larghezzaColonnaOra,
+                                                        padding: const EdgeInsets.only(top: 2, left: 8),
+                                                        child: Text(
+                                                          "${i.toString().padLeft(2, '0')}:30",
+                                                          style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w500),
+                                                        ),
+                                                      ),
+                                                      const Expanded(child: SizedBox.shrink()),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                            Positioned(
+                                              top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
+                                              left: 0,
+                                              right: 0,
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  border: Border(
+                                                    top: BorderSide(color: coloreLineeDivisione, width: 1.2),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+
+                                            // Linee divisorie verticali tra le colonne degli operatori
+                                            LayoutBuilder(
+                                              builder: (context, constraints) {
+                                                final double larghezzaDisponibile = constraints.maxWidth - larghezzaColonnaOra;
+                                                final int numeroOperatori = listaBarbieriSelezionatiDocs.length > 0 ? listaBarbieriSelezionatiDocs.length : 1;
+                                                final double larghezzaCorsia = larghezzaDisponibile / numeroOperatori;
+
+                                                return Stack(
+                                                  children: [
+                                                    for (int bIdx = 0; bIdx < numeroOperatori; bIdx++) ...[
+                                                      Positioned(
+                                                        left: larghezzaColonnaOra + (bIdx * larghezzaCorsia),
+                                                        top: 0,
+                                                        bottom: 0,
+                                                        child: Container(
+                                                          width: 1,
+                                                          color: coloreLineeDivisione,
+                                                        ),
+                                                      ),
+
+                                                      // Rendering degli appuntamenti dell'operatore specifico
+                                                      if (bIdx < listaBarbieriSelezionatiDocs.length) ...[
+                                                        (() {
+                                                          final barberDoc = listaBarbieriSelezionatiDocs[bIdx];
+                                                          final elementiBarber = elementiPerBarbiere[barberDoc.id] ?? [];
+
+                                                          return Stack(
+                                                            children: [
+                                                              for (var elem in elementiBarber) ...[
+                                                                (() {
+                                                                  final data = elem['data'];
+                                                                  final String appointmentId = elem['id'];
+                                                                  final int inizioMinuti = elem['inizio'];
+                                                                  final int durata = elem['durata'];
+                                                                  final int colonnaInterna = elem['colonna'];
+
+                                                                  final double topPos = (inizioMinuti - inizioMinutiTotali) * altezzaPerMinuto;
+                                                                  final double altezzaBlocco = durata * altezzaPerMinuto;
+
+                                                                  final int maxCollisioniSuQuestoSlot = elementiBarber
+                                                                      .where((e) => (inizioMinuti < e['fine'] && elem['fine'] > e['inizio']))
+                                                                      .map((e) => e['colonna'] as int)
+                                                                      .fold(0, (max, col) => col > max ? col : max) + 1;
+
+                                                                  final double larghezzaCardInterna = larghezzaCorsia / maxCollisioniSuQuestoSlot;
+                                                                  final double leftPos = larghezzaColonnaOra + (bIdx * larghezzaCorsia) + (colonnaInterna * larghezzaCardInterna) + 2;
+
+                                                                  final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
+                                                                  final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
+                                                                  final String oraInizioStr = data['slot'] ?? '--:--';
+                                                                  final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
+
+                                                                  final List servizi = data['services'] ?? [];
+                                                                  final String nomeServizioPrincipale = servizi.isNotEmpty
+                                                                      ? servizi.first.toString().trim()
+                                                                      : "Generale";
+
+                                                                  final bool isPeriodico = data['isPeriodico'] == true;
+
+                                                                  // RECUPERO COLORE UNIVOCO DALLA MAPPA FIRESTORE
+                                                                  final String? hexDalDb = mappaColoriServiziDb[nomeServizioPrincipale];
+                                                                  final Color coloreBaseServizio = _getColoreDaHex(hexDalDb);
+
+                                                                  final Color coloreSfondoCard = isPeriodico
+                                                                      ? agOro.withValues(alpha: 0.95)
+                                                                      : coloreBaseServizio.withValues(alpha: 0.95);
+                                                                  final Color coloreTestoCard = isPeriodico
+                                                                      ? Colors.black
+                                                                      : Colors.white;
+                                                                  final Color colorePrezzoCard = isPeriodico
+                                                                      ? const Color(0xFF164638)
+                                                                      : agOro;
+                                                                  final Color coloreBordoCard = isPeriodico
+                                                                      ? agVerde
+                                                                      : agOro;
+
+                                                                  return Positioned(
+                                                                    top: topPos + 2,
+                                                                    left: leftPos,
+                                                                    width: larghezzaCardInterna - 4,
+                                                                    height: altezzaBlocco - 4,
+                                                                    child: GestureDetector(
+                                                                      onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata, appointmentId),
+                                                                      child: Container(
+                                                                        decoration: BoxDecoration(
+                                                                          color: coloreSfondoCard,
+                                                                          borderRadius: BorderRadius.circular(8),
+                                                                          border: Border.all(color: coloreBordoCard, width: 1.2),
+                                                                          boxShadow: [
+                                                                            BoxShadow(
+                                                                              color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.15),
+                                                                              blurRadius: 4,
+                                                                              offset: const Offset(0, 2),
+                                                                            )
+                                                                          ],
+                                                                        ),
+                                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                                                        child: Column(
+                                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                                          children: [
+                                                                            Row(
+                                                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                              children: [
+                                                                                Expanded(
+                                                                                  child: Text(
+                                                                                    clienteNome,
+                                                                                    style: TextStyle(color: coloreTestoCard, fontWeight: FontWeight.bold, fontSize: 12),
+                                                                                    overflow: TextOverflow.ellipsis,
+                                                                                  ),
+                                                                                ),
+                                                                                const SizedBox(width: 2),
+                                                                                Text(
+                                                                                  '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
+                                                                                  style: TextStyle(color: colorePrezzoCard, fontWeight: FontWeight.bold, fontSize: 12),
+                                                                                ),
+                                                                              ],
+                                                                            ),
+                                                                            if (servizi.isNotEmpty) ...[
+                                                                              const SizedBox(height: 2),
+                                                                              Text(
+                                                                                servizi.join(", "),
+                                                                                style: TextStyle(
+                                                                                  color: coloreTestoCard.withValues(alpha: 0.85),
+                                                                                  fontSize: 10,
+                                                                                  fontStyle: FontStyle.italic,
+                                                                                ),
+                                                                                overflow: TextOverflow.ellipsis,
+                                                                                maxLines: 1,
+                                                                              ),
+                                                                            ],
+                                                                          ],
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  );
+                                                                }()),
+                                                              ],
+                                                            ],
+                                                          );
+                                                        }()),
+                                                      ],
+                                                    ],
+                                                  ],
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           );
                         },
                       );
