@@ -21,13 +21,13 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
   // Set per contenere gli ID degli operatori selezionati (Selezione multipla max 2)
   Set<String> _operatoriSelezionati = {};
-// Gestione stato di connessione
+  // Gestione stato di connessione
   bool _isOnline = true;
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
-  // Configurazione Griglia Oraria Dinamica (Aumentato altezzaPerMinuto da 1.6 a 2.5 per dare più spazio tra le mezz'ore)
+  // Configurazione Griglia Oraria Dinamica
   int oraInizioGiornata = 8;
   int oraFineGiornata = 20;
-  final double altezzaPerMinuto = 2.5;
+  final double altezzaPerMinuto = 3.8;
   final double larghezzaColonnaOra = 65.0;
 
   Color _getColoreDaHex(String? hexString) {
@@ -41,8 +41,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       return const Color(0xFF164638);
     }
   }
-
-  // Mappa per assegnare in modo deterministico e univoco un colore a ciascun servizio
 
   @override
   void initState() {
@@ -61,7 +59,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     _connectivitySubscription.cancel();
     super.dispose();
   }
-
 
   // Colori del brand AG Barber
   final Color agVerde = const Color(0xFF164638);
@@ -107,11 +104,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     final Color coloreSfondo = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final Color coloreTesto = isDarkMode ? Colors.white : Colors.black87;
 
-    // VARIABILI DICHIARATE ALL'ESTERNO PER EVITARE IL RESET DELLO STATO AL DRAG/SWIPE
     String queryRicerca = "";
     bool isClienteRegistrato = true;
 
-    // Controller e FocusNode persistenti per l'intero ciclo di vita del dialog
     final TextEditingController nomeOspiteController = TextEditingController();
     final FocusNode ospiteFocusNode = FocusNode();
     final TextEditingController ricercaController = TextEditingController();
@@ -120,13 +115,12 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      enableDrag: false, // FIX: Impedisce allo swipe/drag di cancellare lo stato e tornare alla vista default
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       useSafeArea: true,
       builder: (bottomSheetContext) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            // Funzione helper per resettare la selezione
             void _resettaSelezioneTesto(TextEditingController controller) {
               final text = controller.text;
               controller.value = TextEditingValue(
@@ -149,7 +143,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Intestazione
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -170,7 +163,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                         ),
                         const SizedBox(height: 8),
 
-                        // Scelta Cliente registrato/ospite
                         Text(
                           'Cliente registrato:',
                           style: TextStyle(color: coloreTesto, fontSize: 13, fontWeight: FontWeight.bold),
@@ -223,12 +215,10 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                         ),
                         const SizedBox(height: 16),
 
-                        // SEPARAZIONE NETTA DELLE DUE VISTE
                         Expanded(
                           child: IndexedStack(
                             index: isClienteRegistrato ? 0 : 1,
                             children: [
-                              // VISTA 0: CLIENTE REGISTRATO (SÌ)
                               Column(
                                 children: [
                                   TextField(
@@ -346,7 +336,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                 ],
                               ),
 
-                              // VISTA 1: CLIENTE OSPITE (NO)
                               GestureDetector(
                                 behavior: HitTestBehavior.opaque,
                                 onTap: () {
@@ -467,7 +456,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     }
   }
 
-  // Conferma ed esecuzione dell'eliminazione appuntamento
   void _confermaEDeliminaAppuntamento({
     required BuildContext parentContext,
     required String appointmentId,
@@ -527,10 +515,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                     setDialogState(() => isEliminazioneInCorso = true);
 
                     try {
-                      // 1. Elimina il documento dell'appuntamento da Firestore
                       await FirebaseFirestore.instance.collection('appointments').doc(appointmentId).delete();
 
-                      // 2. Invoca la Cloud Function per notificare l'annullamento
                       try {
                         final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
                             .httpsCallable('inviaNotificaAnnullamentoAlBarbiere');
@@ -547,9 +533,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                       }
 
                       if (!dialogContext.mounted) return;
-                      Navigator.pop(dialogContext); // Chiude Dialog
+                      Navigator.pop(dialogContext);
                       if (!parentContext.mounted) return;
-                      Navigator.pop(parentContext); // Chiude BottomSheet Dettagli
+                      Navigator.pop(parentContext);
 
                       ScaffoldMessenger.of(parentContext).showSnackBar(
                         const SnackBar(
@@ -810,7 +796,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                           ],
                         ),
 
-                        // NOTA CLIENTE (VISIBILE SOLO SE PRESENTE)
                         if (notaCliente != null && notaCliente.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           InkWell(
@@ -884,7 +869,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                           ),
                         ],
 
-                        // VISUALIZZAZIONE SALDO CLIENTE
                         if (clienteId != null) ...[
                           const SizedBox(height: 12),
                           StreamBuilder<DocumentSnapshot>(
@@ -1041,7 +1025,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
                         const SizedBox(height: 24),
 
-                        // SOLLECITA CLIENTE
                         SizedBox(
                           width: double.infinity,
                           height: 48,
@@ -1116,7 +1099,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                         ),
                         const SizedBox(height: 10),
 
-                        // ELIMINA PRENOTAZIONE BARBIERE
                         SizedBox(
                           width: double.infinity,
                           height: 48,
@@ -1151,7 +1133,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                         ),
                         const SizedBox(height: 10),
 
-                        // CHIUDI
                         SizedBox(
                           width: double.infinity,
                           height: 48,
@@ -1180,7 +1161,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     final String dataSelezionataStr = _dataString;
     final String giornoSettimana = _giorniSettimanaDb[_dataSelezionata.weekday % 7];
 
-    // 1. ASCOLTO IN TEMPO REALE DELL'INTERA COLLEZIONE DELLE ECCEZIONI (GESTISCE SIA GIORNI SINGOLI CHE PERIODI)
     final snapEccezioni = FirebaseFirestore.instance.collection('calendar_exceptions').snapshots();
     final snapOrariBase = FirebaseFirestore.instance.collection('settings').doc('orari_negozio').snapshots();
 
@@ -1192,19 +1172,16 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       String mAp = "09:00", mCh = "13:00", pAp = "14:30", pCh = "19:30";
       String stringaNota = "";
 
-      // 2. SEARCH ENGINE ECCEZIONE PER LA DATA SELEZIONATA (CERCA CORRISPONDENZA DIRETTA O RANGE START-END)
       Map<String, dynamic>? eccezioneTrovata;
 
       for (var doc in eccezioniQuerySnap.docs) {
         final dataDoc = doc.data() as Map<String, dynamic>;
 
-        // Controllo 1: Corrispondenza diretta per ID o campo 'date'
         if (doc.id == dataSelezionataStr || dataDoc['date'] == dataSelezionataStr) {
           eccezioneTrovata = dataDoc;
           break;
         }
 
-        // Controllo 2: Verifica se la data ricade nel periodo (startDate e endDate)
         if (dataDoc.containsKey('startDate') && dataDoc.containsKey('endDate')) {
           String startStr = dataDoc['startDate'];
           String endStr = dataDoc['endDate'];
@@ -1215,7 +1192,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         }
       }
 
-      // 3. APPLICAZIONE LOGICA ORARI/CHIUSURA IN BASE ALL'ECCEZIONE O AGLI ORARI BASE
       if (eccezioneTrovata != null) {
         stringaNota = eccezioneTrovata['nota'] ?? "";
         if (eccezioneTrovata['status'] == 'chiuso') {
@@ -1293,7 +1269,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
-      // Posizione dinamica reattiva all'altezza dello schermo (es. 50% dell'altezza)
       floatingActionButtonLocation: const DynamicPercentageFloatingActionButtonLocation(topRatio: 0.60),
       floatingActionButton: FloatingActionButton(
         backgroundColor: agOro,
@@ -1321,7 +1296,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   ],
                 ),
               ),
-            // 1. SELETTORE DATA
             Container(
               color: coloreSfondoBarraData,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -1369,7 +1343,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
               ),
             ),
 
-            // 2. FILTRO OPERATORI (SELEZIONE MULTIPLA REGOLE: MAX 2 OPERATORI, ALMENO 1 SELEZIONATO)
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
               builder: (context, snapshot) {
@@ -1393,7 +1366,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                 if (!snapshot.hasData) return const SizedBox.shrink();
                 final barbieriDocs = snapshot.data!.docs;
 
-                // Inizializzazione di default: seleziona i primi 2 barbieri al primo caricamento
                 if (_operatoriSelezionati.isEmpty && barbieriDocs.isNotEmpty) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) {
@@ -1433,12 +1405,10 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                             setState(() {
                               if (selected) {
                                 if (_operatoriSelezionati.length >= 2) {
-                                  // Se ci sono già 2 selezionati, rimuove il primo per mantenere massimo 2 selezioni
                                   _operatoriSelezionati.remove(_operatoriSelezionati.first);
                                 }
                                 _operatoriSelezionati.add(idFiltro);
                               } else {
-                                // Non permette di deselezionare l'ultimo operatore rimasto (deve essercene almeno 1)
                                 if (_operatoriSelezionati.length > 1) {
                                   _operatoriSelezionati.remove(idFiltro);
                                 }
@@ -1455,7 +1425,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
             Divider(height: 1, color: isDarkMode ? Colors.grey : Colors.grey.shade400),
 
-            // 3. TIMELINE ORIENTATA DINAMICAMENTE
             Expanded(
               child: StreamBuilder<Map<String, dynamic>>(
                 stream: _ascoltaConfigurazioneOrariEDati(),
@@ -1563,16 +1532,13 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                         return const Center(child: CircularProgressIndicator());
                       }
 
-                      // Mappa degli operatori attivi ordinata secondo gli ID selezionati
                       final listaBarbieriSelezionatiDocs = barbieriSnapshot.data!.docs
                           .where((doc) => _operatoriSelezionati.contains(doc.id))
                           .toList();
 
-                      // STREAM IN TEMPO REALE PER RECUPERARE I COLORI UNIVOCHI DEI SERVIZI SALVATI SU FIRESTORE
                       return StreamBuilder<QuerySnapshot>(
                         stream: FirebaseFirestore.instance.collection('services').snapshots(),
                         builder: (context, serviziSnapshot) {
-                          // Mappa nomeServizio -> coloreHex
                           final Map<String, String> mappaColoriServiziDb = {};
                           if (serviziSnapshot.hasData) {
                             for (var sDoc in serviziSnapshot.data!.docs) {
@@ -1616,7 +1582,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
                               final prenotazioniDocs = snapshot.data?.docs ?? [];
 
-                              // Organizzazione delle prenotazioni separate per ciascun operatore
                               Map<String, List<Map<String, dynamic>>> elementiPerBarbiere = {};
                               for (var barber in listaBarbieriSelezionatiDocs) {
                                 elementiPerBarbiere[barber.id] = [];
@@ -1655,7 +1620,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
                               return Column(
                                 children: [
-                                  // INTESTAZIONE PER LE COLONNE DEGLI OPERATORI
                                   Container(
                                     color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
                                     child: Row(
@@ -1687,14 +1651,12 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                   ),
                                   Divider(height: 1, color: coloreLineeDivisione),
 
-                                  // GRIGLIA CALENDARIO CON GLI APPUNTAMENTI SMISTATI PER COLONNA OPERATORE
                                   Expanded(
                                     child: SingleChildScrollView(
                                       child: SizedBox(
                                         height: altezzaTotaleGriglia,
                                         child: Stack(
                                           children: [
-                                            // Linee della griglia oraria
                                             for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
                                               Positioned(
                                                 top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
@@ -1764,7 +1726,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                               ),
                                             ),
 
-                                            // Linee divisorie verticali tra le colonne degli operatori
                                             LayoutBuilder(
                                               builder: (context, constraints) {
                                                 final double larghezzaDisponibile = constraints.maxWidth - larghezzaColonnaOra;
@@ -1784,7 +1745,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                         ),
                                                       ),
 
-                                                      // Rendering degli appuntamenti dell'operatore specifico
                                                       if (bIdx < listaBarbieriSelezionatiDocs.length) ...[
                                                         (() {
                                                           final barberDoc = listaBarbieriSelezionatiDocs[bIdx];
@@ -1823,7 +1783,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
                                                                   final bool isPeriodico = data['isPeriodico'] == true;
 
-                                                                  // RECUPERO COLORE UNIVOCO DALLA MAPPA FIRESTORE
                                                                   final String? hexDalDb = mappaColoriServiziDb[nomeServizioPrincipale];
                                                                   final Color coloreBaseServizio = _getColoreDaHex(hexDalDb);
 
@@ -1860,39 +1819,46 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                                             )
                                                                           ],
                                                                         ),
-                                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                                                        padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
                                                                         child: Column(
                                                                           crossAxisAlignment: CrossAxisAlignment.start,
-                                                                          mainAxisAlignment: MainAxisAlignment.center,
+                                                                          mainAxisAlignment: MainAxisAlignment.start,
                                                                           children: [
-                                                                            Row(
-                                                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                                              children: [
-                                                                                Expanded(
-                                                                                  child: Text(
-                                                                                    clienteNome,
-                                                                                    style: TextStyle(color: coloreTestoCard, fontWeight: FontWeight.bold, fontSize: 12),
-                                                                                    overflow: TextOverflow.ellipsis,
-                                                                                  ),
-                                                                                ),
-                                                                                const SizedBox(width: 2),
-                                                                                Text(
-                                                                                  '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
-                                                                                  style: TextStyle(color: colorePrezzoCard, fontWeight: FontWeight.bold, fontSize: 12),
-                                                                                ),
-                                                                              ],
+                                                                            // NOME DEL CLIENTE (Usa tutto lo spazio in larghezza e va a capo se necessario)
+                                                                            Text(
+                                                                              clienteNome,
+                                                                              style: TextStyle(
+                                                                                color: coloreTestoCard,
+                                                                                fontWeight: FontWeight.bold,
+                                                                                fontSize: 13,
+                                                                              ),
+                                                                              overflow: TextOverflow.ellipsis,
+                                                                              maxLines: 2,
+                                                                            ),
+                                                                            const SizedBox(height: 2),
+                                                                            // PREZZO SOTTO AL NOME
+                                                                            Text(
+                                                                              '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
+                                                                              style: TextStyle(
+                                                                                color: colorePrezzoCard,
+                                                                                fontWeight: FontWeight.bold,
+                                                                                fontSize: 12,
+                                                                              ),
                                                                             ),
                                                                             if (servizi.isNotEmpty) ...[
-                                                                              const SizedBox(height: 2),
-                                                                              Text(
-                                                                                servizi.join(", "),
-                                                                                style: TextStyle(
-                                                                                  color: coloreTestoCard.withValues(alpha: 0.85),
-                                                                                  fontSize: 10,
-                                                                                  fontStyle: FontStyle.italic,
+                                                                              const SizedBox(height: 3),
+                                                                              Expanded(
+                                                                                child: Text(
+                                                                                  servizi.join(", "),
+                                                                                  style: TextStyle(
+                                                                                    color: coloreTestoCard.withValues(alpha: 0.90),
+                                                                                    fontSize: 11,
+                                                                                    fontStyle: FontStyle.italic,
+                                                                                    height: 1.15,
+                                                                                  ),
+                                                                                  overflow: TextOverflow.ellipsis,
+                                                                                  maxLines: 4,
                                                                                 ),
-                                                                                overflow: TextOverflow.ellipsis,
-                                                                                maxLines: 1,
                                                                               ),
                                                                             ],
                                                                           ],
@@ -1977,17 +1943,15 @@ class StreamZip<T> extends StreamView<List<T>> {
 }
 
 class DynamicPercentageFloatingActionButtonLocation extends FloatingActionButtonLocation {
-  final double topRatio; // Es: 0.50 per il 50% dall'alto
+  final double topRatio;
 
   const DynamicPercentageFloatingActionButtonLocation({this.topRatio = 0.50});
 
   @override
   Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
-    // Calcola X: ancorato a destra con il margine standard di 16px
     final double fabX = scaffoldGeometry.scaffoldSize.width -
         scaffoldGeometry.floatingActionButtonSize.width - 16.0;
 
-    // Calcola Y: percentuale esatta dell'altezza dello Scaffold
     final double fabY = (scaffoldGeometry.scaffoldSize.height * topRatio) -
         (scaffoldGeometry.floatingActionButtonSize.height / 2);
 
