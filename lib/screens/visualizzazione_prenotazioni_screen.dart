@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'prenotazione_servizi_barbiere_screen.dart'; // Importato per la navigazione alla schermata del cliente
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class VisualizzazionePrenotazioniScreen extends StatefulWidget {
   const VisualizzazionePrenotazioniScreen({super.key});
@@ -17,13 +18,63 @@ class VisualizzazionePrenotazioniScreen extends StatefulWidget {
 
 class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePrenotazioniScreen> {
   DateTime _dataSelezionata = DateTime.now();
-  String? _operatoreSelezionato; // null significa "Tutti"
 
-  // Configurazione Griglia Oraria Dinamica
+  // Set per contenere gli ID degli operatori selezionati (Selezione multipla max 2)
+  Set<String> _operatoriSelezionati = {};
+// Gestione stato di connessione
+  bool _isOnline = true;
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  // Configurazione Griglia Oraria Dinamica (Aumentato altezzaPerMinuto da 1.6 a 2.5 per dare più spazio tra le mezz'ore)
   int oraInizioGiornata = 8;
   int oraFineGiornata = 20;
-  final double altezzaPerMinuto = 1.6;
+  final double altezzaPerMinuto = 2.5;
   final double larghezzaColonnaOra = 65.0;
+
+  // Palette di 15 colori ben distinti per i differenti servizi
+  final List<Color> _paletteColoriServizi = const [
+    Color(0xFF164638), // Verde AG Barber
+    Color(0xFF1E88E5), // Blu Brillante
+    Color(0xFFD81B60), // Rosa Ciclame
+    Color(0xFF8E24AA), // Viola Chiaro
+    Color(0xFFF57C00), // Arancione
+    Color(0xFF004D40), // Verde Smeraldo
+    Color(0xFF00ACC1), // Turchese
+    Color(0xFF3949AB), // Indaco
+    Color(0xFFC0392B), // Rosso Scuro
+    Color(0xFF2E7D32), // Verde Bosco
+    Color(0xFF6D4C41), // Marrone
+    Color(0xFF00838F), // Otterraneo
+    Color(0xFFAD1457), // Magenta
+    Color(0xFF283593), // Blu Notte
+    Color(0xFF558B2F), // Verde Oliva
+  ];
+
+  // Mappa per assegnare in modo deterministico e univoco un colore a ciascun servizio
+  final Map<String, Color> _mappaColoriServizi = {};
+  @override
+  void initState() {
+    super.initState();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+      if (mounted) {
+        setState(() {
+          _isOnline = !results.contains(ConnectivityResult.none);
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription.cancel();
+    super.dispose();
+  }
+  Color _getColorePerServizio(String nomeServizio) {
+    if (!_mappaColoriServizi.containsKey(nomeServizio)) {
+      final int indiceColore = _mappaColoriServizi.length % _paletteColoriServizi.length;
+      _mappaColoriServizi[nomeServizio] = _paletteColoriServizi[indiceColore];
+    }
+    return _mappaColoriServizi[nomeServizio]!;
+  }
 
   // Colori del brand AG Barber
   final Color agVerde = const Color(0xFF164638);
@@ -56,6 +107,15 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
   // Dialog/BottomSheet per la selezione del cliente e reindirizzamento alla prenotazione
   void _mostraSelezionaClienteEAvviaPrenotazione() {
+    if (!_isOnline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Impossibile avviare una prenotazione in modalità offline.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final Color coloreSfondo = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final Color coloreTesto = isDarkMode ? Colors.white : Colors.black87;
@@ -221,6 +281,22 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                           .where('role', isNotEqualTo: 'barbiere')
                                           .snapshots(),
                                       builder: (context, snapshot) {
+                                        if (snapshot.hasError) {
+                                          return Center(
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(Icons.wifi_off, size: 48, color: Colors.orange),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  'Nessuna connessione ad internet',
+                                                  style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }
+
                                         if (!snapshot.hasData) {
                                           return const Center(
                                             child: CircularProgressIndicator(color: Color(0xFFE2B13C)),
@@ -573,6 +649,50 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       useSafeArea: true,
       builder: (context) {
         final Color coloreTestoDettaglio = isDarkMode ? Colors.white : Colors.black87;
+
+        void _mostraDialogConnessioneAssente() {
+          showDialog(
+            context: context,
+            builder: (dialogContext) {
+              return AlertDialog(
+                backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: Row(
+                  children: [
+                    const Icon(Icons.wifi_off, color: Colors.orange, size: 28),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Connessione Assente',
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ],
+                ),
+                content: Text(
+                  'Controlla la connessione prima di proseguire.',
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white70 : Colors.black87,
+                    fontSize: 15,
+                  ),
+                ),
+                actions: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: agVerde,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              );
+            },
+          );
+        }
 
         return StatefulBuilder(
             builder: (BuildContext context, StateSetter setModalState) {
@@ -961,6 +1081,11 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                             onPressed: (isInvioInCorso || clienteId == null)
                                 ? null
                                 : () async {
+                              if (!_isOnline) {
+                                _mostraDialogConnessioneAssente();
+                                return;
+                              }
+
                               setModalState(() => isInvioInCorso = true);
                               try {
                                 await FirebaseAuth.instance.currentUser?.getIdToken(true);
@@ -1020,6 +1145,11 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                               style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
                             ),
                             onPressed: () {
+                              if (!_isOnline) {
+                                _mostraDialogConnessioneAssente();
+                                return;
+                              }
+
                               _confermaEDeliminaAppuntamento(
                                 parentContext: context,
                                 appointmentId: appointmentId,
@@ -1148,8 +1278,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         .collection('appointments')
         .where('date', isEqualTo: _dataString);
 
-    if (_operatoreSelezionato != null) {
-      query = query.where('barberId', isEqualTo: _operatoreSelezionato);
+    if (_operatoriSelezionati.isNotEmpty) {
+      query = query.where('barberId', whereIn: _operatoriSelezionati.toList());
     }
 
     return query.orderBy('slot').snapshots();
@@ -1187,6 +1317,23 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
       body: SafeArea(
         child: Column(
           children: [
+            if (!_isOnline)
+              Container(
+                color: Colors.orange.shade900,
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.wifi_off, color: Colors.white, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Connessione assente - Modalità offline',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
             // 1. SELETTORE DATA
             Container(
               color: coloreSfondoBarraData,
@@ -1235,12 +1382,40 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
               ),
             ),
 
-            // 2. FILTRO OPERATORI
+            // 2. FILTRO OPERATORI (SELEZIONE MULTIPLA REGOLE: MAX 2 OPERATORI, ALMENO 1 SELEZIONATO)
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Container(
+                    padding: const EdgeInsets.all(8),
+                    color: Colors.orange.shade800,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.wifi_off, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Connessione assente. Verificare la rete.',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  );
+                }
                 if (!snapshot.hasData) return const SizedBox.shrink();
-                final barbieri = snapshot.data!.docs;
+                final barbieriDocs = snapshot.data!.docs;
+
+                // Inizializzazione di default: seleziona i primi 2 barbieri al primo caricamento
+                if (_operatoriSelezionati.isEmpty && barbieriDocs.isNotEmpty) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      setState(() {
+                        _operatoriSelezionati = barbieriDocs.take(2).map((d) => d.id).toSet();
+                      });
+                    }
+                  });
+                }
 
                 return Container(
                   height: 60,
@@ -1248,26 +1423,40 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: barbieri.length + 1,
+                    itemCount: barbieriDocs.length,
                     itemBuilder: (context, index) {
-                      final bool isTutti = index == 0;
-                      final String label = isTutti ? "Tutti" : barbieri[index - 1]['name'];
-                      final String? idFiltro = isTutti ? null : barbieri[index - 1].id;
-                      final bool isSelected = _operatoreSelezionato == idFiltro;
+                      final doc = barbieriDocs[index];
+                      final String label = doc['name'] ?? 'Operatore';
+                      final String idFiltro = doc.id;
+                      final bool isSelected = _operatoriSelezionati.contains(idFiltro);
 
                       return Padding(
                         padding: const EdgeInsets.only(right: 8.0),
-                        child: ChoiceChip(
+                        child: FilterChip(
                           label: Text(label),
                           selected: isSelected,
                           selectedColor: agOro,
+                          checkmarkColor: Colors.black,
                           labelStyle: TextStyle(
                             color: isSelected ? Colors.black : Colors.white,
                             fontWeight: FontWeight.bold,
                           ),
                           backgroundColor: agVerde,
-                          onSelected: (selected) {
-                            setState(() => _operatoreSelezionato = idFiltro);
+                          onSelected: (bool selected) {
+                            setState(() {
+                              if (selected) {
+                                if (_operatoriSelezionati.length >= 2) {
+                                  // Se ci sono già 2 selezionati, rimuove il primo per mantenere massimo 2 selezioni
+                                  _operatoriSelezionati.remove(_operatoriSelezionati.first);
+                                }
+                                _operatoriSelezionati.add(idFiltro);
+                              } else {
+                                // Non permette di deselezionare l'ultimo operatore rimasto (deve essercene almeno 1)
+                                if (_operatoriSelezionati.length > 1) {
+                                  _operatoriSelezionati.remove(idFiltro);
+                                }
+                              }
+                            });
                           },
                         ),
                       );
@@ -1284,6 +1473,28 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
               child: StreamBuilder<Map<String, dynamic>>(
                 stream: _ascoltaConfigurazioneOrariEDati(),
                 builder: (context, configSnapshot) {
+                  if (configSnapshot.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.wifi_off, size: 64, color: Colors.orange),
+                          const SizedBox(height: 16),
+                          Text(
+                            'CONNESSIONE ASSENTE',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : agVerde),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Impossibile caricare gli orari. Verificare la connessione internet.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 14, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
                   if (configSnapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
@@ -1337,209 +1548,372 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                   final double altezzaTotaleGriglia = minutiTotaliGiornata * altezzaPerMinuto;
 
                   return StreamBuilder<QuerySnapshot>(
-                    stream: _costruisciStreamPrenotazioni(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
+                    stream: FirebaseFirestore.instance.collection('barbers').snapshots(),
+                    builder: (context, barbieriSnapshot) {
+                      if (barbieriSnapshot.hasError) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.wifi_off, size: 64, color: Colors.orange),
+                              const SizedBox(height: 16),
+                              Text(
+                                'NESSUNA CONNESSIONE INTERNET',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : agVerde),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Impossibile caricare l\'elenco degli operatori.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 14, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      if (!barbieriSnapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
 
-                      final prenotazioniDocs = snapshot.data?.docs ?? [];
+                      // Mappa degli operatori attivi ordinata secondo gli ID selezionati
+                      final listaBarbieriSelezionatiDocs = barbieriSnapshot.data!.docs
+                          .where((doc) => _operatoriSelezionati.contains(doc.id))
+                          .toList();
 
-                      List<Map<String, dynamic>> elementiCalendario = [];
-                      for (var doc in prenotazioniDocs) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final String oraInizio = data['slot'] ?? '08:00';
-                        final int inizioMinuti = _minutiDaStringa(oraInizio);
-                        final int durata = _estraiDurata(data);
-                        final int fineMinuti = inizioMinuti + durata;
+                      return StreamBuilder<QuerySnapshot>(
+                        stream: _costruisciStreamPrenotazioni(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.wifi_off, size: 64, color: Colors.orange),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'NESSUNA CONNESSIONE INTERNET',
+                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : agVerde),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Controlla la tua connessione per sincronizzare gli appuntamenti.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
 
-                        int colonna = 0;
-                        while (true) {
-                          bool collisione = elementiCalendario.any((e) =>
-                          e['colonna'] == colonna &&
-                              ((inizioMinuti >= e['inizio'] && inizioMinuti < e['fine']) ||
-                                  (fineMinuti > e['inizio'] && fineMinuti <= e['fine']) ||
-                                  (inizioMinuti <= e['inizio'] && fineMinuti >= e['fine'])));
-                          if (!collisione) break;
-                          colonna++;
-                        }
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
 
-                        elementiCalendario.add({
-                          'id': doc.id,
-                          'data': data,
-                          'inizio': inizioMinuti,
-                          'fine': fineMinuti,
-                          'durata': durata,
-                          'colonna': colonna,
-                        });
-                      }
+                          final prenotazioniDocs = snapshot.data?.docs ?? [];
 
-                      return SingleChildScrollView(
-                        child: SizedBox(
-                          height: altezzaTotaleGriglia,
-                          child: Stack(
+                          // Organizzazione delle prenotazioni separate per ciascun operatore
+                          Map<String, List<Map<String, dynamic>>> elementiPerBarbiere = {};
+                          for (var barber in listaBarbieriSelezionatiDocs) {
+                            elementiPerBarbiere[barber.id] = [];
+                          }
+
+                          for (var doc in prenotazioniDocs) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final String barberId = data['barberId'] ?? '';
+                            if (!elementiPerBarbiere.containsKey(barberId)) continue;
+
+                            final String oraInizio = data['slot'] ?? '08:00';
+                            final int inizioMinuti = _minutiDaStringa(oraInizio);
+                            final int durata = _estraiDurata(data);
+                            final int fineMinuti = inizioMinuti + durata;
+
+                            int colonnaInterna = 0;
+                            while (true) {
+                              bool collisione = elementiPerBarbiere[barberId]!.any((e) =>
+                              e['colonna'] == colonnaInterna &&
+                                  ((inizioMinuti >= e['inizio'] && inizioMinuti < e['fine']) ||
+                                      (fineMinuti > e['inizio'] && fineMinuti <= e['fine']) ||
+                                      (inizioMinuti <= e['inizio'] && fineMinuti >= e['fine'])));
+                              if (!collisione) break;
+                              colonnaInterna++;
+                            }
+
+                            elementiPerBarbiere[barberId]!.add({
+                              'id': doc.id,
+                              'data': data,
+                              'inizio': inizioMinuti,
+                              'fine': fineMinuti,
+                              'durata': durata,
+                              'colonna': colonnaInterna,
+                            });
+                          }
+
+                          return Column(
                             children: [
-                              for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
-                                Positioned(
-                                  top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
-                                  left: 0,
-                                  right: 0,
-                                  child: Container(
-                                    height: 30 * altezzaPerMinuto,
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        top: BorderSide(color: coloreLineeDivisione, width: 1.2),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Container(
-                                          width: larghezzaColonnaOra,
-                                          padding: const EdgeInsets.only(top: 4, left: 8),
+                              // INTESTAZIONE PER LE COLONNE DEGLI OPERATORI
+                              Container(
+                                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
+                                child: Row(
+                                  children: [
+                                    SizedBox(width: larghezzaColonnaOra),
+                                    for (int bIdx = 0; bIdx < listaBarbieriSelezionatiDocs.length; bIdx++)
+                                      Expanded(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          decoration: BoxDecoration(
+                                            border: Border(
+                                              left: BorderSide(color: coloreLineeDivisione, width: 1),
+                                            ),
+                                          ),
                                           child: Text(
-                                            "${i.toString().padLeft(2, '0')}:00",
-                                            style: TextStyle(color: coloreTestoSecondario, fontSize: 12, fontWeight: FontWeight.bold),
+                                            (listaBarbieriSelezionatiDocs[bIdx]['name'] ?? 'Operatore').toString().toUpperCase(),
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                              color: isDarkMode ? agOro : agVerde,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        const Expanded(child: SizedBox.shrink()),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
-                                  left: 0,
-                                  right: 0,
-                                  child: Container(
-                                    height: 30 * altezzaPerMinuto,
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        top: BorderSide(color: coloreLineeMezzora, width: 1, style: BorderStyle.solid),
                                       ),
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                  ],
+                                ),
+                              ),
+                              Divider(height: 1, color: coloreLineeDivisione),
+
+                              // GRIGLIA CALENDARIO CON GLI APPUNTAMENTI SMISTATI PER COLONNA OPERATORE
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  child: SizedBox(
+                                    height: altezzaTotaleGriglia,
+                                    child: Stack(
                                       children: [
-                                        Container(
-                                          width: larghezzaColonnaOra,
-                                          padding: const EdgeInsets.only(top: 2, left: 8),
-                                          child: Text(
-                                            "${i.toString().padLeft(2, '0')}:30",
-                                            style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w500),
+                                        // Linee della griglia oraria
+                                        for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
+                                          Positioned(
+                                            top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
+                                            left: 0,
+                                            right: 0,
+                                            child: Container(
+                                              height: 30 * altezzaPerMinuto,
+                                              decoration: BoxDecoration(
+                                                border: Border(
+                                                  top: BorderSide(color: coloreLineeDivisione, width: 1.2),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Container(
+                                                    width: larghezzaColonnaOra,
+                                                    padding: const EdgeInsets.only(top: 4, left: 8),
+                                                    child: Text(
+                                                      "${i.toString().padLeft(2, '0')}:00",
+                                                      style: TextStyle(color: coloreTestoSecondario, fontSize: 12, fontWeight: FontWeight.bold),
+                                                    ),
+                                                  ),
+                                                  const Expanded(child: SizedBox.shrink()),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          Positioned(
+                                            top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
+                                            left: 0,
+                                            right: 0,
+                                            child: Container(
+                                              height: 30 * altezzaPerMinuto,
+                                              decoration: BoxDecoration(
+                                                border: Border(
+                                                  top: BorderSide(color: coloreLineeMezzora, width: 1, style: BorderStyle.solid),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Container(
+                                                    width: larghezzaColonnaOra,
+                                                    padding: const EdgeInsets.only(top: 2, left: 8),
+                                                    child: Text(
+                                                      "${i.toString().padLeft(2, '0')}:30",
+                                                      style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w500),
+                                                    ),
+                                                  ),
+                                                  const Expanded(child: SizedBox.shrink()),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                        Positioned(
+                                          top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
+                                          left: 0,
+                                          right: 0,
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              border: Border(
+                                                top: BorderSide(color: coloreLineeDivisione, width: 1.2),
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                        const Expanded(child: SizedBox.shrink()),
+
+                                        // Linee divisorie verticali tra le colonne degli operatori
+                                        LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            final double larghezzaDisponibile = constraints.maxWidth - larghezzaColonnaOra;
+                                            final int numeroOperatori = listaBarbieriSelezionatiDocs.length > 0 ? listaBarbieriSelezionatiDocs.length : 1;
+                                            final double larghezzaCorsia = larghezzaDisponibile / numeroOperatori;
+
+                                            return Stack(
+                                              children: [
+                                                for (int bIdx = 0; bIdx < numeroOperatori; bIdx++) ...[
+                                                  Positioned(
+                                                    left: larghezzaColonnaOra + (bIdx * larghezzaCorsia),
+                                                    top: 0,
+                                                    bottom: 0,
+                                                    child: Container(
+                                                      width: 1,
+                                                      color: coloreLineeDivisione,
+                                                    ),
+                                                  ),
+
+                                                  // Rendering degli appuntamenti dell'operatore specifico
+                                                  if (bIdx < listaBarbieriSelezionatiDocs.length) ...[
+                                                    (() {
+                                                      final barberDoc = listaBarbieriSelezionatiDocs[bIdx];
+                                                      final elementiBarber = elementiPerBarbiere[barberDoc.id] ?? [];
+
+                                                      return Stack(
+                                                        children: [
+                                                          for (var elem in elementiBarber) ...[
+                                                            (() {
+                                                              final data = elem['data'];
+                                                              final String appointmentId = elem['id'];
+                                                              final int inizioMinuti = elem['inizio'];
+                                                              final int durata = elem['durata'];
+                                                              final int colonnaInterna = elem['colonna'];
+
+                                                              final double topPos = (inizioMinuti - inizioMinutiTotali) * altezzaPerMinuto;
+                                                              final double altezzaBlocco = durata * altezzaPerMinuto;
+
+                                                              final int maxCollisioniSuQuestoSlot = elementiBarber
+                                                                  .where((e) => (inizioMinuti < e['fine'] && elem['fine'] > e['inizio']))
+                                                                  .map((e) => e['colonna'] as int)
+                                                                  .fold(0, (max, col) => col > max ? col : max) + 1;
+
+                                                              final double larghezzaCardInterna = larghezzaCorsia / maxCollisioniSuQuestoSlot;
+                                                              final double leftPos = larghezzaColonnaOra + (bIdx * larghezzaCorsia) + (colonnaInterna * larghezzaCardInterna) + 2;
+
+                                                              final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
+                                                              final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
+                                                              final String oraInizioStr = data['slot'] ?? '--:--';
+                                                              final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
+
+                                                              final List servizi = data['services'] ?? [];
+                                                              final String nomeServizioPrincipale = servizi.isNotEmpty
+                                                                  ? servizi.first.toString()
+                                                                  : "Generale";
+
+                                                              final bool isPeriodico = data['isPeriodico'] == true;
+
+                                                              // Colore dinamico distintivo basato sul nome del servizio
+                                                              final Color coloreBaseServizio = _getColorePerServizio(nomeServizioPrincipale);
+
+                                                              final Color coloreSfondoCard = isPeriodico
+                                                                  ? agOro.withValues(alpha: 0.95)
+                                                                  : coloreBaseServizio.withValues(alpha: 0.95);
+                                                              final Color coloreTestoCard = isPeriodico
+                                                                  ? Colors.black
+                                                                  : Colors.white;
+                                                              final Color colorePrezzoCard = isPeriodico
+                                                                  ? const Color(0xFF164638)
+                                                                  : agOro;
+                                                              final Color coloreBordoCard = isPeriodico
+                                                                  ? agVerde
+                                                                  : agOro;
+
+                                                              return Positioned(
+                                                                top: topPos + 2,
+                                                                left: leftPos,
+                                                                width: larghezzaCardInterna - 4,
+                                                                height: altezzaBlocco - 4,
+                                                                child: GestureDetector(
+                                                                  onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata, appointmentId),
+                                                                  child: Container(
+                                                                    decoration: BoxDecoration(
+                                                                      color: coloreSfondoCard,
+                                                                      borderRadius: BorderRadius.circular(8),
+                                                                      border: Border.all(color: coloreBordoCard, width: 1.2),
+                                                                      boxShadow: [
+                                                                        BoxShadow(
+                                                                          color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.15),
+                                                                          blurRadius: 4,
+                                                                          offset: const Offset(0, 2),
+                                                                        )
+                                                                      ],
+                                                                    ),
+                                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                                                    child: Column(
+                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                                      children: [
+                                                                        Row(
+                                                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                          children: [
+                                                                            Expanded(
+                                                                              child: Text(
+                                                                                clienteNome,
+                                                                                style: TextStyle(color: coloreTestoCard, fontWeight: FontWeight.bold, fontSize: 12),
+                                                                                overflow: TextOverflow.ellipsis,
+                                                                              ),
+                                                                            ),
+                                                                            const SizedBox(width: 2),
+                                                                            Text(
+                                                                              '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
+                                                                              style: TextStyle(color: colorePrezzoCard, fontWeight: FontWeight.bold, fontSize: 12),
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                        if (servizi.isNotEmpty) ...[
+                                                                          const SizedBox(height: 2),
+                                                                          Text(
+                                                                            servizi.join(", "),
+                                                                            style: TextStyle(
+                                                                              color: coloreTestoCard.withValues(alpha: 0.85),
+                                                                              fontSize: 10,
+                                                                              fontStyle: FontStyle.italic,
+                                                                            ),
+                                                                            overflow: TextOverflow.ellipsis,
+                                                                            maxLines: 1,
+                                                                          ),
+                                                                        ],
+                                                                      ],
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            }()),
+                                                          ],
+                                                        ],
+                                                      );
+                                                    }()),
+                                                  ],
+                                                ],
+                                              ],
+                                            );
+                                          },
+                                        ),
                                       ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              Positioned(
-                                top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
-                                left: 0,
-                                right: 0,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    border: Border(
-                                      top: BorderSide(color: coloreLineeDivisione, width: 1.2),
                                     ),
                                   ),
                                 ),
                               ),
-
-                              for (var elem in elementiCalendario) ...[
-                                (() {
-                                  final data = elem['data'];
-                                  final String appointmentId = elem['id'];
-                                  final int inizioMinuti = elem['inizio'];
-                                  final int durata = elem['durata'];
-                                  final int colonna = elem['colonna'];
-
-                                  final double topPos = (inizioMinuti - inizioMinutiTotali) * altezzaPerMinuto;
-                                  final double altezzaBlocco = durata * altezzaPerMinuto;
-
-                                  final int maxCollisioniSuQuestoSlot = elementiCalendario
-                                      .where((e) => (inizioMinuti < e['fine'] && elem['fine'] > e['inizio']))
-                                      .map((e) => e['colonna'] as int)
-                                      .fold(0, (max, col) => col > max ? col : max) + 1;
-
-                                  final double larghezzaDisponibile = MediaQuery.of(context).size.width - larghezzaColonnaOra - 20;
-                                  final double larghezzaCard = larghezzaDisponibile / maxCollisioniSuQuestoSlot;
-                                  final double leftPos = larghezzaColonnaOra + (colonna * larghezzaCard) + 4;
-
-                                  final String clienteNome = data['userName'] ?? data['displayName'] ?? 'Cliente';
-                                  final double prezzoTotale = (data['totalPrice'] ?? 0.0).toDouble();
-                                  final String oraInizioStr = data['slot'] ?? '--:--';
-                                  final String oraFineStr = _stringaDaMinuti(inizioMinuti + durata);
-
-                                  final bool isPeriodico = data['isPeriodico'] == true;
-
-                                  final Color coloreSfondoCard = isPeriodico
-                                      ? agOro.withValues(alpha: 0.95)
-                                      : agVerde.withValues(alpha: 0.95);
-                                  final Color coloreTestoCard = isPeriodico
-                                      ? Colors.black
-                                      : Colors.white;
-                                  final Color colorePrezzoCard = isPeriodico
-                                      ? const Color(0xFF164638)
-                                      : agOro;
-                                  final Color coloreBordoCard = isPeriodico
-                                      ? agVerde
-                                      : agOro;
-
-                                  return Positioned(
-                                    top: topPos + 2,
-                                    left: leftPos,
-                                    width: larghezzaCard - 4,
-                                    height: altezzaBlocco - 4,
-                                    child: GestureDetector(
-                                      onTap: () => _mostraDettagliAppuntamento(data, oraInizioStr, oraFineStr, durata, appointmentId),
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: coloreSfondoCard,
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: coloreBordoCard, width: 1.2),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.15),
-                                              blurRadius: 4,
-                                              offset: const Offset(0, 2),
-                                            )
-                                          ],
-                                        ),
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    clienteNome,
-                                                    style: TextStyle(color: coloreTestoCard, fontWeight: FontWeight.bold, fontSize: 13),
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  '€ ${prezzoTotale.toStringAsFixed(2).replaceAll('.', ',')}',
-                                                  style: TextStyle(color: colorePrezzoCard, fontWeight: FontWeight.bold, fontSize: 13),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }()),
-                              ],
                             ],
-                          ),
-                        ),
+                          );
+                        },
                       );
                     },
                   );
@@ -1594,6 +1968,7 @@ class StreamZip<T> extends StreamView<List<T>> {
     return mainController.stream;
   }
 }
+
 class DynamicPercentageFloatingActionButtonLocation extends FloatingActionButtonLocation {
   final double topRatio; // Es: 0.50 per il 50% dall'alto
 
