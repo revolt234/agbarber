@@ -5,8 +5,16 @@ import 'package:intl/intl.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../services/notification_service.dart';
 
-class StoricoPrenotazioniScreen extends StatelessWidget {
+class StoricoPrenotazioniScreen extends StatefulWidget {
   const StoricoPrenotazioniScreen({super.key});
+
+  @override
+  State<StoricoPrenotazioniScreen> createState() => _StoricoPrenotazioniScreenState();
+}
+
+class _StoricoPrenotazioniScreenState extends State<StoricoPrenotazioniScreen> {
+  // Flag per alternare tra "In corso" (true) e "Cronologia" (false)
+  bool _mostraInCorso = true;
 
   @override
   Widget build(BuildContext context) {
@@ -58,273 +66,370 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('appointments')
-            .where('userId', isEqualTo: user.uid)
-            .orderBy('date', descending: false)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: agOro));
-          }
-
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return _buildEmptyState(agOro, isDarkMode);
-          }
-
-          final adesso = DateTime.now();
-          final prenotazioniValide = <DocumentSnapshot>[];
-
-          for (var doc in snapshot.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            final String dateStr = data['date'] ?? '';
-            final String slotStr = data['slot'] ?? '';
-
-            try {
-              final DateTime orarioAppuntamento = DateFormat("yyyy-MM-dd HH:mm").parse("$dateStr $slotStr");
-
-              // Limite temporale per nascondere visivamente l'appuntamento (12 ore dopo)
-              final DateTime limiteVisualizzazione = orarioAppuntamento.add(const Duration(hours: 12));
-
-              if (adesso.isBefore(limiteVisualizzazione)) {
-                prenotazioniValide.add(doc);
-              }
-            } catch (e) {
-              prenotazioniValide.add(doc);
-            }
-          }
-
-          if (prenotazioniValide.isEmpty) {
-            return _buildEmptyState(agOro, isDarkMode);
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: prenotazioniValide.length,
-            itemBuilder: (context, index) {
-              final doc = prenotazioniValide[index];
-              final data = doc.data() as Map<String, dynamic>;
-
-              final String idDocumento = doc.id;
-              final String dataApp = data['date'] ?? '----';
-              final String ora = data['slot'] ?? '--:--';
-              final String barber = data['barberName'] ?? 'Operatore';
-              final List servizi = data['services'] ?? [];
-              final double prezzo = (data['totalPrice'] ?? 0.0).toDouble();
-
-              // Verifichiamo se l'appuntamento è cronologicamente già passato
-              bool isGiaPassato = false;
-              try {
-                final DateTime orarioAppuntamento = DateFormat("yyyy-MM-dd HH:mm").parse("$dataApp $ora");
-                if (orarioAppuntamento.isBefore(DateTime.now())) {
-                  isGiaPassato = true;
-                }
-              } catch (_) {}
-
-              String dataFormattata = dataApp;
-              try {
-                final DateTime parsedDate = DateFormat("yyyy-MM-dd").parse(dataApp);
-                dataFormattata = DateFormat("E d MMM", "it_IT").format(parsedDate).toUpperCase();
-              } catch (_) {}
-
-              return Card(
-                color: coloreSfondoCard,
-                margin: const EdgeInsets.only(bottom: 12),
-                elevation: isDarkMode ? 0 : 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: BorderSide(
-                    color: isDarkMode ? const Color(0xFFE2DCD2) : Colors.grey.shade300,
-                    width: 1,
-                  ),
+      body: Column(
+        children: [
+          if (!_mostraInCorso)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              color: agVerde.withValues(alpha: 0.1),
+              child: Text(
+                'Gli appuntamenti passati saranno visibili per 45 giorni dalla data dell\'appuntamento',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: isDarkMode ? const Color(0xFF211D1A) : agVerde,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    leading: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: agVerde,
-                        borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('appointments')
+                  .where('userId', isEqualTo: user.uid)
+                  .orderBy('date', descending: !_mostraInCorso)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: agOro));
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return _buildEmptyState(agOro, isDarkMode);
+                }
+
+                final adesso = DateTime.now();
+                final prenotazioniValide = <DocumentSnapshot>[];
+
+                for (var doc in snapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final String dateStr = data['date'] ?? '';
+                  final String slotStr = data['slot'] ?? '';
+
+                  try {
+                    final DateTime orarioAppuntamento = DateFormat("yyyy-MM-dd HH:mm").parse("$dateStr $slotStr");
+
+                    // Limite temporale per nascondere visivamente l'appuntamento (12 ore dopo)
+                    final DateTime limiteVisualizzazione = orarioAppuntamento.add(const Duration(hours: 12));
+
+                    final bool isInCorso = adesso.isBefore(limiteVisualizzazione);
+
+                    if (_mostraInCorso == isInCorso) {
+                      prenotazioniValide.add(doc);
+                    }
+                  } catch (e) {
+                    if (_mostraInCorso) {
+                      prenotazioniValide.add(doc);
+                    }
+                  }
+                }
+
+                if (prenotazioniValide.isEmpty) {
+                  return _buildEmptyState(agOro, isDarkMode);
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: prenotazioniValide.length,
+                  itemBuilder: (context, index) {
+                    final doc = prenotazioniValide[index];
+                    final data = doc.data() as Map<String, dynamic>;
+
+                    final String idDocumento = doc.id;
+                    final String dataApp = data['date'] ?? '----';
+                    final String ora = data['slot'] ?? '--:--';
+                    final String barber = data['barberName'] ?? 'Operatore';
+                    final List servizi = data['services'] ?? [];
+                    final double prezzo = (data['totalPrice'] ?? 0.0).toDouble();
+
+                    // Verifichiamo se l'appuntamento è cronologicamente già passato
+                    bool isGiaPassato = false;
+                    try {
+                      final DateTime orarioAppuntamento = DateFormat("yyyy-MM-dd HH:mm").parse("$dataApp $ora");
+                      if (orarioAppuntamento.isBefore(DateTime.now())) {
+                        isGiaPassato = true;
+                      }
+                    } catch (_) {}
+
+                    String dataFormattata = dataApp;
+                    try {
+                      final DateTime parsedDate = DateFormat("yyyy-MM-dd").parse(dataApp);
+                      dataFormattata = DateFormat("E d MMM", "it_IT").format(parsedDate).toUpperCase();
+                    } catch (_) {}
+
+                    return Card(
+                      color: coloreSfondoCard,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      elevation: isDarkMode ? 0 : 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          color: isDarkMode ? const Color(0xFFE2DCD2) : Colors.grey.shade300,
+                          width: 1,
+                        ),
                       ),
-                      child: const Icon(Icons.event, color: agOro, size: 28),
-                    ),
-                    title: Text(
-                      '${servizi.join(", ")}',
-                      style: TextStyle(
-                        color: coloreTestoPrimarioCard,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 6.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '$dataFormattata alle ore $ora',
-                            style: TextStyle(color: coloreTestoSecondarioCard, fontWeight: FontWeight.w500),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: agVerde,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.event, color: agOro, size: 28),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Specialista: $barber',
-                            style: TextStyle(color: coloreTestoSecondarioCard),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '€ ${prezzo.toStringAsFixed(2).replaceAll('.', ',')}',
-                            style: const TextStyle(
-                              color: agOro,
+                          title: Text(
+                            '${servizi.join(", ")}',
+                            style: TextStyle(
+                              color: coloreTestoPrimarioCard,
                               fontWeight: FontWeight.bold,
-                              fontSize: 15,
+                              fontSize: 16,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    trailing: IconButton(
-                      icon: Icon(
-                        Icons.delete_forever,
-                        color: isGiaPassato ? Colors.grey : Colors.redAccent,
-                        size: 28,
-                      ),
-                      tooltip: isGiaPassato ? 'Appuntamento già passato' : 'Annulla Appuntamento',
-                      onPressed: isGiaPassato
-                          ? null
-                          : () async {
-                        bool isAnnullamentoInCorso = false;
-
-                        await showDialog<void>(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (dialogContext) {
-                            return StatefulBuilder(
-                              builder: (context, setDialogState) {
-                                return PopScope(
-                                  canPop: !isAnnullamentoInCorso,
-                                  child: AlertDialog(
-                                    backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
-                                    title: Text(
-                                        'Annulla Appuntamento',
-                                        style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87, fontWeight: FontWeight.bold)
-                                    ),
-                                    content: Text(
-                                        'Sei sicuro di voler cancellare questa prenotazione? L\'orario tornerà disponibile per gli altri clienti.',
-                                        style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54)
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: isAnnullamentoInCorso
-                                            ? null
-                                            : () => Navigator.pop(dialogContext),
-                                        child: const Text('No, mantieni', style: TextStyle(color: agOro)),
-                                      ),
-                                      TextButton(
-                                        onPressed: isAnnullamentoInCorso
-                                            ? null
-                                            : () async {
-                                          setDialogState(() {
-                                            isAnnullamentoInCorso = true;
-                                          });
-
-                                          try {
-                                            // 1. Invia notifica di annullamento al barbiere tramite Cloud Function
-                                            try {
-                                              final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-                                                  .httpsCallable('inviaNotificaAnnullamentoAlBarbiere');
-
-                                              // Recupera il nome reale dell'utente se user.displayName è vuoto
-                                              String nomeClienteReale = user.displayName ?? '';
-                                              if (nomeClienteReale.isEmpty) {
-                                                final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                                                if (userDoc.exists && userDoc.data() != null) {
-                                                  nomeClienteReale = userDoc.data()!['name'] ?? userDoc.data()!['nome'] ?? '';
-                                                }
-                                              }
-                                              if (nomeClienteReale.isEmpty) {
-                                                nomeClienteReale = user.email ?? 'Un cliente';
-                                              }
-
-                                              await callable.call(<String, dynamic>{
-                                                'date': dataApp,
-                                                'slot': ora,
-                                                'barberName': barber,
-                                                'serviceNome': servizi.join(", "),
-                                                'clienteNome': nomeClienteReale,
-                                              });
-                                            } catch (e) {
-                                              debugPrint("Errore invio notifica annullamento al barbiere: $e");
-                                            }
-
-                                            // 2. Elimina il documento da Firestore
-                                            await FirebaseFirestore.instance
-                                                .collection('appointments')
-                                                .doc(idDocumento)
-                                                .delete();
-
-                                            // 3. Disdice la sveglia locale
-                                            await NotificationService().cancellaNotifica(idDocumento.hashCode);
-
-                                            if (dialogContext.mounted) {
-                                              Navigator.pop(dialogContext);
-                                            }
-
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text('Prenotazione annullata con successo.'),
-                                                  backgroundColor: Colors.green,
-                                                ),
-                                              );
-                                            }
-                                          } catch (e) {
-                                            setDialogState(() {
-                                              isAnnullamentoInCorso = false;
-                                            });
-
-                                            if (dialogContext.mounted) {
-                                              Navigator.pop(dialogContext);
-                                            }
-
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text('Errore durante la cancellazione: $e'),
-                                                  backgroundColor: Colors.redAccent,
-                                                ),
-                                              );
-                                            }
-                                          }
-                                        },
-                                        child: isAnnullamentoInCorso
-                                            ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.redAccent,
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                            : const Text('Sì, annulla', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                                      ),
-                                    ],
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 6.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$dataFormattata alle ore $ora',
+                                  style: TextStyle(color: coloreTestoSecondarioCard, fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Specialista: $barber',
+                                  style: TextStyle(color: coloreTestoSecondarioCard),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '€ ${prezzo.toStringAsFixed(2).replaceAll('.', ',')}',
+                                  style: const TextStyle(
+                                    color: agOro,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
                                   ),
-                                );
-                              },
-                            );
-                          },
-                        );
+                                ),
+                              ],
+                            ),
+                          ),
+                          trailing: IconButton(
+                            icon: Icon(
+                              Icons.delete_forever,
+                              color: isGiaPassato ? Colors.grey : Colors.redAccent,
+                              size: 28,
+                            ),
+                            tooltip: isGiaPassato ? 'Appuntamento già passato' : 'Annulla Appuntamento',
+                            onPressed: isGiaPassato
+                                ? null
+                                : () async {
+                              bool isAnnullamentoInCorso = false;
+
+                              await showDialog<void>(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (dialogContext) {
+                                  return StatefulBuilder(
+                                    builder: (context, setDialogState) {
+                                      return PopScope(
+                                        canPop: !isAnnullamentoInCorso,
+                                        child: AlertDialog(
+                                          backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
+                                          title: Text(
+                                              'Annulla Appuntamento',
+                                              style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87, fontWeight: FontWeight.bold)
+                                          ),
+                                          content: Text(
+                                              'Sei sicuro di voler cancellare questa prenotazione? L\'orario tornerà disponibile per gli altri clienti.',
+                                              style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54)
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: isAnnullamentoInCorso
+                                                  ? null
+                                                  : () => Navigator.pop(dialogContext),
+                                              child: const Text('No, mantieni', style: TextStyle(color: agOro)),
+                                            ),
+                                            TextButton(
+                                              onPressed: isAnnullamentoInCorso
+                                                  ? null
+                                                  : () async {
+                                                setDialogState(() {
+                                                  isAnnullamentoInCorso = true;
+                                                });
+
+                                                try {
+                                                  // 1. Invia notifica di annullamento al barbiere tramite Cloud Function
+                                                  try {
+                                                    final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                                        .httpsCallable('inviaNotificaAnnullamentoAlBarbiere');
+
+                                                    // Recupera il nome reale dell'utente se user.displayName è vuoto
+                                                    String nomeClienteReale = user.displayName ?? '';
+                                                    if (nomeClienteReale.isEmpty) {
+                                                      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                                                      if (userDoc.exists && userDoc.data() != null) {
+                                                        nomeClienteReale = userDoc.data()!['name'] ?? userDoc.data()!['nome'] ?? '';
+                                                      }
+                                                    }
+                                                    if (nomeClienteReale.isEmpty) {
+                                                      nomeClienteReale = user.email ?? 'Un cliente';
+                                                    }
+
+                                                    await callable.call(<String, dynamic>{
+                                                      'date': dataApp,
+                                                      'slot': ora,
+                                                      'barberName': barber,
+                                                      'serviceNome': servizi.join(", "),
+                                                      'clienteNome': nomeClienteReale,
+                                                    });
+                                                  } catch (e) {
+                                                    debugPrint("Errore invio notifica annullamento al barbiere: $e");
+                                                  }
+
+                                                  // 2. Elimina il documento da Firestore
+                                                  await FirebaseFirestore.instance
+                                                      .collection('appointments')
+                                                      .doc(idDocumento)
+                                                      .delete();
+
+                                                  // 3. Disdice la sveglia locale
+                                                  await NotificationService().cancellaNotifica(idDocumento.hashCode);
+
+                                                  if (dialogContext.mounted) {
+                                                    Navigator.pop(dialogContext);
+                                                  }
+
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text('Prenotazione annullata con successo.'),
+                                                        backgroundColor: Colors.green,
+                                                      ),
+                                                    );
+                                                  }
+                                                } catch (e) {
+                                                  setDialogState(() {
+                                                    isAnnullamentoInCorso = false;
+                                                  });
+
+                                                  if (dialogContext.mounted) {
+                                                    Navigator.pop(dialogContext);
+                                                  }
+
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text('Errore durante la cancellazione: $e'),
+                                                        backgroundColor: Colors.redAccent,
+                                                      ),
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                              child: isAnnullamentoInCorso
+                                                  ? const SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child: CircularProgressIndicator(
+                                                  color: Colors.redAccent,
+                                                  strokeWidth: 2,
+                                                ),
+                                              )
+                                                  : const Text('Sì, annulla', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+
+          // Selettore inferiore in stile due colonne ("IN CORSO" | "CRONOLOGIA")
+          Container(
+            padding: const EdgeInsets.all(8.0),
+            color: isDarkMode ? const Color(0xFFE8E3D9) : Colors.grey.shade200,
+            child: SafeArea(
+              top: false,
+              child: Row(
+                children: [
+                  // Colonna sinistra: IN CORSO
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        if (!_mostraInCorso) {
+                          setState(() {
+                            _mostraInCorso = true;
+                          });
+                        }
                       },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _mostraInCorso ? agVerde : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'IN CORSO',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: _mostraInCorso ? Colors.white : coloreTestoSecondarioCard,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
-          );
-        },
+
+                  const SizedBox(width: 8),
+
+                  // Colonna destra: CRONOLOGIA
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        if (_mostraInCorso) {
+                          setState(() {
+                            _mostraInCorso = false;
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: !_mostraInCorso ? agVerde : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'CRONOLOGIA',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: !_mostraInCorso ? Colors.white : coloreTestoSecondarioCard,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -343,7 +448,7 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'Nessun appuntamento attivo',
+              _mostraInCorso ? 'Nessun appuntamento attivo' : 'Nessun appuntamento in cronologia',
               style: TextStyle(
                 fontSize: 18,
                 color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87,
@@ -353,7 +458,9 @@ class StoricoPrenotazioniScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'I tuoi prossimi appuntamenti compariranno qui.',
+              _mostraInCorso
+                  ? 'I tuoi prossimi appuntamenti compariranno qui.'
+                  : 'Gli appuntamenti passati compariranno qui.',
               style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54, fontSize: 14),
               textAlign: TextAlign.center,
             ),

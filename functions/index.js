@@ -3,21 +3,21 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
-// 0. PULIZIA AUTOMATICA PRENOTAZIONI VECCHIE (Eseguita ogni 9 giorni)
+// 0. PULIZIA AUTOMATICA PRENOTAZIONI VECCHIE (Eseguita ogni giorno)
 exports.puliziaPrenotazioniVecchie = onSchedule(
   {
-    schedule: "0 3 */9 * *", // Alle 03:00 del mattino, ogni 9 giorni
+    schedule: "0 3 * * *", // Alle 03:00 del mattino, ogni giorno
     timeZone: "Europe/Rome",
     region: "europe-west3",
   },
   async (event) => {
-    console.log("Starting automatic cleanup of appointments older than 7 days...");
+    console.log("Starting automatic cleanup of appointments older than 45 days...");
 
     const db = admin.firestore();
     const adesso = new Date();
 
-    // Calcola la data e l'ora limite di 7 giorni fa
-    const limiteSetteGiorniFa = new Date(adesso.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Calcola la data e l'ora limite di 45 giorni fa
+    const limiteQuarantacinqueGiorniFa = new Date(adesso.getTime() - 45 * 24 * 60 * 60 * 1000);
 
     try {
       const appointmentsSnap = await db.collection("appointments").get();
@@ -39,8 +39,8 @@ exports.puliziaPrenotazioniVecchie = onSchedule(
           // Ricostruisce la data e l'orario completo dell'appuntamento
           const orarioAppuntamento = new Date(`${dateStr}T${slotStr}:00`);
 
-          // Se l'appuntamento è avvenuto più di 7 giorni fa, viene accodato per l'eliminazione
-          if (orarioAppuntamento < limiteSetteGiorniFa) {
+          // Se l'appuntamento è avvenuto più di 45 giorni fa, viene accodato per l'eliminazione
+          if (orarioAppuntamento < limiteQuarantacinqueGiorniFa) {
             batch.delete(doc.ref);
             contatoreEliminati++;
           }
