@@ -1,3 +1,9 @@
+plugins {
+    // START: FlutterFire Configuration
+    id("com.google.gms.google-services") version "4.4.4" apply false
+    // END: FlutterFire Configuration
+    id("com.google.firebase.crashlytics") version "3.0.2" apply false
+}
 allprojects {
     repositories {
         google()

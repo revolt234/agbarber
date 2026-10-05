@@ -529,6 +529,7 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final Color coloreTesto = isDarkMode ? Colors.white : Colors.black87;
+    final double paddingInferioreSistema = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       appBar: AppBar(
@@ -556,138 +557,149 @@ class _GestioneCalendarioScreenState extends State<GestioneCalendarioScreen> {
           ]
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('calendar_exceptions').orderBy('date', descending: false).snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Text(
-                  'Nessuna eccezione impostata.\nUsa i pulsanti in basso per gestire i singoli giorni o i periodi.',
-                  textAlign: TextAlign.center,
+      body: SafeArea(
+        top: false,
+        left: false,
+        right: false,
+        bottom: true,
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance.collection('calendar_exceptions').orderBy('date', descending: false).snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Text(
+                    'Nessuna eccezione impostata.\nUsa i pulsanti in basso per gestire i singoli giorni o i periodi.',
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-              ),
-            );
-          }
+              );
+            }
 
-          final eccezioni = snapshot.data!.docs;
-          final bool tuttiSelezionati = _elementiSelezionati.length == eccezioni.length;
+            final eccezioni = snapshot.data!.docs;
+            final bool tuttiSelezionati = _elementiSelezionati.length == eccezioni.length;
 
-          return Column(
-            children: [
-              Container(
-                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Row(
-                  children: [
-                    Checkbox(
-                      value: tuttiSelezionati,
-                      activeColor: const Color(0xFF164638),
-                      onChanged: (bool? checked) {
-                        setState(() {
-                          if (checked == true) {
-                            _isModalitaSelezione = true;
-                            _elementiSelezionati.clear();
-                            for (var doc in eccezioni) {
-                              _elementiSelezionati.add(doc.id);
-                            }
-                          } else {
-                            _elementiSelezionati.clear();
-                            _isModalitaSelezione = false;
-                          }
-                        });
-                      },
-                    ),
-                    Text(
-                      'Seleziona Tutti (${eccezioni.length})',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: coloreTesto),
-                    ),
-                    const Spacer(),
-                    if (_elementiSelezionati.isNotEmpty)
-                      IconButton(
-                        icon: const Icon(Icons.delete_sweep, color: Colors.red),
-                        onPressed: _confermaEliminazioneSelezionati,
-                      ),
-                  ],
-                ),
-              ),
-
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(left: 16.0, top: 16.0, right: 16.0, bottom: 80.0),
-                  itemCount: eccezioni.length,
-                  itemBuilder: (context, index) {
-                    final doc = eccezioni[index];
-                    final dati = doc.data() as Map<String, dynamic>;
-
-                    final String dataText = dati['date'] ?? dati['startDate'] ?? '';
-                    final String status = dati['status'] ?? 'chiuso';
-                    final String nota = dati['nota'] ?? '';
-                    final bool isChiuso = status == 'chiuso';
-                    final bool isSelezionato = _elementiSelezionati.contains(doc.id);
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      color: isSelezionato ? (isDarkMode ? const Color(0xFF2C3E35) : Colors.green.shade50) : null,
-                      child: ListTile(
-                        leading: _isModalitaSelezione
-                            ? Checkbox(
-                          value: isSelezionato,
-                          activeColor: const Color(0xFF164638),
-                          onChanged: (bool? val) {
-                            setState(() {
-                              if (val == true) {
-                                _elementiSelezionati.add(doc.id);
-                              } else {
-                                _elementiSelezionati.remove(doc.id);
-                                if (_elementiSelezionati.isEmpty) {
-                                  _isModalitaSelezione = false;
-                                }
-                              }
-                            });
-                          },
-                        )
-                            : CircleAvatar(
-                          backgroundColor: isChiuso ? Colors.red.shade100 : Colors.green.shade100,
-                          child: Icon(
-                            isChiuso ? Icons.block : Icons.event_available,
-                            color: isChiuso ? Colors.red : Colors.green,
-                          ),
-                        ),
-                        title: Text(
-                          dataText,
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: coloreTesto),
-                        ),
-                        subtitle: Text(
-                          '${isChiuso ? "CHIUSO" : "APERTURA STRAORDINARIA"} ${nota.isNotEmpty ? "- $nota" : ""}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: isChiuso ? Colors.red : Colors.green, fontSize: 13, fontWeight: FontWeight.w600),
-                        ),
-                        onLongPress: () {
+            return Column(
+              children: [
+                Container(
+                  color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: tuttiSelezionati,
+                        activeColor: const Color(0xFF164638),
+                        onChanged: (bool? checked) {
                           setState(() {
-                            _isModalitaSelezione = true;
-                            _elementiSelezionati.add(doc.id);
+                            if (checked == true) {
+                              _isModalitaSelezione = true;
+                              _elementiSelezionati.clear();
+                              for (var doc in eccezioni) {
+                                _elementiSelezionati.add(doc.id);
+                              }
+                            } else {
+                              _elementiSelezionati.clear();
+                              _isModalitaSelezione = false;
+                            }
                           });
                         },
-                        trailing: !_isModalitaSelezione
-                            ? IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.grey),
-                          onPressed: () => _confermaRimuoviEccezione(doc.id, dataText),
-                        )
-                            : null,
                       ),
-                    );
-                  },
+                      Text(
+                        'Seleziona Tutti (${eccezioni.length})',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: coloreTesto),
+                      ),
+                      const Spacer(),
+                      if (_elementiSelezionati.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                          onPressed: _confermaEliminazioneSelezionati,
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+
+                Expanded(
+                  child: ListView.builder(
+                    padding: EdgeInsets.only(
+                      left: 16.0,
+                      top: 16.0,
+                      right: 16.0,
+                      bottom: 100.0 + paddingInferioreSistema,
+                    ),
+                    itemCount: eccezioni.length,
+                    itemBuilder: (context, index) {
+                      final doc = eccezioni[index];
+                      final dati = doc.data() as Map<String, dynamic>;
+
+                      final String dataText = dati['date'] ?? dati['startDate'] ?? '';
+                      final String status = dati['status'] ?? 'chiuso';
+                      final String nota = dati['nota'] ?? '';
+                      final bool isChiuso = status == 'chiuso';
+                      final bool isSelezionato = _elementiSelezionati.contains(doc.id);
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        color: isSelezionato ? (isDarkMode ? const Color(0xFF2C3E35) : Colors.green.shade50) : null,
+                        child: ListTile(
+                          leading: _isModalitaSelezione
+                              ? Checkbox(
+                            value: isSelezionato,
+                            activeColor: const Color(0xFF164638),
+                            onChanged: (bool? val) {
+                              setState(() {
+                                if (val == true) {
+                                  _elementiSelezionati.add(doc.id);
+                                } else {
+                                  _elementiSelezionati.remove(doc.id);
+                                  if (_elementiSelezionati.isEmpty) {
+                                    _isModalitaSelezione = false;
+                                  }
+                                }
+                              });
+                            },
+                          )
+                              : CircleAvatar(
+                            backgroundColor: isChiuso ? Colors.red.shade100 : Colors.green.shade100,
+                            child: Icon(
+                              isChiuso ? Icons.block : Icons.event_available,
+                              color: isChiuso ? Colors.red : Colors.green,
+                            ),
+                          ),
+                          title: Text(
+                            dataText,
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: coloreTesto),
+                          ),
+                          subtitle: Text(
+                            '${isChiuso ? "CHIUSO" : "APERTURA STRAORDINARIA"} ${nota.isNotEmpty ? "- $nota" : ""}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: isChiuso ? Colors.red : Colors.green, fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                          onLongPress: () {
+                            setState(() {
+                              _isModalitaSelezione = true;
+                              _elementiSelezionati.add(doc.id);
+                            });
+                          },
+                          trailing: !_isModalitaSelezione
+                              ? IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.grey),
+                            onPressed: () => _confermaRimuoviEccezione(doc.id, dataText),
+                          )
+                              : null,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
       // PULSANTI SEPARATI PER SINGOLO GIORNO E PERIODO
       floatingActionButton: Row(

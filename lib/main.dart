@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Pacchetto ufficiale per i messaggi push
 import 'package:firebase_analytics/firebase_analytics.dart'; // AGGIUNTO: Pacchetto ufficiale per Google Analytics
+import 'package:firebase_crashlytics/firebase_crashlytics.dart'; // AGGIUNTO: Pacchetto ufficiale per Crashlytics
 import 'screens/visualizzazione_prenotazioni_screen.dart';
 import 'firebase_options.dart';
 import 'screens/prenotazione_servizi_screen.dart';
@@ -33,6 +34,13 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // AGGIUNTO: Configurazione di Firebase Crashlytics per catturare tutti gli errori Flutter e di piattaforma
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
 
   // Accensione del sistema notifiche all'avvio (Inizializzazione Unica e Centralizzata)
   if (!kIsWeb) {
