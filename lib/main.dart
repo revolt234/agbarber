@@ -146,7 +146,7 @@ class _AuthGateState extends State<AuthGate> {
       _pulisciNotificheEBadge();
     });
 
-    // CORREZIONE: Registriamo le notifiche PUSH una sola volta al cambio di stato Auth
+    // Registrazione notifiche PUSH eseguita una sola volta al cambio di stato Auth
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) {
         _configuraNotifichePushRemote(user.uid);
@@ -167,7 +167,7 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void dispose() {
     _tokenRefreshSubscription?.cancel();
-    _authSubscription?.cancel(); // Ricordati di annullare la sottoscrizione
+    _authSubscription?.cancel();
     super.dispose();
   }
 
@@ -345,8 +345,6 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         final User user = snapshot.data!;
-
-        // ❌ RIMOSSA LA CHIAMATA A _configuraNotifichePushRemote(user.uid); DA QUI!
 
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
