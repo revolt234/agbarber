@@ -8,7 +8,7 @@ import UIKit
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
 
-    // CORRETTO: Registra il delegato in modo sicuro impostando self
+    // Registra il delegato in modo sicuro impostando self
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self
     }
@@ -17,6 +17,11 @@ import UIKit
     self.azzeraBadge()
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // Spostata la registrazione dei plugin Flutter per supportare UIScene
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
   }
 
   // Intercetta l'istante in cui l'app torna attiva per azzerare definitivamente il badge
@@ -35,9 +40,5 @@ import UIKit
     } else {
       UIApplication.shared.applicationIconBadgeNumber = 0
     }
-  }
-
-  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
   }
 }
