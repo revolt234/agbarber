@@ -134,8 +134,8 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  // Riferimento per cancellare la sottoscrizione allo stream quando il widget viene distrutto
   StreamSubscription<String>? _tokenRefreshSubscription;
+  StreamSubscription<User?>? _authSubscription;
   String? _currentUid;
 
   @override
@@ -143,10 +143,18 @@ class _AuthGateState extends State<AuthGate> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controllaAggiornamentoObbligatorio();
-      _pulisciNotificheEBadge(); // MODIFICATO: Richiama la pulizia del badge all'avvio
+      _pulisciNotificheEBadge();
     });
 
-    // Inizializza l'ascolto globale del cambio token (onTokenRefresh)
+    // CORREZIONE: Registriamo le notifiche PUSH una sola volta al cambio di stato Auth
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        _configuraNotifichePushRemote(user.uid);
+      } else {
+        _currentUid = null;
+      }
+    });
+
     if (!kIsWeb) {
       _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
         if (_currentUid != null) {
@@ -159,6 +167,7 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void dispose() {
     _tokenRefreshSubscription?.cancel();
+    _authSubscription?.cancel(); // Ricordati di annullare la sottoscrizione
     super.dispose();
   }
 
@@ -332,13 +341,12 @@ class _AuthGateState extends State<AuthGate> {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          _currentUid = null;
           return const ClienteHomePage(nomeUtente: "Ospite");
         }
 
         final User user = snapshot.data!;
 
-        _configuraNotifichePushRemote(user.uid);
+        // ❌ RIMOSSA LA CHIAMATA A _configuraNotifichePushRemote(user.uid); DA QUI!
 
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
@@ -356,8 +364,6 @@ class _AuthGateState extends State<AuthGate> {
               nomeEstratto = userData['name'] ?? user.displayName ?? "Cliente";
 
               if (ruolo == 'barbiere') {
-                // MODIFICATO: Per evitare il loop di refresh e il doppio caricamento grafico,
-                // aggiorniamo il token in background anziché attendere in modo sincrono con un FutureBuilder.
                 user.getIdToken();
                 return const BarbiereHomePage();
               }
