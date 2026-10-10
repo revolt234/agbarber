@@ -26,6 +26,10 @@
     <string>$(FLUTTER_BUILD_NUMBER)</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Utilizziamo il calendario per salvare i tuoi appuntamenti prenotati.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Utilizziamo il calendario per salvare i tuoi appuntamenti prenotati.</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>

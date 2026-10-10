@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:device_calendar_plus/device_calendar_plus.dart';
 import '../services/notification_service.dart';
 
 class StoricoPrenotazioniScreen extends StatefulWidget {
@@ -15,6 +16,69 @@ class StoricoPrenotazioniScreen extends StatefulWidget {
 class _StoricoPrenotazioniScreenState extends State<StoricoPrenotazioniScreen> {
   // Flag per alternare tra "In corso" (true) e "Cronologia" (false)
   bool _mostraInCorso = true;
+
+  /// Cerca e rimuove l'evento corrispondente dal calendario locale
+  Future<void> _rimuoviEventoDalCalendarioLocale({
+    required String dataApp,
+    required String oraStr,
+    required String servizioNome,
+  }) async {
+    try {
+      debugPrint("=== AVVIO RIMOZIONE EVENTO DAL CALENDARIO ===");
+
+      final status = await DeviceCalendar.instance.requestPermissions(
+        level: CalendarAccessLevel.full,
+      );
+
+      if (status != CalendarPermissionStatus.granted && status != CalendarPermissionStatus.writeOnly) {
+        debugPrint("Permesso calendario non concesso per la rimozione.");
+        return;
+      }
+
+      final calendars = await DeviceCalendar.instance.listCalendars();
+      if (calendars.isEmpty) return;
+
+      List<String> partiOra = oraStr.split(':');
+      int ora = int.parse(partiOra[0]);
+      int minuti = int.parse(partiOra[1]);
+
+      DateTime parsedDate = DateFormat("yyyy-MM-dd").parse(dataApp);
+      DateTime dataInizio = DateTime(
+        parsedDate.year,
+        parsedDate.month,
+        parsedDate.day,
+        ora,
+        minuti,
+      );
+      // Finestra temporale di ricerca ristretta all'intervallo dell'evento
+      DateTime dataFineRicerca = dataInizio.add(const Duration(hours: 3));
+
+      final String titoloRicerca = 'AG Barber: $servizioNome';
+
+      for (var calendar in calendars) {
+        if (calendar.readOnly) continue;
+
+        try {
+          final events = await DeviceCalendar.instance.listEvents(
+            dataInizio.subtract(const Duration(minutes: 10)),
+            dataFineRicerca,
+            calendarIds: [calendar.id],
+          );
+
+          for (var event in events) {
+            if (event.title == titoloRicerca || event.title.contains(servizioNome)) {
+              await DeviceCalendar.instance.deleteEvent(instanceId: event.instanceId);
+              debugPrint("=== EVENTO CANCELLATO CON SUCCESSO DAL CALENDARIO (${calendar.name}) ===");
+            }
+          }
+        } catch (e) {
+          debugPrint("Errore ricerca/cancellazione nel calendario ${calendar.id}: $e");
+        }
+      }
+    } catch (e) {
+      debugPrint("Errore rimozione evento calendario: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -297,6 +361,13 @@ class _StoricoPrenotazioniScreenState extends State<StoricoPrenotazioniScreen> {
 
                                                   // 3. Disdice la sveglia locale
                                                   await NotificationService().cancellaNotifica(idDocumento.hashCode);
+
+                                                  // 4. Rimuove l'evento dal calendario nativo del telefono
+                                                  await _rimuoviEventoDalCalendarioLocale(
+                                                    dataApp: dataApp,
+                                                    oraStr: ora,
+                                                    servizioNome: servizi.isNotEmpty ? servizi.join(", ") : '',
+                                                  );
 
                                                   if (dialogContext.mounted) {
                                                     Navigator.pop(dialogContext);

@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario per invocare la funzione lato server
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:device_calendar_plus/device_calendar_plus.dart';
 import '../services/notification_service.dart';
 
 class PrenotazioneDataScreen extends StatefulWidget {
@@ -75,6 +76,109 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     super.dispose();
   }
 
+  /// Aggiunge l'evento al calendario del dispositivo con orario preciso e promemoria alle 06:00 di mattina
+  Future<void> _aggiungiEventoAlCalendarioLocale({
+    required DateTime dataGiorno,
+    required String oraStr,
+    required int durataMinuti,
+    required String servizioNome,
+    required String barbiereNome,
+    required String nota,
+  }) async {
+    try {
+      debugPrint("=== AVVIO SALVATAGGIO CALENDARIO IN BACKGROUND ===");
+
+      // 1. Richiesta permessi
+      final status = await DeviceCalendar.instance.requestPermissions(
+        level: CalendarAccessLevel.full,
+      );
+
+      if (status != CalendarPermissionStatus.granted && status != CalendarPermissionStatus.writeOnly) {
+        debugPrint("Permesso calendario non concesso dall'utente.");
+        return;
+      }
+
+      // 2. Recupero tutti i calendari
+      final calendars = await DeviceCalendar.instance.listCalendars();
+      if (calendars.isEmpty) {
+        debugPrint("Nessun calendario trovato sul dispositivo.");
+        return;
+      }
+
+      // 3. Selezione del calendario scrivibile (priorità account Gmail/Google)
+      Calendar? targetCalendar;
+
+      try {
+        targetCalendar = calendars.firstWhere(
+              (c) => !c.readOnly && (c.accountName?.toLowerCase().contains('gmail.com') ?? false),
+        );
+      } catch (_) {
+        try {
+          targetCalendar = calendars.firstWhere(
+                (c) => !c.readOnly && c.isPrimary,
+          );
+        } catch (_) {
+          targetCalendar = calendars.firstWhere((c) => !c.readOnly);
+        }
+      }
+
+      if (targetCalendar.readOnly) {
+        debugPrint("Nessun calendario scrivibile valido trovato.");
+        return;
+      }
+
+      // 4. Calcolo orari precisi dell'appuntamento
+      List<String> partiOra = oraStr.split(':');
+      int ora = int.parse(partiOra[0]);
+      int minuti = int.parse(partiOra[1]);
+
+      DateTime dataInizio = DateTime(
+        dataGiorno.year,
+        dataGiorno.month,
+        dataGiorno.day,
+        ora,
+        minuti,
+      );
+      DateTime dataFine = dataInizio.add(Duration(minutes: durataMinuti));
+
+      // 5. Calcolo dei minuti di preavviso per ricevere la notifica alle 06:00 del mattino
+      DateTime orarioPromemoriaMattina = DateTime(
+        dataGiorno.year,
+        dataGiorno.month,
+        dataGiorno.day,
+        6,
+        0,
+      );
+
+      int minutiPreavviso = dataInizio.difference(orarioPromemoriaMattina).inMinutes;
+
+      if (minutiPreavviso < 0) {
+        minutiPreavviso = 0;
+      }
+
+      String descrizione = "Operatore: $barbiereNome";
+      if (nota.isNotEmpty) {
+        descrizione += "\nNote: $nota";
+      }
+
+      // 6. Salvataggio con la lista di Duration per i promemoria
+      await DeviceCalendar.instance.createEvent(
+        calendarId: targetCalendar.id,
+        title: 'AG Barber: $servizioNome',
+        startDate: dataInizio,
+        endDate: dataFine,
+        isAllDay: false,
+        reminders: [Duration(minutes: minutiPreavviso)], // Converte i minuti in Duration
+        location: 'AG Barber',
+        description: descrizione,
+      );
+
+      debugPrint("=== EVENTO SALVATO CON PROMEMORIA ALLE 06:00 SUL CALENDARIO: ${targetCalendar.name} ===");
+    } catch (e) {
+      debugPrint("Errore aggiunta calendario background: $e");
+    }
+  }
+
   Future<void> _inizializzaDati() async {
     try {
       final orariDoc = await FirebaseFirestore.instance
@@ -103,6 +207,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       setState(() => _isLoadingConfig = false);
     }
   }
+
   Map<String, dynamic>? _getEccezionePerData(DateTime d) {
     String dataStr = _formattaData(d);
 
@@ -124,6 +229,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     }
     return null;
   }
+
   void _centraGiornoSelezionato({bool animato = true}) {
     if (!_scrollControllerGiorni.hasClients || _giorniFiltratiVisibili.isEmpty) return;
 
@@ -701,6 +807,16 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                           if (datiRisposta['success'] != true) throw 'SLOT_OCCUPATO';
 
                                           final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
+
+                                          // Salva l'evento al calendario del telefono in background
+                                          await _aggiungiEventoAlCalendarioLocale(
+                                            dataGiorno: _dataSelezionata,
+                                            oraStr: oraSelezionata,
+                                            durataMinuti: widget.servizioDurata,
+                                            servizioNome: widget.servizioNome,
+                                            barbiereNome: _barbiereSelezionatoNome ?? 'Staff',
+                                            nota: testoNota,
+                                          );
 
                                           try {
                                             final HttpsCallable callableNotificaBarbiere = FirebaseFunctions.instanceFor(region: 'europe-west3')
