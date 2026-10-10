@@ -277,21 +277,23 @@ class _LoginScreenState extends State<LoginScreen> {
           final String telInserito = _telefonoController.text.trim();
           final String telefonoFinale = telInserito.isNotEmpty ? telInserito : 'Nessun cellulare';
 
-          // AGGIUNTO: Recupero dinamico della versione Privacy Policy richiesta da Remote Config
+          // Recupero dinamico della versione Privacy Policy da Remote Config (con trim per sicurezza)
           String versionePrivacyAttuale = "1.0";
           try {
             final remoteConfig = FirebaseRemoteConfig.instance;
-            versionePrivacyAttuale = remoteConfig.getString('privacy_required_version');
-            if (versionePrivacyAttuale.isEmpty) versionePrivacyAttuale = "1.0";
+            await remoteConfig.fetchAndActivate(); // Assicura che l'ultima versione remota sia attiva
+            final String versioneRemota = remoteConfig.getString('privacy_required_version').trim();
+            if (versioneRemota.isNotEmpty) {
+              versionePrivacyAttuale = versioneRemota;
+            }
           } catch (e) {
             debugPrint("Errore lettura Remote Config in registrazione: $e");
           }
 
-          // MODIFICATO: Recupero preventivo dell'fcmToken del dispositivo in fase di registrazione
+          // Recupero preventivo dell'fcmToken del dispositivo in fase di registrazione
           String? token;
           if (!kIsWeb) {
             try {
-              // Richiede i permessi per le notifiche push
               await FirebaseMessaging.instance.requestPermission();
               token = await FirebaseMessaging.instance.getToken();
             } catch (e) {
@@ -301,7 +303,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           final List<String> listaTokenIniziale = (token != null && token.isNotEmpty) ? [token] : [];
 
-          // CORRETTO: Inserimento dei campi di tracciamento e accettazione della Privacy Policy per evitare il ri-check
+          // Inserimento dei campi di tracciamento e accettazione della Privacy Policy
           await FirebaseFirestore.instance
               .collection('users')
               .doc(userCredential.user!.uid)
@@ -310,11 +312,11 @@ class _LoginScreenState extends State<LoginScreen> {
             'email': email,
             'role': 'cliente',
             'phone': telefonoFinale,
-            'fcmToken': token ?? '', // Campo legacy
-            'fcmTokens': listaTokenIniziale, // MODIFICATO: Salvataggio multi-dispositivo nativo del token
-            'privacyAccepted': true, // AGGIUNTO: Registra l'accettazione del consenso
-            'privacyAcceptedVersion': versionePrivacyAttuale, // AGGIUNTO: Salva la versione corrente
-            'privacyAcceptedAt': FieldValue.serverTimestamp(), // AGGIUNTO: Registra la data e l'ora di accettazione
+            'fcmToken': token ?? '',
+            'fcmTokens': listaTokenIniziale,
+            'privacyAccepted': true,
+            'privacyAcceptedVersion': versionePrivacyAttuale, // Salva la versione esatta sincronizzata
+            'privacyAcceptedAt': FieldValue.serverTimestamp(),
             'createdAt': FieldValue.serverTimestamp(),
           });
         }

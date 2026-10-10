@@ -28,10 +28,10 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   late Stream<QuerySnapshot> _servicesStream;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
 
-  // AGGIUNTO: ScrollController per la gestione e la visualizzazione permanente della Scrollbar
+  // ScrollController per la gestione e la visualizzazione permanente della Scrollbar
   final ScrollController _scrollController = ScrollController();
 
-  // MODIFICATO: Versione dinamica letta da Firebase Remote Config (con fallback a "1.0")
+  // Versione dinamica letta da Remote Config
   String _versionePrivacyRichiesta = "1.0";
   bool _dialogPrivacyMostrato = false;
 
@@ -42,7 +42,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   void initState() {
     super.initState();
     _inizializzaStream();
-    _inizializzaRemoteConfig(); // AGGIUNTO: Inizializza e recupera la versione da Remote Config
+    _inizializzaRemoteConfig();
     _ascoltaNomeUtenteInTempoReale();
     _richiediPermessiNotifiche();
   }
@@ -50,24 +50,26 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   @override
   void dispose() {
     _userSubscription?.cancel();
-    _scrollController.dispose(); // AGGIUNTO: Rilascio delle risorse dello ScrollController
+    _scrollController.dispose();
     super.dispose();
   }
 
-  // AGGIUNTO: Recupera dinamicamente il parametro "privacy_required_version" da Firebase Remote Config
+  // Recupera dinamicamente il parametro "privacy_required_version" da Firebase Remote Config
   Future<void> _inizializzaRemoteConfig() async {
     try {
       final remoteConfig = FirebaseRemoteConfig.instance;
       await remoteConfig.setConfigSettings(RemoteConfigSettings(
         fetchTimeout: const Duration(seconds: 10),
-        minimumFetchInterval: Duration.zero, // Consente di recuperare immediatamente le modifiche
+        minimumFetchInterval: Duration.zero,
       ));
       await remoteConfig.setDefaults({'privacy_required_version': '1.0'});
       await remoteConfig.fetchAndActivate();
 
-      final String versioneRemota = remoteConfig.getString('privacy_required_version');
-      if (versioneRemota.isNotEmpty) {
-        _versionePrivacyRichiesta = versioneRemota;
+      final String versioneRemota = remoteConfig.getString('privacy_required_version').trim();
+      if (versioneRemota.isNotEmpty && mounted) {
+        setState(() {
+          _versionePrivacyRichiesta = versioneRemota;
+        });
       }
     } catch (e) {
       debugPrint("Errore durante il recupero da Remote Config: $e");
@@ -87,7 +89,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
         ?.requestNotificationsPermission();
   }
 
-  // AGGIUNTO: Funzione helper per aprire la Privacy Policy sul browser
+  // Funzione helper per aprire la Privacy Policy sul browser
   Future<void> _apriPrivacyPolicy() async {
     final Uri url = Uri.parse('https://agbarber-bc826.web.app/privacypolicy.html');
     try {
@@ -97,9 +99,8 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     }
   }
 
-  // AGGIUNTO: Esegue la cancellazione completa dell'account se l'utente rifiuta le nuove condizioni della privacy
+  // Esegue la cancellazione completa dell'account se l'utente rifiuta le nuove condizioni della privacy
   Future<void> _eliminaAccountEseguiLogout(String uid) async {
-    // Mostra indicatore di caricamento bloccante
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -117,7 +118,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
       await callable.call(<String, dynamic>{'uid': uid});
 
-      // Cancella il token FCM hardware locale
       try {
         await FirebaseMessaging.instance.deleteToken();
       } catch (e) {
@@ -127,7 +127,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
       await FirebaseAuth.instance.signOut();
 
       if (mounted) {
-        Navigator.pop(context); // Chiude il loader
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Account e relative prenotazioni eliminati con successo per rifiuto privacy.'),
@@ -138,7 +138,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context); // Chiude il loader
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Errore durante l\'eliminazione dell\'account: $e'),
@@ -149,7 +149,7 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     }
   }
 
-  // AGGIUNTO: Mostra il dialogo di accettazione obbligatoria con la versione letta da Remote Config e opzione di recesso
+  // Mostra il dialogo di accettazione obbligatoria
   void _mostraDialogoAccettazionePrivacyObbligatoria(String uid) {
     if (_dialogPrivacyMostrato) return;
     _dialogPrivacyMostrato = true;
@@ -158,14 +158,14 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
     showDialog(
       context: context,
-      barrierDismissible: false, // Impedisce la chiusura toccando all'esterno
+      barrierDismissible: false,
       builder: (context) {
         bool isSalvataggioInCorso = false;
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return PopScope(
-              canPop: false, // Impedisce la chiusura con il tasto Indietro
+              canPop: false,
               child: AlertDialog(
                 backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
                 title: Text(
@@ -210,12 +210,10 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                   ],
                 ),
                 actions: [
-                  // Pulsante per Rifiutare e avviare la cancellazione dell'account o il logout
                   TextButton(
                     onPressed: isSalvataggioInCorso
                         ? null
                         : () async {
-                      // Mostra conferma di eliminazione/recesso
                       final bool confermaEliminazione = await showDialog(
                         context: context,
                         builder: (ctx) => AlertDialog(
@@ -244,8 +242,8 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
                       if (confermaEliminazione && context.mounted) {
                         _dialogPrivacyMostrato = false;
-                        Navigator.pop(context); // Chiude il dialogo della privacy
-                        await _eliminaAccountEseguiLogout(uid); // Richiama la procedura di eliminazione
+                        Navigator.pop(context);
+                        await _eliminaAccountEseguiLogout(uid);
                       }
                     },
                     child: const Text(
@@ -264,12 +262,15 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                         : () async {
                       setDialogState(() => isSalvataggioInCorso = true);
                       try {
+                        final String versioneDaSalvare = _versionePrivacyRichiesta.trim();
+
+                        // Priorità a Firestore: salva la versione accettata
                         await FirebaseFirestore.instance
                             .collection('users')
                             .doc(uid)
                             .update({
                           'privacyAccepted': true,
-                          'privacyAcceptedVersion': _versionePrivacyRichiesta,
+                          'privacyAcceptedVersion': versioneDaSalvare,
                           'privacyAcceptedAt': FieldValue.serverTimestamp(),
                         });
 
@@ -302,14 +303,10 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     );
   }
 
-  // AGGIUNTO: Funzione asincrona di allineamento del token in background all'avvio dell'app per sessioni persistenti
   Future<void> _sincronizzaTokenFCM(String uid) async {
     if (kIsWeb) return;
     try {
-      // Verifica o richiede i permessi per le notifiche push remota
       await FirebaseMessaging.instance.requestPermission();
-
-      // Preleva il token FCM rigenerato dall'aggiornamento dell'app
       String? tokenAttuale = await FirebaseMessaging.instance.getToken();
 
       if (tokenAttuale != null) {
@@ -317,7 +314,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
             .collection('users')
             .doc(uid)
             .update({'fcmToken': tokenAttuale});
-        debugPrint("Token FCM sincronizzato correttamente all'avvio per la sessione attiva.");
       }
     } catch (e) {
       debugPrint("Errore silenzioso sincronizzazione token all'avvio: $e");
@@ -327,7 +323,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   void _ascoltaNomeUtenteInTempoReale() {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // MODIFICATO: Sincronizziamo il token preventivamente non appena rileviamo l'utente loggato in persistenza
       _sincronizzaTokenFCM(user.uid);
 
       _userSubscription = FirebaseFirestore.instance
@@ -336,21 +331,16 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
           .snapshots()
           .listen((userDoc) async {
 
-        // Controlliamo che l'utente sia ancora presente nell'istanza Auth locale
         final currentUserCheck = FirebaseAuth.instance.currentUser;
         if (currentUserCheck == null) {
           _userSubscription?.cancel();
           return;
         }
 
-        // MODIFICATO: Evitiamo il falso positivo per gli account appena registrati.
-        // Se il documento non esiste ancora sul server, controlliamo da quanto tempo è stato creato l'account Auth.
         if (!userDoc.exists && !userDoc.metadata.isFromCache) {
           final DateTime? creationTime = currentUserCheck.metadata.creationTime;
           if (creationTime != null) {
             final differenza = DateTime.now().difference(creationTime);
-            // Se l'account è stato registrato da meno di 45 secondi, non effettuiamo il logout.
-            // Stiamo dando il tempo a LoginScreen di terminare la scrittura .set() su Firestore.
             if (differenza.inSeconds < 45) {
               if (mounted) {
                 setState(() {
@@ -362,7 +352,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
             }
           }
 
-          // Se l'account è vecchio e il documento non esiste sul server, allora è stato rimosso davvero dal barbiere.
           _userSubscription?.cancel();
           await FirebaseAuth.instance.signOut();
 
@@ -383,9 +372,19 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
         if (userDoc.exists && userDoc.data() != null) {
           final data = userDoc.data() as Map<String, dynamic>;
 
-          // AGGIUNTO: Controllo dinamico rispetto alla versione letta da Remote Config
-          final String versioneAccettata = data['privacyAcceptedVersion']?.toString() ?? '';
-          if (versioneAccettata != _versionePrivacyRichiesta && mounted) {
+          // PRIORITÀ ASSOLUTA A FIREBASE:
+          // Sincronizza immediatamente la variabile locale con l'ultima versione registrata su Firebase
+          final String versioneAccettataSuFirebase = data['privacyAcceptedVersion']?.toString().trim() ?? '';
+
+          if (versioneAccettataSuFirebase.isNotEmpty) {
+            _versionePrivacyRichiesta = versioneAccettataSuFirebase;
+          }
+
+          // Se su Firebase manca la versione accettata o differisce dalla richiesta di Remote Config, mostra il dialogo
+          final String versioneRichiestaDaRemoteConfig = _versionePrivacyRichiesta.trim();
+          if (versioneRichiestaDaRemoteConfig.isNotEmpty &&
+              versioneAccettataSuFirebase != versioneRichiestaDaRemoteConfig &&
+              mounted) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _mostraDialogoAccettazionePrivacyObbligatoria(user.uid);
             });
@@ -601,7 +600,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
                       final servizi = snapshot.data!.docs;
 
-                      // AGGIUNTO: Scrollbar visibile e MasonryGridView per incastro tipo Tetris
                       return Scrollbar(
                         controller: _scrollController,
                         thumbVisibility: true,
@@ -656,9 +654,8 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                   borderRadius: BorderRadius.circular(15),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    mainAxisSize: MainAxisSize.min, // Si adatta verticalmente al contenuto
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      // Fascia superiore stilizzata del blocco note (con fori circolari)
                                       Container(
                                         height: 32,
                                         color: isSelezionato
@@ -687,7 +684,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                                         ),
                                       ),
 
-                                      // Contenuto del foglio a sviluppo dinamico verticale
                                       Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
                                         child: Column(
