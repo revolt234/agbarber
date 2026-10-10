@@ -31,8 +31,8 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   // ScrollController per la gestione e la visualizzazione permanente della Scrollbar
   final ScrollController _scrollController = ScrollController();
 
-  // Versione dinamica letta da Remote Config
-  String _versionePrivacyRichiesta = "1.0";
+  // Versione dinamica letta da Remote Config (Inizializzata vuota)
+  String _versionePrivacyRichiesta = "";
   bool _dialogPrivacyMostrato = false;
 
   // Colore Oro per le selezioni
@@ -42,9 +42,9 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   void initState() {
     super.initState();
     _inizializzaStream();
-    _inizializzaRemoteConfig();
-    _ascoltaNomeUtenteInTempoReale();
     _richiediPermessiNotifiche();
+    // Inizializza Remote Config e, solo a completamento, avvia l'ascoltatore utente
+    _inizializzaRemoteConfig();
   }
 
   @override
@@ -52,6 +52,27 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     _userSubscription?.cancel();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Confronta la versione accettata dall'utente con quella richiesta da Remote Config
+  /// (Stessa logica di _deveAggiornare in main.dart)
+  bool _deveAccettarePrivacy(String accettata, String richiesta) {
+    if (richiesta.isEmpty) return false;
+    if (accettata.isEmpty) return true;
+
+    try {
+      List<int> vAcc = accettata.split('.').map(int.parse).toList();
+      List<int> vRich = richiesta.split('.').map(int.parse).toList();
+
+      for (int i = 0; i < vRich.length; i++) {
+        if (i >= vAcc.length) return true;
+        if (vAcc[i] < vRich[i]) return true;
+        if (vAcc[i] > vRich[i]) return false;
+      }
+    } catch (e) {
+      return accettata.trim() != richiesta.trim();
+    }
+    return false;
   }
 
   // Recupera dinamicamente il parametro "privacy_required_version" da Firebase Remote Config
@@ -62,7 +83,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
         fetchTimeout: const Duration(seconds: 10),
         minimumFetchInterval: Duration.zero,
       ));
-      await remoteConfig.setDefaults({'privacy_required_version': '1.0'});
       await remoteConfig.fetchAndActivate();
 
       final String versioneRemota = remoteConfig.getString('privacy_required_version').trim();
@@ -73,6 +93,9 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
       }
     } catch (e) {
       debugPrint("Errore durante il recupero da Remote Config: $e");
+    } finally {
+      // Avvia l'ascolto di Firestore solo dopo aver ottenuto il parametro remoto
+      _ascoltaNomeUtenteInTempoReale();
     }
   }
 
@@ -264,7 +287,6 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
                       try {
                         final String versioneDaSalvare = _versionePrivacyRichiesta.trim();
 
-                        // Priorità a Firestore: salva la versione accettata
                         await FirebaseFirestore.instance
                             .collection('users')
                             .doc(uid)
@@ -372,19 +394,11 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
         if (userDoc.exists && userDoc.data() != null) {
           final data = userDoc.data() as Map<String, dynamic>;
 
-          // PRIORITÀ ASSOLUTA A FIREBASE:
-          // Sincronizza immediatamente la variabile locale con l'ultima versione registrata su Firebase
+          // Versione precedentemente salvata nel profilo dell'utente su Firestore
           final String versioneAccettataSuFirebase = data['privacyAcceptedVersion']?.toString().trim() ?? '';
 
-          if (versioneAccettataSuFirebase.isNotEmpty) {
-            _versionePrivacyRichiesta = versioneAccettataSuFirebase;
-          }
-
-          // Se su Firebase manca la versione accettata o differisce dalla richiesta di Remote Config, mostra il dialogo
-          final String versioneRichiestaDaRemoteConfig = _versionePrivacyRichiesta.trim();
-          if (versioneRichiestaDaRemoteConfig.isNotEmpty &&
-              versioneAccettataSuFirebase != versioneRichiestaDaRemoteConfig &&
-              mounted) {
+          // Controllo dinamico basato sul confronto tra la versione accettata e quella da Remote Config
+          if (_deveAccettarePrivacy(versioneAccettataSuFirebase, _versionePrivacyRichiesta) && mounted) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _mostraDialogoAccettazionePrivacyObbligatoria(user.uid);
             });
