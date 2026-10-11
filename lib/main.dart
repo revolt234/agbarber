@@ -300,15 +300,20 @@ class _AuthGateState extends State<AuthGate> {
         return PopScope(
           canPop: false,
           child: AlertDialog(
-            backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            backgroundColor: isDarkMode ? const Color(0xFF0F2E25) : const Color(0xFFFDFBF7),
             title: Text(
               "Aggiornamento Obbligatorio 🚀",
-              style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  color: isDarkMode ? const Color(0xFFE2B13C) : const Color(0xFF211D1A),
+                  fontWeight: FontWeight.bold
+              ),
             ),
             content: Text(
               "Una nuova versione di AG Barber è disponibile nello store ufficiale. "
                   "Per garantire la massima stabilità nella prenotazione degli slot orari, aggiorna l'applicazione prima di procedere.",
-              style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black54),
+              style: TextStyle(
+                  color: isDarkMode ? const Color(0xFFE0E0E0) : const Color(0xFF6B635E)
+              ),
             ),
             actions: [
               TextButton(

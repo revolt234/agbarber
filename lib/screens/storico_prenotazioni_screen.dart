@@ -300,21 +300,32 @@ class _StoricoPrenotazioniScreenState extends State<StoricoPrenotazioniScreen> {
                                       return PopScope(
                                         canPop: !isAnnullamentoInCorso,
                                         child: AlertDialog(
-                                          backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
+                                          backgroundColor: isDarkMode ? const Color(0xFF0F2E25) : const Color(0xFFFDFBF7),
                                           title: Text(
                                               'Annulla Appuntamento',
-                                              style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87, fontWeight: FontWeight.bold)
+                                              style: TextStyle(
+                                                color: isDarkMode ? const Color(0xFFE2B13C) : const Color(0xFF211D1A),
+                                                fontWeight: FontWeight.bold,
+                                              )
                                           ),
                                           content: Text(
                                               'Sei sicuro di voler cancellare questa prenotazione? L\'orario tornerà disponibile per gli altri clienti.',
-                                              style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54)
+                                              style: TextStyle(
+                                                color: isDarkMode ? const Color(0xFFE0E0E0) : const Color(0xFF6B635E),
+                                              )
                                           ),
                                           actions: [
                                             TextButton(
                                               onPressed: isAnnullamentoInCorso
                                                   ? null
                                                   : () => Navigator.pop(dialogContext),
-                                              child: const Text('No, mantieni', style: TextStyle(color: agOro)),
+                                              child: Text(
+                                                'No, mantieni',
+                                                style: TextStyle(
+                                                  color: isDarkMode ? Colors.white70 : agOro,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
                                             ),
                                             TextButton(
                                               onPressed: isAnnullamentoInCorso

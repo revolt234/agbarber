@@ -97,22 +97,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
         return Theme(
           data: isDarkMode
-              ? ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
+              ? ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
               primary: Color(0xFFE2B13C),
               onPrimary: Colors.black,
-              surface: Color(0xFFFDFBF7),
-              onSurface: Color(0xFF211D1A),
-            ),
-            dialogBackgroundColor: const Color(0xFFFDFBF7),
+              surface: Color(0xFF0F2E25),
+              onSurface: Color(0xFFE0E0E0),
+            ), dialogTheme: DialogThemeData(backgroundColor: const Color(0xFF0F2E25)),
           )
               : ThemeData.light().copyWith(
             colorScheme: const ColorScheme.light(
               primary: Color(0xFF164638),
               onPrimary: Colors.white,
-              surface: Colors.white,
+              surface: Color(0xFFFDFBF7),
               onSurface: Colors.black,
-            ),
+            ), dialogTheme: DialogThemeData(backgroundColor: const Color(0xFFFDFBF7)),
           ),
           child: child!,
         );
@@ -178,11 +177,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
+          backgroundColor: isDarkMode ? const Color(0xFF0F2E25) : const Color(0xFFFDFBF7),
           title: Text(
             'Modifica Cellulare',
             style: TextStyle(
-              color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87,
+              color: isDarkMode ? const Color(0xFFE2B13C) : const Color(0xFF211D1A),
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -192,7 +191,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Text(
                 'Inserisci il tuo nuovo numero di cellulare (10 cifre) o rimuovilo usando il pulsante sotto.',
-                style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey, fontSize: 13),
+                style: TextStyle(
+                  color: isDarkMode ? const Color(0xFFE0E0E0) : const Color(0xFF6B635E),
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -201,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 autofocus: true, // Assegna automaticamente il focus all'apertura
                 maxLength: 10, // Blocca l'inserimento oltre la decima cifra
                 keyboardType: TextInputType.phone,
-                style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87),
+                style: TextStyle(color: isDarkMode ? Colors.white : const Color(0xFF211D1A)),
                 onTap: () => resettaSelezioneTesto(telController),
                 onTapOutside: (event) => telFocus.unfocus(),
                 inputFormatters: [
@@ -209,7 +211,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
                 decoration: InputDecoration(
                   labelText: 'Numero di cellulare',
-                  labelStyle: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey),
+                  labelStyle: TextStyle(color: isDarkMode ? const Color(0xFFE0E0E0) : const Color(0xFF6B635E)),
                   counterText: "",
                   enabledBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: isDarkMode ? const Color(0xFFE2DCD2) : const Color(0xFF164638)),
@@ -241,10 +243,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 telFocus.dispose();
                 Navigator.pop(context);
               },
-              child: Text('Annulla', style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey)),
+              child: Text(
+                'Annulla',
+                style: TextStyle(color: isDarkMode ? const Color(0xFFE0E0E0) : Colors.grey),
+              ),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF164638)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF164638),
+                foregroundColor: Colors.white,
+              ),
               onPressed: () async {
                 final String nuovoTel = telController.text.trim();
 
@@ -342,18 +350,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             return PopScope(
               canPop: !isDisconnessioneInCorso,
               child: AlertDialog(
-                backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
+                backgroundColor: isDarkMode ? const Color(0xFF0F2E25) : const Color(0xFFFDFBF7),
                 title: Text(
                   'Disconnetti',
                   style: TextStyle(
-                    color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87,
+                    color: isDarkMode ? const Color(0xFFE2B13C) : const Color(0xFF211D1A),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 content: Text(
                   'Sei sicuro di voler uscire dal tuo account?',
                   style: TextStyle(
-                    color: isDarkMode ? const Color(0xFF3D3734) : Colors.black87,
+                    color: isDarkMode ? const Color(0xFFE0E0E0) : const Color(0xFF3D3734),
                   ),
                 ),
                 actions: [
@@ -361,7 +369,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: isDisconnessioneInCorso ? null : () => Navigator.pop(dialogContext),
                     child: Text(
                       'Annulla',
-                      style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.grey),
+                      style: TextStyle(color: isDarkMode ? const Color(0xFFE0E0E0) : Colors.grey),
                     ),
                   ),
                   ElevatedButton(
@@ -436,24 +444,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     bool confermato = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
+        backgroundColor: isDarkMode ? const Color(0xFF0F2E25) : const Color(0xFFFDFBF7),
         title: Text(
           'Elimina Account',
-          style: TextStyle(color: isDarkMode ? const Color(0xFF211D1A) : Colors.black87, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: isDarkMode ? const Color(0xFFE2B13C) : const Color(0xFF211D1A),
+            fontWeight: FontWeight.bold,
+          ),
         ),
         content: Text(
           'Sei sicuro? Questa azione è irreversibile e cancellerà permanentemente tutti i tuoi dati, incluse tutte le tue prenotazioni.',
-          style: TextStyle(color: isDarkMode ? const Color(0xFF6B635E) : Colors.black54),
+          style: TextStyle(
+            color: isDarkMode ? const Color(0xFFE0E0E0) : const Color(0xFF6B635E),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annulla'),
+            child: Text(
+              'Annulla',
+              style: TextStyle(color: isDarkMode ? const Color(0xFFE0E0E0) : Colors.grey),
+            ),
           ),
-          TextButton(
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade900),
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Elimina Definitivamente'),
+            child: const Text(
+              'Elimina',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -474,7 +496,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'uid': _user.uid,
       });
 
-      // AGGIUNTO: Cancella il token hardware locale dopo l'eliminazione dell'account
+      // Cancella il token hardware locale dopo l'eliminazione dell'account
       try {
         await FirebaseMessaging.instance.deleteToken();
       } catch (e) {

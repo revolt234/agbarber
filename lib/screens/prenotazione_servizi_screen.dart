@@ -23,8 +23,9 @@ class PrenotazioneServiziScreen extends StatefulWidget {
 class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   String? _servizioSelezionatoId;
   Map<String, dynamic>? _datiServizioSelezionato;
-  String _nomeUtente = "";
-  bool _isLoadingNome = true;
+// Recupera subito il nome salvato in locale dall'istanza Auth per evitare il flicker di caricamento
+  late String _nomeUtente = FirebaseAuth.instance.currentUser?.displayName ?? "";
+  late bool _isLoadingNome = FirebaseAuth.instance.currentUser == null || _nomeUtente.isEmpty;
   late Stream<QuerySnapshot> _servicesStream;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
 
@@ -345,12 +346,22 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
   void _ascoltaNomeUtenteInTempoReale() {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
+      // Se il nome è già presente in locale da FirebaseAuth, disattiviamo subito l'indicatore
+      if (user.displayName != null && user.displayName!.trim().isNotEmpty && _isLoadingNome) {
+        if (mounted) {
+          setState(() {
+            _nomeUtente = user.displayName!;
+            _isLoadingNome = false;
+          });
+        }
+      }
+
       _sincronizzaTokenFCM(user.uid);
 
       _userSubscription = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .snapshots()
+          .snapshots(includeMetadataChanges: true) // Abilita l'ascolto immediato dalla cache locale di Firestore
           .listen((userDoc) async {
 
         final currentUserCheck = FirebaseAuth.instance.currentUser;
@@ -394,10 +405,8 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
         if (userDoc.exists && userDoc.data() != null) {
           final data = userDoc.data() as Map<String, dynamic>;
 
-          // Versione precedentemente salvata nel profilo dell'utente su Firestore
           final String versioneAccettataSuFirebase = data['privacyAcceptedVersion']?.toString().trim() ?? '';
 
-          // Controllo dinamico basato sul confronto tra la versione accettata e quella da Remote Config
           if (_deveAccettarePrivacy(versioneAccettataSuFirebase, _versionePrivacyRichiesta) && mounted) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _mostraDialogoAccettazionePrivacyObbligatoria(user.uid);
