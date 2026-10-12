@@ -7,7 +7,6 @@ import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario p
 import 'package:firebase_messaging/firebase_messaging.dart'; // AGGIUNTO: Necessario per recuperare il token FCM aggiornato
 import 'package:firebase_remote_config/firebase_remote_config.dart'; // AGGIUNTO: Necessario per la lettura dinamica della versione Privacy
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart'; // AGGIUNTO: Per layout a incastro (Tetris/Masonry)
 import 'package:prenotazionibarbiere/screens/prenotazione_calendario_screen.dart';
 import 'package:url_launcher/url_launcher.dart'; // AGGIUNTO: Necessario per aprire il link alla Privacy Policy
 import 'login_screen.dart'; // Importato per permettere il reindirizzamento alla LoginScreen
@@ -507,6 +506,124 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
     );
   }
 
+  Widget _costruisciCardServizio(DocumentSnapshot doc, bool isDarkMode, Color coloreSfondoCardSpenta, Color coloreTestoCardSpenta, Color coloreIconaCardSpenta) {
+    final dati = doc.data() as Map<String, dynamic>;
+    final String id = doc.id;
+    final String nome = dati['name'] ?? 'Servizio';
+    final double prezzo = (dati['price'] ?? 0.0).toDouble();
+    final int durata = dati['duration'] ?? 0;
+
+    final bool isSelezionato = _servizioSelezionatoId == id;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _servizioSelezionatoId = id;
+          _datiServizioSelezionato = dati;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: isSelezionato
+              ? (isDarkMode ? const Color(0xFFFFFDF8) : const Color(0xFFFFFDF7))
+              : coloreSfondoCardSpenta,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelezionato ? _coloreOro : (isDarkMode ? const Color(0xFFE2DCD2) : Colors.black12),
+            width: isSelezionato ? 2.5 : 1.0,
+          ),
+          boxShadow: isDarkMode ? null : [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            )
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 32,
+                color: isSelezionato
+                    ? _coloreOro
+                    : (isDarkMode ? const Color(0xFFE2DCD2) : const Color(0xFFE0E0E0)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      nome.toLowerCase().contains('barba') ? Icons.chair : Icons.content_cut,
+                      color: isSelezionato ? _coloreOro : coloreIconaCardSpenta,
+                      size: 30,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      nome,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: isSelezionato ? (isDarkMode ? const Color(0xFF211D1A) : Colors.black) : coloreTestoCardSpenta,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '$durata min',
+                      style: TextStyle(
+                        color: isSelezionato
+                            ? (isDarkMode ? const Color(0xFF6B635E) : Colors.grey.shade700)
+                            : Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${prezzo.toStringAsFixed(2).replaceAll('.', ',')} €',
+                      style: TextStyle(
+                        color: isSelezionato ? _coloreOro : coloreTestoCardSpenta,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -623,138 +740,57 @@ class _PrenotazioneServiziScreenState extends State<PrenotazioneServiziScreen> {
 
                       final servizi = snapshot.data!.docs;
 
+                      // Separazione rigida tra colonna Sinistra e colonna Destra
+                      final List<DocumentSnapshot> serviziSinistra = [];
+                      final List<DocumentSnapshot> serviziDestra = [];
+
+                      for (int i = 0; i < servizi.length; i++) {
+                        if (i % 2 == 0) {
+                          serviziSinistra.add(servizi[i]);
+                        } else {
+                          serviziDestra.add(servizi[i]);
+                        }
+                      }
+
                       return Scrollbar(
                         controller: _scrollController,
                         thumbVisibility: true,
                         interactive: true,
                         thickness: 6.0,
                         radius: const Radius.circular(8.0),
-                        child: MasonryGridView.count(
+                        child: SingleChildScrollView(
                           controller: _scrollController,
                           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 16,
-                          itemCount: servizi.length,
-                          itemBuilder: (context, index) {
-                            final doc = servizi[index];
-                            final dati = doc.data() as Map<String, dynamic>;
-
-                            final String id = doc.id;
-                            final String nome = dati['name'] ?? 'Servizio';
-                            final double prezzo = (dati['price'] ?? 0.0).toDouble();
-                            final int durata = dati['duration'] ?? 0;
-
-                            final bool isSelezionato = _servizioSelezionatoId == id;
-
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _servizioSelezionatoId = id;
-                                  _datiServizioSelezionato = dati;
-                                });
-                              },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                decoration: BoxDecoration(
-                                  color: isSelezionato
-                                      ? (isDarkMode ? const Color(0xFFFFFDF8) : const Color(0xFFFFFDF7))
-                                      : coloreSfondoCardSpenta,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: isSelezionato ? _coloreOro : (isDarkMode ? const Color(0xFFE2DCD2) : Colors.black12),
-                                    width: isSelezionato ? 2.5 : 1.0,
-                                  ),
-                                  boxShadow: isDarkMode ? null : [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.05),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 3),
-                                    )
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(15),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        height: 32,
-                                        color: isSelezionato
-                                            ? _coloreOro
-                                            : (isDarkMode ? const Color(0xFFE2DCD2) : const Color(0xFFE0E0E0)),
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                          children: [
-                                            Container(
-                                              width: 8,
-                                              height: 8,
-                                              decoration: BoxDecoration(
-                                                color: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
-                                                shape: BoxShape.circle,
-                                              ),
-                                            ),
-                                            Container(
-                                              width: 8,
-                                              height: 8,
-                                              decoration: BoxDecoration(
-                                                color: isDarkMode ? const Color(0xFFFDFBF7) : Colors.white,
-                                                shape: BoxShape.circle,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              nome.toLowerCase().contains('barba') ? Icons.chair : Icons.content_cut,
-                                              color: isSelezionato ? _coloreOro : coloreIconaCardSpenta,
-                                              size: 30,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              nome,
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                color: isSelezionato ? (isDarkMode ? const Color(0xFF211D1A) : Colors.black) : coloreTestoCardSpenta,
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                            Text(
-                                              '$durata min',
-                                              style: TextStyle(
-                                                color: isSelezionato
-                                                    ? (isDarkMode ? const Color(0xFF6B635E) : Colors.grey.shade700)
-                                                    : Colors.grey.shade600,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '${prezzo.toStringAsFixed(2).replaceAll('.', ',')} €',
-                                              style: TextStyle(
-                                                color: isSelezionato ? _coloreOro : coloreTestoCardSpenta,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // COLONNA SINISTRA
+                              Expanded(
+                                child: Column(
+                                  children: serviziSinistra.map((doc) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 16.0),
+                                      child: _costruisciCardServizio(doc, isDarkMode, coloreSfondoCardSpenta, coloreTestoCardSpenta, coloreIconaCardSpenta),
+                                    );
+                                  }).toList(),
                                 ),
                               ),
-                            );
-                          },
+
+                              const SizedBox(width: 14), // Spaziatura orizzontale tra colonne
+
+                              // COLONNA DESTRA
+                              Expanded(
+                                child: Column(
+                                  children: serviziDestra.map((doc) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 16.0),
+                                      child: _costruisciCardServizio(doc, isDarkMode, coloreSfondoCardSpenta, coloreTestoCardSpenta, coloreIconaCardSpenta),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },
