@@ -1,17 +1,24 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:prenotazionibarbiere/screens/prenotazione_calendario_screen.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:intl/intl.dart';
 
 class PrenotazioneServiziBarbiereScreen extends StatefulWidget {
   final String clienteId;
   final String clienteNome;
+  final DateTime? dataInizialeSelezionata;
+  final String? slotIniziale;
+  final String? barberIdIniziale;
 
   const PrenotazioneServiziBarbiereScreen({
     super.key,
     required this.clienteId,
     required this.clienteNome,
+    this.dataInizialeSelezionata,
+    this.slotIniziale,
+    this.barberIdIniziale,
   });
 
   @override
@@ -22,6 +29,7 @@ class _PrenotazioneServiziBarbiereScreenState extends State<PrenotazioneServiziB
   String? _servizioSelezionatoId;
   Map<String, dynamic>? _datiServizioSelezionato;
   late Stream<QuerySnapshot> _servicesStream;
+  bool _isSaving = false;
 
   // Colori del brand AG Barber
   final Color constColorVerde = const Color(0xFF164638);
@@ -50,6 +58,109 @@ class _PrenotazioneServiziBarbiereScreenState extends State<PrenotazioneServiziB
     }
   }
 
+  Future<void> _effettuaPrenotazioneDiretta() async {
+    final DateTime data = widget.dataInizialeSelezionata ?? DateTime.now();
+    final String dataStr = DateFormat('yyyy-MM-dd').format(data);
+    final String? slot = widget.slotIniziale;
+    final String? barberId = widget.barberIdIniziale;
+
+    if (slot == null || barberId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Dati orario o operatore mancanti per completare la prenotazione.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      // 1. Recupero del nome del barbiere
+      String barberName = "Staff";
+      final barberDoc = await FirebaseFirestore.instance.collection('barbers').doc(barberId).get();
+      if (barberDoc.exists && barberDoc.data() != null) {
+        barberName = barberDoc.data()!['name'] ?? "Staff";
+      }
+
+      final String serviceNome = _datiServizioSelezionato?['name'] ?? 'Servizio';
+      final int serviceDurata = _datiServizioSelezionato?['duration'] ?? 30;
+      final double servicePrezzo = (_datiServizioSelezionato?['price'] ?? 0.0).toDouble();
+
+      // 2. Chiamata alla Cloud Function "creaPrenotazioneSicura"
+      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+          .httpsCallable('creaPrenotazioneSicura');
+
+      final HttpsCallableResult response = await callable.call(<String, dynamic>{
+        'date': dataStr,
+        'slot': slot,
+        'duration': serviceDurata,
+        'barberId': barberId,
+        'barberName': barberName,
+        'serviceNome': serviceNome,
+        'servicePrezzo': servicePrezzo,
+        'targetUserId': widget.clienteId,
+        'targetUserName': widget.clienteNome,
+      });
+
+      final Map<String, dynamic> datiRisposta = Map<String, dynamic>.from(response.data as Map);
+
+      if (datiRisposta['success'] != true) {
+        throw 'SLOT_OCCUPATO';
+      }
+
+      // 3. Notifica al barbiere
+      try {
+        final HttpsCallable callableNotificaBarbiere = FirebaseFunctions.instanceFor(region: 'europe-west3')
+            .httpsCallable('inviaNotificaNuovaPrenotazioneAlBarbiere');
+
+        await callableNotificaBarbiere.call(<String, dynamic>{
+          'date': dataStr,
+          'slot': slot,
+          'barberName': barberName,
+          'serviceNome': serviceNome,
+          'clienteNome': widget.clienteNome,
+        });
+      } catch (e) {
+        debugPrint("Errore notifica barbiere: $e");
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Prenotazione effettuata con successo!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      // Torna alla schermata del calendario chiudendo sia la selezione servizio sia il bottom sheet dei clienti
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+
+      String messaggioErrore = 'Errore di connessione. Impossibile salvare la prenotazione.';
+      Color coloreSfondo = Colors.red;
+
+      if (e == 'SLOT_OCCUPATO' || e.toString().contains('already-exists')) {
+        messaggioErrore = 'Spiacenti! Questo slot orario non è più disponibile.';
+        coloreSfondo = Colors.orange.shade900;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(messaggioErrore),
+          backgroundColor: coloreSfondo,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -71,7 +182,7 @@ class _PrenotazioneServiziBarbiereScreenState extends State<PrenotazioneServiziB
         iconTheme: const IconThemeData(color: Colors.white),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isSaving ? null : () => Navigator.pop(context),
         ),
       ),
       body: SafeArea(
@@ -80,7 +191,7 @@ class _PrenotazioneServiziBarbiereScreenState extends State<PrenotazioneServiziB
           builder: (context, snapshot) {
             final bool haErroreConnessione = snapshot.hasError;
             final bool haDatiValidi = snapshot.hasData && snapshot.data!.docs.isNotEmpty;
-            final bool puoProseguire = !haErroreConnessione && haDatiValidi && _servizioSelezionatoId != null;
+            final bool puoProseguire = !haErroreConnessione && haDatiValidi && _servizioSelezionatoId != null && !_isSaving;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -186,7 +297,9 @@ class _PrenotazioneServiziBarbiereScreenState extends State<PrenotazioneServiziB
                           final bool isSelezionato = _servizioSelezionatoId == id;
 
                           return GestureDetector(
-                            onTap: () {
+                            onTap: _isSaving
+                                ? null
+                                : () {
                               setState(() {
                                 _servizioSelezionatoId = id;
                                 _datiServizioSelezionato = dati;
@@ -252,7 +365,7 @@ class _PrenotazioneServiziBarbiereScreenState extends State<PrenotazioneServiziB
                   ),
                 ),
 
-                // Tasto Prosegui
+                // Tasto Conferma Prenotazione
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: ElevatedButton(
@@ -272,19 +385,7 @@ class _PrenotazioneServiziBarbiereScreenState extends State<PrenotazioneServiziB
                       if (!context.mounted) return;
 
                       if (online) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PrenotazioneCalendarioScreen(
-                              servizioId: _servizioSelezionatoId!,
-                              servizioNome: _datiServizioSelezionato?['name'] ?? 'Servizio',
-                              servizioDurata: _datiServizioSelezionato?['duration'] ?? 30,
-                              servizioPrezzo: (_datiServizioSelezionato?['price'] ?? 0.0).toDouble(),
-                              clienteId: widget.clienteId,     // PASSATO IL CLIENTE
-                              clienteNome: widget.clienteNome, // PASSATO IL CLIENTE
-                            ),
-                          ),
-                        );
+                        await _effettuaPrenotazioneDiretta();
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -296,8 +397,17 @@ class _PrenotazioneServiziBarbiereScreenState extends State<PrenotazioneServiziB
                       }
                     }
                         : null,
-                    child: const Text(
-                      'Prosegui',
+                    child: _isSaving
+                        ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF121212),
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                        : const Text(
+                      'CONFERMA PRENOTAZIONE',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),

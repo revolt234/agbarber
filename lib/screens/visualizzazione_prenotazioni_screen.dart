@@ -24,10 +24,10 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
   // Gestione stato di connessione
   bool _isOnline = true;
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
-  // Configurazione Griglia Oraria Dinamica
+  // Configurazione Griglia Oraria Dinamica Granulare
   int oraInizioGiornata = 8;
   int oraFineGiornata = 20;
-  final double altezzaPerMinuto = 3.8;
+  final double altezzaPerMinuto = 4.8; // Aumentata l'altezza per minuto per dare più respiro ai 10 minuti
   final double larghezzaColonnaOra = 65.0;
 
   Color _getColoreDaHex(String? hexString) {
@@ -89,8 +89,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     return 30;
   }
 
-  // Dialog/BottomSheet per la selezione del cliente e reindirizzamento alla prenotazione
-  void _mostraSelezionaClienteEAvviaPrenotazione() {
+  // Dialog/BottomSheet per la selezione del cliente e reindirizzamento alla prenotazione con orario e barbiere presi dallo slot selezionato
+  void _mostraSelezionaClienteEAvviaPrenotazione({String? slotSelezionato, String? barberIdSelezionato}) {
     if (!_isOnline) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -323,6 +323,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                     builder: (context) => PrenotazioneServiziBarbiereScreen(
                                                       clienteId: doc.id,
                                                       clienteNome: nome,
+                                                      dataInizialeSelezionata: _dataSelezionata,
+                                                      slotIniziale: slotSelezionato,
+                                                      barberIdIniziale: barberIdSelezionato,
                                                     ),
                                                   ),
                                                 );
@@ -388,6 +391,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                               builder: (context) => PrenotazioneServiziBarbiereScreen(
                                                 clienteId: 'OSPITE',
                                                 clienteNome: nomeInserito,
+                                                dataInizialeSelezionata: _dataSelezionata,
+                                                slotIniziale: slotSelezionato,
+                                                barberIdIniziale: barberIdSelezionato,
                                               ),
                                             ),
                                           );
@@ -560,6 +566,131 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                     child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                   )
                       : const Text('ELIMINA', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _mostraDialogInviaMessaggio(BuildContext sheetContext, String clienteId, String clienteNome, bool isDarkMode) {
+    final TextEditingController messaggioController = TextEditingController();
+    bool isInvioMessaggioInCorso = false;
+
+    showDialog(
+      context: sheetContext,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  Icon(Icons.message, color: agOro, size: 26),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Messaggio a $clienteNome',
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: messaggioController,
+                    maxLines: 4,
+                    style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+                    decoration: InputDecoration(
+                      hintText: 'Scrivi qui il messaggio per il cliente...',
+                      hintStyle: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38),
+                      filled: true,
+                      fillColor: isDarkMode ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: agOro, width: 2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isInvioMessaggioInCorso ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('ANNULLA', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: agVerde,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: isInvioMessaggioInCorso
+                      ? null
+                      : () async {
+                    final testo = messaggioController.text.trim();
+                    if (testo.isEmpty) return;
+
+                    setDialogState(() => isInvioMessaggioInCorso = true);
+
+                    try {
+                      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
+                      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                          .httpsCallable('inviaNotificaPersonalizzataCliente');
+
+                      await callable.call(<String, dynamic>{
+                        'userIdCliente': clienteId,
+                        'messaggio': testo,
+                      });
+
+                      if (!dialogContext.mounted) return;
+                      Navigator.pop(dialogContext);
+
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        SnackBar(
+                          content: Text('Messaggio inviato con successo a $clienteNome!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } catch (e) {
+                      setDialogState(() => isInvioMessaggioInCorso = false);
+
+                      String erroreDettaglio = e is FirebaseFunctionsException
+                          ? e.message ?? e.toString()
+                          : e.toString();
+
+                      if (erroreDettaglio.contains('failed-precondition')) {
+                        erroreDettaglio = 'Il cliente non ha abilitato le notifiche push sul telefono.';
+                      }
+
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        SnackBar(
+                          content: Text('Errore: $erroreDettaglio'),
+                          backgroundColor: Colors.orange.shade800,
+                          duration: const Duration(seconds: 5),
+                        ),
+                      );
+                    }
+                  },
+                  child: isInvioMessaggioInCorso
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                      : const Text('INVIA', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -1025,77 +1156,109 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
 
                         const SizedBox(height: 24),
 
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: agOro, width: 1.5),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              foregroundColor: agOro,
-                            ),
-                            icon: isInvioInCorso
-                                ? SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: agOro,
-                                strokeWidth: 2,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 48,
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(color: agOro, width: 1.5),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    foregroundColor: agOro,
+                                  ),
+                                  icon: isInvioInCorso
+                                      ? SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      color: agOro,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                      : const Icon(Icons.notification_important, size: 18),
+                                  label: Text(
+                                    isInvioInCorso ? 'INVIO...' : 'SOLLECITO',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, fontSize: 13),
+                                  ),
+                                  onPressed: (isInvioInCorso || clienteId == null)
+                                      ? null
+                                      : () async {
+                                    if (!_isOnline) {
+                                      _mostraDialogConnessioneAssente();
+                                      return;
+                                    }
+
+                                    setModalState(() => isInvioInCorso = true);
+                                    try {
+                                      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
+                                      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
+                                          .httpsCallable('inviaSollecitoCliente');
+
+                                      await callable.call(<String, dynamic>{
+                                        'userIdCliente': clienteId,
+                                      });
+
+                                      if (!context.mounted) return;
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Notifica inviata con successo a $clienteNome!'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    } catch (e) {
+                                      setModalState(() => isInvioInCorso = false);
+
+                                      String erroreDettaglio = e is FirebaseFunctionsException
+                                          ? e.message ?? e.toString()
+                                          : e.toString();
+
+                                      if (erroreDettaglio.contains('failed-precondition')) {
+                                        erroreDettaglio = 'Il cliente non ha abilitato le notifiche push sul telefono.';
+                                      }
+
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Errore: $erroreDettaglio'),
+                                          backgroundColor: Colors.orange.shade800,
+                                          duration: const Duration(seconds: 5),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
                               ),
-                            )
-                                : const Icon(Icons.notification_important, size: 20),
-                            label: Text(
-                              isInvioInCorso ? 'INVIO IN CORSO...' : 'SOLLECITA CLIENTE',
-                              style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
                             ),
-                            onPressed: (isInvioInCorso || clienteId == null)
-                                ? null
-                                : () async {
-                              if (!_isOnline) {
-                                _mostraDialogConnessioneAssente();
-                                return;
-                              }
-
-                              setModalState(() => isInvioInCorso = true);
-                              try {
-                                await FirebaseAuth.instance.currentUser?.getIdToken(true);
-
-                                final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west3')
-                                    .httpsCallable('inviaSollecitoCliente');
-
-                                await callable.call(<String, dynamic>{
-                                  'userIdCliente': clienteId,
-                                });
-
-                                if (!context.mounted) return;
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Notifica inviata con successo a $clienteNome!'),
-                                    backgroundColor: Colors.green,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: SizedBox(
+                                height: 48,
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(color: agVerde, width: 1.5),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    foregroundColor: isDarkMode ? Colors.white : agVerde,
                                   ),
-                                );
-                              } catch (e) {
-                                setModalState(() => isInvioInCorso = false);
-
-                                String erroreDettaglio = e is FirebaseFunctionsException
-                                    ? e.message ?? e.toString()
-                                    : e.toString();
-
-                                if (erroreDettaglio.contains('failed-precondition')) {
-                                  erroreDettaglio = 'Il cliente non ha abilitato le notifiche push sul telefono.';
-                                }
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Errore: $erroreDettaglio'),
-                                    backgroundColor: Colors.orange.shade800,
-                                    duration: const Duration(seconds: 5),
+                                  icon: const Icon(Icons.message, size: 18),
+                                  label: const Text(
+                                    'MESSAGGIO',
+                                    style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, fontSize: 13),
                                   ),
-                                );
-                              }
-                            },
-                          ),
+                                  onPressed: (clienteId == null)
+                                      ? null
+                                      : () {
+                                    if (!_isOnline) {
+                                      _mostraDialogConnessioneAssente();
+                                      return;
+                                    }
+                                    _mostraDialogInviaMessaggio(context, clienteId, clienteNome, isDarkMode);
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 10),
 
@@ -1256,7 +1419,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     final Color coloreSfondoBarraData = isDarkMode ? Colors.white.withValues(alpha: 0.05) : Colors.white;
     final Color coloreTestoSecondario = isDarkMode ? Colors.white70 : Colors.black54;
     final Color coloreLineeDivisione = isDarkMode ? Colors.grey.withValues(alpha: 0.25) : Colors.grey.shade300;
-    final Color coloreLineeMezzora = isDarkMode ? Colors.grey.withValues(alpha: 0.12) : Colors.grey.shade200;
+    final Color coloreLineeMezzora = isDarkMode ? Colors.grey.withValues(alpha: 0.15) : Colors.grey.shade200;
+    final Color coloreLineeDieciMin = isDarkMode ? Colors.grey.withValues(alpha: 0.08) : Colors.grey.shade100;
 
     return Scaffold(
       backgroundColor: coloreSfondoSchermata,
@@ -1268,13 +1432,6 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
         backgroundColor: agVerde,
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
-      ),
-      floatingActionButtonLocation: const DynamicPercentageFloatingActionButtonLocation(topRatio: 0.60),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: agOro,
-        foregroundColor: Colors.black,
-        onPressed: _mostraSelezionaClienteEAvviaPrenotazione,
-        child: const Icon(Icons.add, size: 28),
       ),
       body: SafeArea(
         child: Column(
@@ -1657,7 +1814,9 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                         height: altezzaTotaleGriglia,
                                         child: Stack(
                                           children: [
+                                            // LINEE GUIDA DEGLI ORARI (Ore, Mezz'ore e ogni 10 minuti)
                                             for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
+                                              // Linea dell'ora piena (:00)
                                               Positioned(
                                                 top: (i - oraInizioGiornata) * 60 * altezzaPerMinuto,
                                                 left: 0,
@@ -1666,7 +1825,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                   height: 30 * altezzaPerMinuto,
                                                   decoration: BoxDecoration(
                                                     border: Border(
-                                                      top: BorderSide(color: coloreLineeDivisione, width: 1.2),
+                                                      top: BorderSide(color: coloreLineeDivisione, width: 1.5),
                                                     ),
                                                   ),
                                                   child: Row(
@@ -1685,6 +1844,36 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                   ),
                                                 ),
                                               ),
+                                              // Linee intermedie ai minuti :10 e :20
+                                              for (int m in [10, 20]) ...[
+                                                Positioned(
+                                                  top: ((i - oraInizioGiornata) * 60 + m) * altezzaPerMinuto,
+                                                  left: 0,
+                                                  right: 0,
+                                                  child: Container(
+                                                    decoration: BoxDecoration(
+                                                      border: Border(
+                                                        top: BorderSide(color: coloreLineeDieciMin, width: 0.8),
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Container(
+                                                          width: larghezzaColonnaOra,
+                                                          padding: const EdgeInsets.only(top: 1, left: 12),
+                                                          child: Text(
+                                                            ":${m.toString().padLeft(2, '0')}",
+                                                            style: TextStyle(color: isDarkMode ? Colors.white24 : Colors.black26, fontSize: 10),
+                                                          ),
+                                                        ),
+                                                        const Expanded(child: SizedBox.shrink()),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                              // Linea della mezz'ora (:30)
                                               Positioned(
                                                 top: ((i - oraInizioGiornata) * 60 + 30) * altezzaPerMinuto,
                                                 left: 0,
@@ -1693,7 +1882,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                   height: 30 * altezzaPerMinuto,
                                                   decoration: BoxDecoration(
                                                     border: Border(
-                                                      top: BorderSide(color: coloreLineeMezzora, width: 1, style: BorderStyle.solid),
+                                                      top: BorderSide(color: coloreLineeMezzora, width: 1.2),
                                                     ),
                                                   ),
                                                   child: Row(
@@ -1704,7 +1893,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                         padding: const EdgeInsets.only(top: 2, left: 8),
                                                         child: Text(
                                                           "${i.toString().padLeft(2, '0')}:30",
-                                                          style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w500),
+                                                          style: TextStyle(color: isDarkMode ? Colors.grey : Colors.black38, fontSize: 11, fontWeight: FontWeight.w600),
                                                         ),
                                                       ),
                                                       const Expanded(child: SizedBox.shrink()),
@@ -1712,7 +1901,37 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                   ),
                                                 ),
                                               ),
+                                              // Linee intermedie ai minuti :40 e :50
+                                              for (int m in [40, 50]) ...[
+                                                Positioned(
+                                                  top: ((i - oraInizioGiornata) * 60 + m) * altezzaPerMinuto,
+                                                  left: 0,
+                                                  right: 0,
+                                                  child: Container(
+                                                    decoration: BoxDecoration(
+                                                      border: Border(
+                                                        top: BorderSide(color: coloreLineeDieciMin, width: 0.8),
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Container(
+                                                          width: larghezzaColonnaOra,
+                                                          padding: const EdgeInsets.only(top: 1, left: 12),
+                                                          child: Text(
+                                                            ":${m.toString().padLeft(2, '0')}",
+                                                            style: TextStyle(color: isDarkMode ? Colors.white24 : Colors.black26, fontSize: 10),
+                                                          ),
+                                                        ),
+                                                        const Expanded(child: SizedBox.shrink()),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ],
+                                            // Linea finale di chiusura giornata
                                             Positioned(
                                               top: (oraFineGiornata - oraInizioGiornata) * 60 * altezzaPerMinuto,
                                               left: 0,
@@ -1720,7 +1939,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                               child: Container(
                                                 decoration: BoxDecoration(
                                                   border: Border(
-                                                    top: BorderSide(color: coloreLineeDivisione, width: 1.2),
+                                                    top: BorderSide(color: coloreLineeDivisione, width: 1.5),
                                                   ),
                                                 ),
                                               ),
@@ -1748,10 +1967,94 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                       if (bIdx < listaBarbieriSelezionatiDocs.length) ...[
                                                         (() {
                                                           final barberDoc = listaBarbieriSelezionatiDocs[bIdx];
-                                                          final elementiBarber = elementiPerBarbiere[barberDoc.id] ?? [];
+                                                          final barberId = barberDoc.id;
+                                                          final elementiBarber = elementiPerBarbiere[barberId] ?? [];
+
+                                                          List<Widget> slotVuotiWidgets = [];
+                                                          const int passoMinuti = 10; // Granularità della selezione a 10 minuti
+
+                                                          for (int minInizioSlot = inizioMinutiTotali; minInizioSlot < fineMinutiTotali; minInizioSlot += passoMinuti) {
+                                                            final int minFineSlot = minInizioSlot + passoMinuti;
+
+                                                            int prossimoInizioOccupato = fineMinutiTotali;
+                                                            bool slotSovrapposto = false;
+                                                            int ultimoFinePrecedente = inizioMinutiTotali;
+
+                                                            for (var elem in elementiBarber) {
+                                                              final int appInizio = elem['inizio'];
+                                                              final int appFine = elem['fine'];
+
+                                                              if (minInizioSlot < appFine && minFineSlot > appInizio) {
+                                                                slotSovrapposto = true;
+                                                                break;
+                                                              }
+                                                              if (appInizio >= minInizioSlot && appInizio < prossimoInizioOccupato) {
+                                                                prossimoInizioOccupato = appInizio;
+                                                              }
+                                                              if (appFine <= minInizioSlot && appFine > ultimoFinePrecedente) {
+                                                                ultimoFinePrecedente = appFine;
+                                                              }
+                                                            }
+
+                                                            if (!slotSovrapposto && (prossimoInizioOccupato - minInizioSlot) >= 15) { // Durata minima prenotabile (15 min)
+                                                              final double topPos = (minInizioSlot - inizioMinutiTotali) * altezzaPerMinuto;
+                                                              final double altezzaBlocco = passoMinuti * altezzaPerMinuto;
+                                                              final double leftPos = larghezzaColonnaOra + (bIdx * larghezzaCorsia);
+
+                                                              // Se lo slot libero inizia subito dopo un servizio, prende esattamente l'orario di fine del servizio precedente
+                                                              final int orarioInizioEffettivo = (minInizioSlot - ultimoFinePrecedente < passoMinuti)
+                                                                  ? ultimoFinePrecedente
+                                                                  : minInizioSlot;
+
+                                                              final String oraSlot = _stringaDaMinuti(orarioInizioEffettivo);
+
+                                                              slotVuotiWidgets.add(
+                                                                Positioned(
+                                                                  top: topPos,
+                                                                  left: leftPos,
+                                                                  width: larghezzaCorsia,
+                                                                  height: altezzaBlocco,
+                                                                  child: Material(
+                                                                    color: Colors.transparent,
+                                                                    child: InkWell(
+                                                                      splashColor: agOro.withValues(alpha: 0.2),
+                                                                      highlightColor: agVerde.withValues(alpha: 0.1),
+                                                                      onTap: () {
+                                                                        _mostraSelezionaClienteEAvviaPrenotazione(
+                                                                          slotSelezionato: oraSlot,
+                                                                          barberIdSelezionato: barberId,
+                                                                        );
+                                                                      },
+                                                                      child: Container(
+                                                                        decoration: BoxDecoration(
+                                                                          border: Border(
+                                                                            bottom: BorderSide(
+                                                                              color: coloreLineeDieciMin,
+                                                                              width: 0.5,
+                                                                            ),
+                                                                          ),
+                                                                        ),
+                                                                        padding: const EdgeInsets.only(left: 4, top: 1),
+                                                                        alignment: Alignment.topLeft,
+                                                                        child: Text(
+                                                                          oraSlot,
+                                                                          style: TextStyle(
+                                                                            fontSize: 9,
+                                                                            fontWeight: FontWeight.w500,
+                                                                            color: isDarkMode ? Colors.white24 : Colors.black26,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            }
+                                                          }
 
                                                           return Stack(
                                                             children: [
+                                                              ...slotVuotiWidgets,
                                                               for (var elem in elementiBarber) ...[
                                                                 (() {
                                                                   final data = elem['data'];
@@ -1782,6 +2085,8 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                                       : "Generale";
 
                                                                   final bool isPeriodico = data['isPeriodico'] == true;
+                                                                  final String? notaContenuto = (data['nota'] ?? data['note'])?.toString().trim();
+                                                                  final bool haNota = notaContenuto != null && notaContenuto.isNotEmpty;
 
                                                                   final String? hexDalDb = mappaColoriServiziDb[nomeServizioPrincipale];
                                                                   final Color coloreBaseServizio = _getColoreDaHex(hexDalDb);
@@ -1849,7 +2154,7 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                                                               const SizedBox(height: 3),
                                                                               Expanded(
                                                                                 child: Text(
-                                                                                  servizi.join(", "),
+                                                                                  "${servizi.join(', ')}${haNota ? ' 📝' : ''}",
                                                                                   style: TextStyle(
                                                                                     color: coloreTestoCard.withValues(alpha: 0.90),
                                                                                     fontSize: 11,
@@ -1939,22 +2244,5 @@ class StreamZip<T> extends StreamView<List<T>> {
     });
 
     return mainController.stream;
-  }
-}
-
-class DynamicPercentageFloatingActionButtonLocation extends FloatingActionButtonLocation {
-  final double topRatio;
-
-  const DynamicPercentageFloatingActionButtonLocation({this.topRatio = 0.50});
-
-  @override
-  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
-    final double fabX = scaffoldGeometry.scaffoldSize.width -
-        scaffoldGeometry.floatingActionButtonSize.width - 16.0;
-
-    final double fabY = (scaffoldGeometry.scaffoldSize.height * topRatio) -
-        (scaffoldGeometry.floatingActionButtonSize.height / 2);
-
-    return Offset(fabX, fabY);
   }
 }
