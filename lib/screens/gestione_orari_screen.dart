@@ -34,6 +34,8 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
           String chiaveDb = giorno.toLowerCase();
           if (dati.containsKey(chiaveDb)) {
             _orariSettimanali[giorno] = Map<String, dynamic>.from(dati[chiaveDb]);
+            // Garantisce la presenza del campo isOrarioContinuato anche su dati già salvati precedentemente
+            _orariSettimanali[giorno]!['isOrarioContinuato'] ??= false;
           } else {
             // Fallback se manca un singolo giorno nel documento esistente
             _orariSettimanali[giorno] = _generaGiornoDefault(giorno);
@@ -56,6 +58,7 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
     bool diBaseAperto = (giorno != 'Lunedì' && giorno != 'Domenica');
     return {
       'isAperto': diBaseAperto,
+      'isOrarioContinuato': false,
       'mattina': {'apertura': '09:00', 'chiusura': '13:00'},
       'pomeriggio': {'apertura': '14:30', 'chiusura': '19:30'},
     };
@@ -93,31 +96,47 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
       final String pomInizioStr = _orariSettimanali[giorno]!['pomeriggio']['apertura'] ?? "14:30";
       final String pomFineStr = _orariSettimanali[giorno]!['pomeriggio']['chiusura'] ?? "19:30";
 
+      final bool isContinuato = _orariSettimanali[giorno]!['isOrarioContinuato'] ?? false;
+
       String? messaggioErrore;
 
-      // --- LOGICA DI VALIDAZIONE RIGIDA ---
-      if (fascia == 'mattina') {
+      // --- LOGICA DI VALIDAZIONE ---
+      if (isContinuato) {
+        // Se orario continuato, usiamo la fascia 'mattina' per memorizzare apertura e chiusura dell'intera giornata
         if (isApertura) {
           if (minutiScelti >= _minutiDaStringa(mattFineStr)) {
-            messaggioErrore = "L'apertura della mattina deve precedere l'orario di chiusura ($mattFineStr).";
+            messaggioErrore = "L'orario di apertura deve precedere l'orario di chiusura ($mattFineStr).";
           }
         } else {
-          if (minutiScelti > limiteMezzogiorno) {
-            messaggioErrore = "Il turno di mattina deve tassativamente chiudere entro le ore 13:00.";
-          } else if (minutiScelti <= _minutiDaStringa(mattInizioStr)) {
-            messaggioErrore = "La chiusura della mattina deve seguire l'orario di apertura ($mattInizioStr).";
+          if (minutiScelti <= _minutiDaStringa(mattInizioStr)) {
+            messaggioErrore = "L'orario di chiusura deve seguire l'orario di apertura ($mattInizioStr).";
           }
         }
-      } else if (fascia == 'pomeriggio') {
-        if (isApertura) {
-          if (minutiScelti < limiteMezzogiorno) {
-            messaggioErrore = "Il turno del pomeriggio non può aprire prima delle ore 13:00.";
-          } else if (minutiScelti >= _minutiDaStringa(pomFineStr)) {
-            messaggioErrore = "L'apertura del pomeriggio deve precedere l'orario di chiusura ($pomFineStr).";
+      } else {
+        // Se non è orario continuato, applichiamo i controlli tradizionali sui due turni
+        if (fascia == 'mattina') {
+          if (isApertura) {
+            if (minutiScelti >= _minutiDaStringa(mattFineStr)) {
+              messaggioErrore = "L'apertura della mattina deve precedere l'orario di chiusura ($mattFineStr).";
+            }
+          } else {
+            if (minutiScelti > limiteMezzogiorno) {
+              messaggioErrore = "Il turno di mattina deve tassativamente chiudere entro le ore 13:00.";
+            } else if (minutiScelti <= _minutiDaStringa(mattInizioStr)) {
+              messaggioErrore = "La chiusura della mattina deve seguire l'orario di apertura ($mattInizioStr).";
+            }
           }
-        } else {
-          if (minutiScelti <= _minutiDaStringa(pomInizioStr)) {
-            messaggioErrore = "La chiusura del pomeriggio deve seguire l'orario di apertura ($pomInizioStr).";
+        } else if (fascia == 'pomeriggio') {
+          if (isApertura) {
+            if (minutiScelti < limiteMezzogiorno) {
+              messaggioErrore = "Il turno del pomeriggio non può aprire prima delle ore 13:00.";
+            } else if (minutiScelti >= _minutiDaStringa(pomFineStr)) {
+              messaggioErrore = "L'apertura del pomeriggio deve precedere l'orario di chiusura ($pomFineStr).";
+            }
+          } else {
+            if (minutiScelti <= _minutiDaStringa(pomInizioStr)) {
+              messaggioErrore = "La chiusura del pomeriggio deve seguire l'orario di apertura ($pomInizioStr).";
+            }
           }
         }
       }
@@ -220,6 +239,7 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
             final giorno = _giorniUi[index];
             final infoGiorno = _orariSettimanali[giorno]!;
             final bool isAperto = infoGiorno['isAperto'] ?? false;
+            final bool isContinuato = infoGiorno['isOrarioContinuato'] ?? false;
 
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
@@ -247,39 +267,87 @@ class _GestioneOrariScreenState extends State<GestioneOrariScreen> {
                     ),
                     if (isAperto) ...[
                       const Divider(),
+
+                      // Opzione Orario Continuato
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            "Orario Continuato",
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                          Switch(
+                            activeThumbColor: const Color(0xFFE2B13C),
+                            value: isContinuato,
+                            onChanged: (valore) {
+                              setState(() {
+                                _orariSettimanali[giorno]!['isOrarioContinuato'] = valore;
+                                if (valore) {
+                                  // Imposta un intervallo di default congruo per il giorno continuato
+                                  _orariSettimanali[giorno]!['mattina']['apertura'] = '09:00';
+                                  _orariSettimanali[giorno]!['mattina']['chiusura'] = '19:30';
+                                } else {
+                                  // Ripristina gli orari di default divisi in due turni
+                                  _orariSettimanali[giorno]!['mattina']['apertura'] = '09:00';
+                                  _orariSettimanali[giorno]!['mattina']['chiusura'] = '13:00';
+                                  _orariSettimanali[giorno]!['pomeriggio']['apertura'] = '14:30';
+                                  _orariSettimanali[giorno]!['pomeriggio']['chiusura'] = '19:30';
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 4),
 
-                      // FASCIA MATTUTINA
-                      const Text(
-                          "Turno Mattina",
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildOrarioTile(giorno, 'mattina', true, coloreTesto),
-                          Icon(Icons.arrow_forward, color: coloreTesto.withValues(alpha: 0.5), size: 18),
-                          _buildOrarioTile(giorno, 'mattina', false, coloreTesto),
-                        ],
-                      ),
+                      if (isContinuato) ...[
+                        // FASCIA ORARIO CONTINUATO
+                        const Text(
+                            "Turno Continuato",
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _buildOrarioTile(giorno, 'mattina', true, coloreTesto),
+                            Icon(Icons.arrow_forward, color: coloreTesto.withValues(alpha: 0.5), size: 18),
+                            _buildOrarioTile(giorno, 'mattina', false, coloreTesto),
+                          ],
+                        ),
+                      ] else ...[
+                        // FASCIA MATTUTINA
+                        const Text(
+                            "Turno Mattina",
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _buildOrarioTile(giorno, 'mattina', true, coloreTesto),
+                            Icon(Icons.arrow_forward, color: coloreTesto.withValues(alpha: 0.5), size: 18),
+                            _buildOrarioTile(giorno, 'mattina', false, coloreTesto),
+                          ],
+                        ),
 
-                      const SizedBox(height: 10),
+                        const SizedBox(height: 10),
 
-                      // FASCIA POMERIDIANA
-                      const Text(
-                          "Turno Pomeriggio",
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildOrarioTile(giorno, 'pomeriggio', true, coloreTesto),
-                          Icon(Icons.arrow_forward, color: coloreTesto.withValues(alpha: 0.5), size: 18),
-                          _buildOrarioTile(giorno, 'pomeriggio', false, coloreTesto),
-                        ],
-                      ),
+                        // FASCIA POMERIDIANA
+                        const Text(
+                            "Turno Pomeriggio",
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey)
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _buildOrarioTile(giorno, 'pomeriggio', true, coloreTesto),
+                            Icon(Icons.arrow_forward, color: coloreTesto.withValues(alpha: 0.5), size: 18),
+                            _buildOrarioTile(giorno, 'pomeriggio', false, coloreTesto),
+                          ],
+                        ),
+                      ]
                     ] else ...[
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8.0),

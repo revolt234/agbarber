@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_functions/cloud_functions.dart'; // AGGIUNTO: Necessario per invocare la funzione lato server
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:device_calendar_plus/device_calendar_plus.dart';
@@ -334,23 +334,31 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
             String nomeGiorno = _giorniSettimana[giorno.weekday % 7];
             var orariGiorno = _orariNegozioBase[nomeGiorno];
 
-            // NUOVO CODICE:
             final Map<String, dynamic>? eccezione = _getEccezionePerData(giorno);
             final bool haAperturaStraordinaria = eccezione?['status'] == 'aperto';
             if (haAperturaStraordinaria) {
               orariGiorno = {
                 'isAperto': true,
+                'isOrarioContinuato': eccezione?['isOrarioContinuato'] ?? false,
                 'mattina': eccezione?['mattina'],
                 'pomeriggio': eccezione?['pomeriggio'],
               };
             }
 
             if (orariGiorno != null && orariGiorno['isAperto'] == true) {
-              if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
-                slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['mattina'], dataEx, giorno, occupatiBarbiere);
-              }
-              if (orariGiorno.containsKey('pomeriggio') && orariGiorno['pomeriggio'] != null) {
-                slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['pomeriggio'], dataEx, giorno, occupatiBarbiere);
+              final bool isContinuato = orariGiorno['isOrarioContinuato'] ?? false;
+
+              if (isContinuato) {
+                if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
+                  slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['mattina'], dataEx, giorno, occupatiBarbiere);
+                }
+              } else {
+                if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
+                  slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['mattina'], dataEx, giorno, occupatiBarbiere);
+                }
+                if (orariGiorno.containsKey('pomeriggio') && orariGiorno['pomeriggio'] != null) {
+                  slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['pomeriggio'], dataEx, giorno, occupatiBarbiere);
+                }
               }
             }
           }
@@ -422,26 +430,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       }
       if (siSovrappone) continue;
 
-      bool eIncastroValido = (m == start);
-      if (!eIncastroValido) {
-        for (var app in occupati) {
-          if (m == app.fine) {
-            eIncastroValido = true;
-            break;
-          }
+      int ultimoPuntoRiferimento = start;
+      for (var app in occupati) {
+        if (app.fine <= m && app.fine > ultimoPuntoRiferimento) {
+          ultimoPuntoRiferimento = app.fine;
         }
       }
-      if (!eIncastroValido) {
-        int ultimoPuntoRiferimento = start;
-        for (var app in occupati) {
-          if (app.fine <= m) {
-            ultimoPuntoRiferimento = app.fine;
-          }
-        }
-        if ((m - ultimoPuntoRiferimento) % widget.servizioDurata == 0) {
-          eIncastroValido = true;
-        }
-      }
+
+      bool eIncastroValido = ((m - ultimoPuntoRiferimento) % widget.servizioDurata == 0);
 
       if (eIncastroValido) contatore++;
     }
@@ -491,23 +487,31 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       String nomeGiorno = _giorniSettimana[_dataSelezionata.weekday % 7];
       var orariGiorno = _orariNegozioBase[nomeGiorno];
 
-      // NUOVO CODICE:
       final Map<String, dynamic>? eccezione = _getEccezionePerData(_dataSelezionata);
       final bool haAperturaStraordinaria = eccezione?['status'] == 'aperto';
       if (haAperturaStraordinaria) {
         orariGiorno = {
           'isAperto': true,
+          'isOrarioContinuato': eccezione?['isOrarioContinuato'] ?? false,
           'mattina': eccezione?['mattina'],
           'pomeriggio': eccezione?['pomeriggio'],
         };
       }
 
       if (orariGiorno != null && orariGiorno['isAperto'] == true) {
-        if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
-          _calcolaSlotPerFascia(orariGiorno['mattina'], dataEx);
-        }
-        if (orariGiorno.containsKey('pomeriggio') && orariGiorno['pomeriggio'] != null) {
-          _calcolaSlotPerFascia(orariGiorno['pomeriggio'], dataEx);
+        final bool isContinuato = orariGiorno['isOrarioContinuato'] ?? false;
+
+        if (isContinuato) {
+          if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
+            _calcolaSlotPerFascia(orariGiorno['mattina'], dataEx);
+          }
+        } else {
+          if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
+            _calcolaSlotPerFascia(orariGiorno['mattina'], dataEx);
+          }
+          if (orariGiorno.containsKey('pomeriggio') && orariGiorno['pomeriggio'] != null) {
+            _calcolaSlotPerFascia(orariGiorno['pomeriggio'], dataEx);
+          }
         }
       }
     } catch (e) {
@@ -544,27 +548,14 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
       }
       if (siSovrappone) continue;
 
-      bool eIncastroValido = (m == start);
-      if (!eIncastroValido) {
-        for (var app in _appuntamentiOccupati) {
-          if (m == app.fine) {
-            eIncastroValido = true;
-            break;
-          }
+      int ultimoPuntoRiferimento = start;
+      for (var app in _appuntamentiOccupati) {
+        if (app.fine <= m && app.fine > ultimoPuntoRiferimento) {
+          ultimoPuntoRiferimento = app.fine;
         }
       }
 
-      if (!eIncastroValido) {
-        int ultimoPuntoRiferimento = start;
-        for (var app in _appuntamentiOccupati) {
-          if (app.fine <= m) {
-            ultimoPuntoRiferimento = app.fine;
-          }
-        }
-        if ((m - ultimoPuntoRiferimento) % widget.servizioDurata == 0) {
-          eIncastroValido = true;
-        }
-      }
+      bool eIncastroValido = ((m - ultimoPuntoRiferimento) % widget.servizioDurata == 0);
 
       if (eIncastroValido) {
         int min = m % 60;
@@ -643,7 +634,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      isDismissible: false, // <-- AGGIUNGI QUESTO: Blocca la chiusura cliccando fuori
+      isDismissible: false,
       enableDrag: false,
       backgroundColor: Colors.transparent,
       useSafeArea: true,
