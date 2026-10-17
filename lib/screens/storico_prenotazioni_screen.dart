@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:device_calendar_plus/device_calendar_plus.dart';
-import '../services/notification_service.dart';
 
 class StoricoPrenotazioniScreen extends StatefulWidget {
   const StoricoPrenotazioniScreen({super.key});
@@ -370,10 +369,7 @@ class _StoricoPrenotazioniScreenState extends State<StoricoPrenotazioniScreen> {
                                                       .doc(idDocumento)
                                                       .delete();
 
-                                                  // 3. Disdice la sveglia locale
-                                                  await NotificationService().cancellaNotifica(idDocumento.hashCode);
-
-                                                  // 4. Rimuove l'evento dal calendario nativo del telefono
+                                                  // 3. Rimuove l'evento dal calendario nativo del telefono
                                                   await _rimuoviEventoDalCalendarioLocale(
                                                     dataApp: dataApp,
                                                     oraStr: ora,

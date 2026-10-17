@@ -6,7 +6,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:device_calendar_plus/device_calendar_plus.dart';
-import '../services/notification_service.dart';
 
 class PrenotazioneDataScreen extends StatefulWidget {
   final String servizioId;
@@ -791,13 +790,12 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                             'targetUserId': targetUserIdEffective,
                                             'targetUserName': targetClienteNomeEffective,
                                             'nota': testoNota,
+                                            'minutiPreavviso': minutiPreavvisoSelezionati,
                                           });
 
                                           final Map<String, dynamic> datiRisposta = Map<String, dynamic>.from(response.data as Map);
 
                                           if (datiRisposta['success'] != true) throw 'SLOT_OCCUPATO';
-
-                                          final String idAppuntamentoGenerato = datiRisposta['appointmentId'] ?? '';
 
                                           // Salva l'evento al calendario del telefono in background
                                           await _aggiungiEventoAlCalendarioLocale(
@@ -816,6 +814,7 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                             await callableNotificaBarbiere.call(<String, dynamic>{
                                               'date': dataStr,
                                               'slot': oraSelezionata,
+                                              'duration': widget.servizioDurata, // <-- AGGIUNGI QUESTA RIGA!
                                               'barberName': _barbiereSelezionatoNome ?? 'lo staff',
                                               'serviceNome': widget.servizioNome,
                                               'clienteNome': targetClienteNomeEffective,
@@ -823,18 +822,6 @@ class _PrenotazioneDataScreenState extends State<PrenotazioneDataScreen> {
                                             });
                                           } catch (e) {
                                             debugPrint("Errore durante l'invio della notifica al barbiere: $e");
-                                          }
-
-                                          try {
-                                            await NotificationService().pianificaNotificaFlessibile(
-                                              idNotifica: idAppuntamentoGenerato.hashCode,
-                                              dataStr: dataStr,
-                                              slotStr: oraSelezionata,
-                                              servizi: widget.servizioNome,
-                                              minutiPreavviso: minutiPreavvisoSelezionati,
-                                            );
-                                          } catch (e) {
-                                            debugPrint("Errore notifiche flessibili: $e");
                                           }
 
                                           notaController.dispose();

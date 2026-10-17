@@ -50,7 +50,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
   Timer? _timerLegenda;
   int _statoLegendaCorrente = 0;
 
-  final Color _coloreOro = const Color(0xFFD4AF37);
+  final Color _coloreOro = const Color(0xFFE2B13C);
   final Color _coloreVerdeForesta = const Color(0xFF164638);
 
   @override
@@ -226,17 +226,26 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
             if (haAperturaStraordinaria) {
               orariGiorno = {
                 'isAperto': true,
+                'isOrarioContinuato': eccezione?['isOrarioContinuato'] ?? false,
                 'mattina': eccezione?['mattina'],
                 'pomeriggio': eccezione?['pomeriggio'],
               };
             }
 
             if (orariGiorno != null && orariGiorno['isAperto'] == true) {
-              if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
-                slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['mattina'], dataEx, giorno, occupatiBarbiere);
-              }
-              if (orariGiorno.containsKey('pomeriggio') && orariGiorno['pomeriggio'] != null) {
-                slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['pomeriggio'], dataEx, giorno, occupatiBarbiere);
+              final bool isContinuato = orariGiorno['isOrarioContinuato'] ?? false;
+
+              if (isContinuato) {
+                if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
+                  slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['mattina'], dataEx, giorno, occupatiBarbiere);
+                }
+              } else {
+                if (orariGiorno.containsKey('mattina') && orariGiorno['mattina'] != null) {
+                  slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['mattina'], dataEx, giorno, occupatiBarbiere);
+                }
+                if (orariGiorno.containsKey('pomeriggio') && orariGiorno['pomeriggio'] != null) {
+                  slotLiberiTotaliGiorno += _contaSlotLiberiFascia(orariGiorno['pomeriggio'], dataEx, giorno, occupatiBarbiere);
+                }
               }
             }
           }
@@ -281,26 +290,14 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       }
       if (siSovrappone) continue;
 
-      bool eIncastroValido = (m == start);
-      if (!eIncastroValido) {
-        for (var app in occupati) {
-          if (m == app.fine) {
-            eIncastroValido = true;
-            break;
-          }
+      int ultimoPuntoRiferimento = start;
+      for (var app in occupati) {
+        if (app.fine <= m && app.fine > ultimoPuntoRiferimento) {
+          ultimoPuntoRiferimento = app.fine;
         }
       }
-      if (!eIncastroValido) {
-        int ultimoPuntoRiferimento = start;
-        for (var app in occupati) {
-          if (app.fine <= m) {
-            ultimoPuntoRiferimento = app.fine;
-          }
-        }
-        if ((m - ultimoPuntoRiferimento) % widget.servizioDurata == 0) {
-          eIncastroValido = true;
-        }
-      }
+
+      bool eIncastroValido = ((m - ultimoPuntoRiferimento) % widget.servizioDurata == 0);
 
       if (eIncastroValido) contatore++;
     }
@@ -378,7 +375,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
       context: context,
       initialDate: _giornoSelezionato,
       firstDate: DateTime.now(),
-      lastDate: _maxDataConsentita, // Modificato per rispettare il limite reale del terzo mese
+      lastDate: _maxDataConsentita,
       locale: const Locale('it', 'IT'),
       builder: (context, child) {
         final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -386,11 +383,11 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
           data: isDarkMode
               ? ThemeData.light().copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFFD4AF37),
+              primary: Color(0xFFE2B13C),
               onPrimary: Colors.black,
               surface: Color(0xFFFDFBF7),
               onSurface: Color(0xFF211D1A),
-            ), dialogTheme: DialogThemeData(backgroundColor: const Color(0xFFFDFBF7)),
+            ), dialogTheme: const DialogThemeData(backgroundColor: Color(0xFFFDFBF7)),
           )
               : ThemeData.light().copyWith(
             colorScheme: const ColorScheme.light(
@@ -421,7 +418,6 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
     int nuovaPagina = paginaAttuale + offset;
     int maxPagina = _calcolaPaginaPerData(_maxDataConsentita);
 
-    // Blocca se cerchiamo di andare nel passato o oltre il 3° mese
     if (nuovaPagina < 1000 || nuovaPagina > maxPagina) return;
 
     _pageController.animateToPage(
@@ -580,7 +576,7 @@ class _PrenotazioneCalendarioScreenState extends State<PrenotazioneCalendarioScr
                     Expanded(
                       child: PageView.builder(
                         controller: _pageController,
-                        itemCount: maxPaginaAssoluta + 1, // Blocca lo scroll fisico alle pagine consentite
+                        itemCount: maxPaginaAssoluta + 1,
                         onPageChanged: (index) {
                           if (_isChangingMonthManually) return;
 

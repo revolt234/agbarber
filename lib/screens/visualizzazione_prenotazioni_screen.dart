@@ -89,6 +89,168 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     return 30;
   }
 
+  // Mostra il pannello delle notifiche ricevute nel giorno selezionato (prenotazioni e disdette)
+  void _mostraPannelloNotificheGiorno(BuildContext context) {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color coloreSfondo = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final Color coloreTesto = isDarkMode ? Colors.white : Colors.black87;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (bottomSheetContext) {
+        return FractionallySizedBox(
+          heightFactor: 0.7,
+          child: Container(
+            decoration: BoxDecoration(
+              color: coloreSfondo,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.notifications_active, color: agOro, size: 24),
+                        const SizedBox(width: 8),
+                        Text(
+                          'NOTIFICHE DEL GIORNO',
+                          style: TextStyle(
+                            color: coloreTesto,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: coloreTesto),
+                      onPressed: () => Navigator.pop(bottomSheetContext),
+                    ),
+                  ],
+                ),
+                Text(
+                  DateFormat('EEEE d MMMM yyyy', 'it_IT').format(_dataSelezionata).toUpperCase(),
+                  style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const Divider(height: 20),
+
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('notifications')
+                        .where('date', isEqualTo: _dataString)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Errore durante il caricamento delle notifiche.',
+                            style: TextStyle(color: coloreTesto),
+                          ),
+                        );
+                      }
+
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator(color: Color(0xFFE2B13C)));
+                      }
+
+                      final docs = snapshot.data!.docs;
+
+                      if (docs.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.notifications_off_outlined, size: 48, color: isDarkMode ? Colors.white38 : Colors.black26),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Nessuna notifica o attività per oggi.',
+                                style: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black45, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      // Convertiamo e ordiniamo la lista dei log
+                      final listaNotifiche = docs.map((d) => d.data() as Map<String, dynamic>).toList();
+                      listaNotifiche.sort((a, b) {
+                        final Timestamp? timeA = a['timestamp'] as Timestamp?;
+                        final Timestamp? timeB = b['timestamp'] as Timestamp?;
+                        if (timeA != null && timeB != null) {
+                          return timeB.compareTo(timeA); // Più recenti in alto
+                        }
+                        final String slotA = a['slot'] ?? '00:00';
+                        final String slotB = b['slot'] ?? '00:00';
+                        return slotA.compareTo(slotB);
+                      });
+
+                      return ListView.separated(
+                        itemCount: listaNotifiche.length,
+                        separatorBuilder: (context, index) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final notifica = listaNotifiche[index];
+                          final String cliente = notifica['clienteNome'] ?? 'Cliente';
+                          final String ora = notifica['slot'] ?? '--:--';
+                          final String operatore = notifica['barberName'] ?? 'Operatore';
+                          final String servizio = notifica['serviceNome'] ?? 'Servizio';
+                          final bool isAnnullato = notifica['type'] == 'annullamento';
+
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            leading: CircleAvatar(
+                              backgroundColor: isAnnullato ? Colors.red.shade900 : agVerde,
+                              child: Icon(
+                                isAnnullato ? Icons.event_busy : Icons.event_available,
+                                color: isAnnullato ? Colors.white : agOro,
+                                size: 22,
+                              ),
+                            ),
+                            title: Text(
+                              '$cliente - ore $ora',
+                              style: TextStyle(
+                                color: coloreTesto,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                decoration: isAnnullato ? TextDecoration.lineThrough : null,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Servizio: $servizio\nOperatore: $operatore',
+                              style: TextStyle(
+                                color: isDarkMode ? Colors.white70 : Colors.black.withValues(alpha: 0.60),
+                                fontSize: 13,
+                              ),
+                            ),
+                            trailing: Text(
+                              isAnnullato ? 'CANCELLATO' : 'PRENOTATO',
+                              style: TextStyle(
+                                color: isAnnullato ? Colors.red : Colors.green,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
   // Dialog/BottomSheet per la selezione del cliente e reindirizzamento alla prenotazione con orario e barbiere presi dallo slot selezionato
   void _mostraSelezionaClienteEAvviaPrenotazione({String? slotSelezionato, String? barberIdSelezionato}) {
     if (!_isOnline) {
@@ -1422,6 +1584,11 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
     final Color coloreLineeMezzora = isDarkMode ? Colors.grey.withValues(alpha: 0.15) : Colors.grey.shade200;
     final Color coloreLineeDieciMin = isDarkMode ? Colors.grey.withValues(alpha: 0.08) : Colors.grey.shade100;
 
+    // Calcolo orario trascorso se la data selezionata è quella odierna
+    final DateTime adesso = DateTime.now();
+    final bool isOggi = _dataString == DateFormat('yyyy-MM-dd').format(adesso);
+    final int minutiOggiSvolti = isOggi ? (adesso.hour * 60 + adesso.minute) : 0;
+
     return Scaffold(
       backgroundColor: coloreSfondoSchermata,
       appBar: AppBar(
@@ -1781,7 +1948,15 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                     color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade200,
                                     child: Row(
                                       children: [
-                                        SizedBox(width: larghezzaColonnaOra),
+                                        // PULSANTE CAMPANELLA NOTIFICHE DEL GIORNO
+                                        SizedBox(
+                                          width: larghezzaColonnaOra,
+                                          child: IconButton(
+                                            icon: Icon(Icons.notifications, color: agOro, size: 24),
+                                            tooltip: 'Notifiche del giorno',
+                                            onPressed: () => _mostraPannelloNotificheGiorno(context),
+                                          ),
+                                        ),
                                         for (int bIdx = 0; bIdx < listaBarbieriSelezionatiDocs.length; bIdx++)
                                           Expanded(
                                             child: Container(
@@ -1814,6 +1989,41 @@ class _VisualizzazionePrenotazioniScreenState extends State<VisualizzazionePreno
                                         height: altezzaTotaleGriglia,
                                         child: Stack(
                                           children: [
+                                            // EVIDENZIATORE ROSSO COLONNA ORARI FINO ALL'ORA ATTUALE (SOLO OGGI)
+                                            if (isOggi && minutiOggiSvolti > inizioMinutiTotali) ...[
+                                              (() {
+                                                final int minutiTrascorsiValidi = (minutiOggiSvolti > fineMinutiTotali)
+                                                    ? fineMinutiTotali
+                                                    : minutiOggiSvolti;
+                                                final double altezzaRosso = (minutiTrascorsiValidi - inizioMinutiTotali) * altezzaPerMinuto;
+
+                                                return Positioned(
+                                                  top: 0,
+                                                  left: 0,
+                                                  width: larghezzaColonnaOra,
+                                                  height: altezzaRosso,
+                                                  child: Container(
+                                                    color: Colors.red.withValues(alpha: 0.18),
+                                                  ),
+                                                );
+                                              }()),
+                                              (() {
+                                                if (minutiOggiSvolti >= inizioMinutiTotali && minutiOggiSvolti <= fineMinutiTotali) {
+                                                  final double topLineaAttuale = (minutiOggiSvolti - inizioMinutiTotali) * altezzaPerMinuto;
+                                                  return Positioned(
+                                                    top: topLineaAttuale,
+                                                    left: 0,
+                                                    right: 0,
+                                                    child: Container(
+                                                      height: 2,
+                                                      color: Colors.red,
+                                                    ),
+                                                  );
+                                                }
+                                                return const SizedBox.shrink();
+                                              }()),
+                                            ],
+
                                             // LINEE GUIDA DEGLI ORARI (Ore, Mezz'ore e ogni 10 minuti)
                                             for (int i = oraInizioGiornata; i < oraFineGiornata; i++) ...[
                                               // Linea dell'ora piena (:00)

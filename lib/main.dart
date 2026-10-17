@@ -20,7 +20,6 @@ import 'screens/gestione_orari_screen.dart';
 import 'screens/gestione_calendario_screen.dart';
 import 'screens/gestione_turni_operatori_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'services/notification_service.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -42,10 +41,6 @@ void main() async {
     return true;
   };
 
-  // Accensione del sistema notifiche all'avvio (Inizializzazione Unica e Centralizzata)
-  if (!kIsWeb) {
-    await NotificationService().init();
-  }
 
   runApp(const MyApp());
 }
