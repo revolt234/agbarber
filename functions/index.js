@@ -3,6 +3,65 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
+// Helper per calcolare lo slot orario completo (es. "10:00 - 10:30")
+function calcolaSlotCompleto(slotInizio, durataMinuti) {
+  if (!slotInizio) return "--:--";
+  if (!durataMinuti) return slotInizio;
+
+  const parti = slotInizio.split(':');
+  const inizioMinuti = parseInt(parti[0], 10) * 60 + parseInt(parti[1], 10);
+  const fineMinuti = inizioMinuti + parseInt(durataMinuti, 10);
+
+  const oraFine = Math.floor(fineMinuti / 60).toString().padStart(2, '0');
+  const minFine = (fineMinuti % 60).toString().padStart(2, '0');
+
+  return `${slotInizio} - ${oraFine}:${minFine}`;
+}
+
+// Helper per estrarre tutti i token validi da un documento utente (multi-dispositivo con fallback)
+function estraiTuttiIToken(datiUtente) {
+  const tokens = new Set();
+
+  // Array multi-dispositivo (sistema attuale)
+  if (Array.isArray(datiUtente.fcmTokens)) {
+    datiUtente.fcmTokens.forEach((t) => {
+      if (t && typeof t === 'string' && t.trim().length > 0) tokens.add(t.trim());
+    });
+  }
+
+  // Fallback campo singolo (sistema precedente)
+  if (datiUtente.fcmToken && typeof datiUtente.fcmToken === 'string') {
+    tokens.add(datiUtente.fcmToken.trim());
+  }
+
+  return Array.from(tokens);
+}
+
+// Helper per inviare push a una lista di token e pulire i token non più validi
+async function inviaNotificheEPulisciToken(tokens, messaggioBase, userDocRef) {
+  const invii = tokens.map(async (token) => {
+    try {
+      const messaggioPush = { ...messaggioBase, token: token };
+      await admin.messaging().send(messaggioPush);
+    } catch (err) {
+      // Se il token è invalido o il dispositivo si è disconnesso/ha disinstallato, lo rimuoviamo dal DB
+      if (
+        err.code === 'messaging/invalid-registration-token' ||
+        err.code === 'messaging/registration-token-not-registered'
+      ) {
+        if (userDocRef) {
+          await userDocRef.update({
+            fcmTokens: admin.firestore.FieldValue.arrayRemove(token)
+          });
+        }
+      }
+      console.warn(`Invio notifica fallito per il token ${token}:`, err.message);
+    }
+  });
+
+  await Promise.all(invii);
+}
+
 // 0. PULIZIA AUTOMATICA PRENOTAZIONI VECCHIE (Eseguita ogni giorno)
 exports.puliziaPrenotazioniVecchie = onSchedule(
   {
@@ -58,6 +117,7 @@ exports.puliziaPrenotazioniVecchie = onSchedule(
     }
   }
 );
+
 // 1. ELIMINA UTENTE
 exports.eliminaUtenteCompleto = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
@@ -125,7 +185,7 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
     );
   }
 
-  const { date, slot, duration, barberId, barberName, serviceNome, servicePrezzo, targetUserId, targetUserName, nota } = data;
+  const { date, slot, duration, barberId, barberName, serviceNome, servicePrezzo, targetUserId, targetUserName, nota, minutiPreavviso } = data;
 
   if (!date || !slot || !duration || !barberId || !barberName || !serviceNome || !servicePrezzo) {
     throw new HttpsError(
@@ -165,6 +225,7 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
     const nuovoInizioMinuti = minutiDaStringa(slot);
     const nuovoFineMinuti = nuovoInizioMinuti + parseInt(duration, 10);
     const bloccoSlotId = `${date}_${barberId}_${slot.replace(':', '')}`;
+    const slotCompleto = calcolaSlotCompleto(slot, duration);
 
     const risultatoTransazione = await db.runTransaction(async (transaction) => {
       const barberRef = db.collection("barbers").doc(barberId);
@@ -207,6 +268,8 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
         userEmail: emailCliente,
         services: [serviceNome],
         totalPrice: parseFloat(servicePrezzo),
+        minutiPreavviso: parseInt(minutiPreavviso || 30, 10),
+        promemoriaInviato: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
@@ -214,7 +277,22 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
         appuntamentoData.nota = nota.trim();
       }
 
+      // Salva l'appuntamento nell'agenda
       transaction.set(docBloccoRef, appuntamentoData);
+
+      // Salva il log dell'evento nella collezione 'notifications' per il registro permanente del giorno
+      const docNotificaRef = db.collection("notifications").doc();
+      transaction.set(docNotificaRef, {
+        date: date,
+        type: "nuova_prenotazione",
+        title: "Nuova Prenotazione",
+        clienteNome: nomeRealeCliente,
+        barberName: barberName,
+        barberId: barberId,
+        serviceNome: serviceNome,
+        slot: slotCompleto,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
       return { success: true, appointmentId: bloccoSlotId };
     });
@@ -236,49 +314,6 @@ exports.creaPrenotazioneSicura = onCall({ region: "europe-west3" }, async (reque
   }
 });
 
-// Helper per estrarre tutti i token validi da un documento utente (multi-dispositivo con fallback)
-function estraiTuttiIToken(datiUtente) {
-  const tokens = new Set();
-
-  // Array multi-dispositivo (sistema attuale)
-  if (Array.isArray(datiUtente.fcmTokens)) {
-    datiUtente.fcmTokens.forEach((t) => {
-      if (t && typeof t === 'string' && t.trim().length > 0) tokens.add(t.trim());
-    });
-  }
-
-  // Fallback campo singolo (sistema precedente)
-  if (datiUtente.fcmToken && typeof datiUtente.fcmToken === 'string') {
-    tokens.add(datiUtente.fcmToken.trim());
-  }
-
-  return Array.from(tokens);
-}
-
-// Helper per inviare push a una lista di token e pulire i token non più validi
-async function inviaNotificheEPulisciToken(tokens, messaggioBase, userDocRef) {
-  const invii = tokens.map(async (token) => {
-    try {
-      const messaggioPush = { ...messaggioBase, token: token };
-      await admin.messaging().send(messaggioPush);
-    } catch (err) {
-      // Se il token è invalido o il dispositivo si è disconnesso/ha disinstallato, lo rimuoviamo dal DB
-      if (
-        err.code === 'messaging/invalid-registration-token' ||
-        err.code === 'messaging/registration-token-not-registered'
-      ) {
-        if (userDocRef) {
-          await userDocRef.update({
-            fcmTokens: admin.firestore.FieldValue.arrayRemove(token)
-          });
-        }
-      }
-      console.warn(`Invio notifica fallito per il token ${token}:`, err.message);
-    }
-  });
-
-  await Promise.all(invii);
-}
 // 3. INVIA SOLLECITO CLIENTE (Multi-Dispositivo con Autopulizia Token)
 exports.inviaSollecitoCliente = onCall({ region: "europe-west3" }, async (request) => {
   const auth = request.auth;
@@ -460,7 +495,7 @@ exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west
     );
   }
 
-  const { date, slot, barberName, serviceNome, clienteNome } = data;
+  const { date, slot, duration, barberName, serviceNome, clienteNome } = data;
 
   if (!date || !slot || !serviceNome) {
     throw new HttpsError(
@@ -479,8 +514,9 @@ exports.inviaNotificaNuovaPrenotazioneAlBarbiere = onCall({ region: "europe-west
       return { success: false, message: "Nessun barbiere trovato." };
     }
 
+    const slotCompleto = calcolaSlotCompleto(slot, duration);
     const dateFormatted = date.split('-').reverse().join('/');
-    const testoNotifica = `${dateFormatted} ore ${slot} con ${barberName || "lo staff"}: ${clienteNome || "Un cliente"} - ${serviceNome}`;
+    const testoNotifica = `${dateFormatted} ore ${slotCompleto} con ${barberName || "lo staff"}: ${clienteNome || "Un cliente"} - ${serviceNome}`;
 
     const messaggioBase = {
       notification: {
@@ -540,7 +576,7 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
     );
   }
 
-  const { date, slot, barberName, serviceNome, clienteNome } = data;
+  const { date, slot, duration, barberName, serviceNome, clienteNome } = data;
 
   if (!date || !slot) {
     throw new HttpsError(
@@ -552,6 +588,20 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
   try {
     const db = admin.firestore();
 
+    const slotCompleto = calcolaSlotCompleto(slot, duration);
+
+    // Salva il log dell'annullamento nella collezione 'notifications' per il registro permanente
+    await db.collection("notifications").add({
+      date: date,
+      type: "annullamento",
+      title: "Prenotazione Annullata",
+      clienteNome: clienteNome || "Cliente",
+      barberName: barberName || "Staff",
+      serviceNome: serviceNome || "Servizio",
+      slot: slotCompleto,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     const barbieriSnap = await db.collection("users").where("role", "==", "barbiere").get();
 
     if (barbieriSnap.empty) {
@@ -560,7 +610,7 @@ exports.inviaNotificaAnnullamentoAlBarbiere = onCall({ region: "europe-west3" },
     }
 
     const dateFormatted = date.split('-').reverse().join('/');
-    const testoAnnullamento = `${dateFormatted} ore ${slot} con ${barberName || "Staff"}: ${clienteNome || "Un cliente"} - ${serviceNome || "Servizio"}.`;
+    const testoAnnullamento = `${dateFormatted} ore ${slotCompleto} con ${barberName || "Staff"}: ${clienteNome || "Un cliente"} - ${serviceNome || "Servizio"}.`;
 
     const messaggioBase = {
       notification: {
@@ -751,3 +801,91 @@ exports.creaPrenotazioniPeriodicheSicure = onCall({ region: "europe-west3" }, as
     throw new HttpsError("internal", error.message);
   }
 });
+
+// 8. INVIO AUTOMATICO PROMEMORIA PRENOTAZIONI VIA PUSH
+exports.inviaPromemoriaPrenotazioni = onSchedule(
+  {
+    schedule: "every 5 minutes",
+    timeZone: "Europe/Rome",
+    region: "europe-west3",
+  },
+  async (event) => {
+    const db = admin.firestore();
+
+    const adessoLocaleStr = new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" });
+    const adessoRome = new Date(adessoLocaleStr);
+
+    const anno = adessoRome.getFullYear();
+    const mese = String(adessoRome.getMonth() + 1).padStart(2, '0');
+    const giorno = String(adessoRome.getDate()).padStart(2, '0');
+    const oggiStr = `${anno}-${mese}-${giorno}`;
+
+    const minutiAttuali = adessoRome.getHours() * 60 + adessoRome.getMinutes();
+
+    try {
+      const snapshot = await db.collection("appointments")
+        .where("date", "==", oggiStr)
+        .where("promemoriaInviato", "==", false)
+        .get();
+
+      if (snapshot.empty) return;
+
+      const minutiDaStringa = (s) => {
+        const parti = s.split(':');
+        return parseInt(parti[0], 10) * 60 + parseInt(parti[1], 10);
+      };
+
+      for (const doc of snapshot.docs) {
+        const app = doc.data();
+        if (!app.slot || !app.userId || app.userId === "OSPITE") continue;
+
+        const inizioMinuti = minutiDaStringa(app.slot);
+        const minutiPreavviso = app.minutiPreavviso || 30;
+
+        const orarioNotificaMinuti = inizioMinuti - minutiPreavviso;
+
+        if (minutiAttuali >= orarioNotificaMinuti && minutiAttuali < inizioMinuti) {
+          const userRef = db.collection("users").doc(app.userId);
+          const userDoc = await userRef.get();
+
+          if (userDoc.exists) {
+            const tokens = estraiTuttiIToken(userDoc.data());
+
+            if (tokens.length > 0) {
+              const servizioNome = (app.services && app.services.length > 0) ? app.services.join(", ") : "il tuo servizio";
+              const testoCorpo = `${app.slot} - ${servizioNome} con ${app.barberName || "Staff"}`;
+
+              const messaggioBase = {
+                notification: {
+                  title: "Promemoria Appuntamento 💈",
+                  body: testoCorpo,
+                },
+                android: {
+                  priority: "high",
+                  notification: {
+                    sound: "default",
+                    icon: "ic_stat_name",
+                  },
+                },
+                apns: {
+                  payload: {
+                    aps: { sound: "default" },
+                  },
+                },
+                data: {
+                  type: "promemoria_appuntamento",
+                },
+              };
+
+              await inviaNotificheEPulisciToken(tokens, messaggioBase, userRef);
+            }
+          }
+
+          await doc.ref.update({ promemoriaInviato: true });
+        }
+      }
+    } catch (error) {
+      console.error("Errore nell'invio automatico dei promemoria:", error);
+    }
+  }
+);
